@@ -15,12 +15,14 @@ import { Settings, LogOut, User, Crown } from "lucide-react"
 import { useState } from "react"
 import { ProfileModal } from "./profile-modal"
 import { SettingsModal } from "./settings-modal"
+import { UpgradePlanModal } from "./upgrade-plan-modal"
 
 export function ProfileDropdown() {
   const { user, logout } = useAuth()
   
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isUpgradeOpen, setIsUpgradeOpen] = useState(false)
 
   return (
     <>
@@ -53,7 +55,10 @@ export function ProfileDropdown() {
             <User className="w-4 h-4" />
             Profile
           </DropdownMenuItem>
-          <DropdownMenuItem className="flex items-center gap-2 cursor-pointer text-zinc-400 hover:text-white hover:bg-zinc-800">
+          <DropdownMenuItem
+            className="flex items-center gap-2 cursor-pointer text-zinc-400 hover:text-white hover:bg-zinc-800"
+            onClick={() => setIsUpgradeOpen(true)}
+          >
             <Crown className="w-4 h-4" />
             Upgrade Plan
           </DropdownMenuItem>
@@ -76,8 +81,8 @@ export function ProfileDropdown() {
       </DropdownMenu>
 
       <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
-
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <UpgradePlanModal isOpen={isUpgradeOpen} onClose={() => setIsUpgradeOpen(false)} />
     </>
   )
 }
