@@ -42,11 +42,18 @@ import { AnimatedText } from "@/components/animated-text";
 
 import { chatAPI } from "@/lib/api";
 
+// Add interface for Message type
+interface Message {
+  id: string;
+  prompt?: string;
+  response?: string;
+}
+
 export default function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [messages, setMessages] = useState<any>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [sessions, setSessions] = useState<any>([]);
   const [activeSession, setActiveSession] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
@@ -54,6 +61,7 @@ export default function ChatPage() {
   const [newTitle, setNewTitle] = useState("");
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [latestMessageId, setLatestMessageId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -194,88 +202,92 @@ export default function ChatPage() {
     }
   };
 
+  const scrollToBottom = () => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  };
+
+  useEffect(() => {
+    // Only scroll on new messages
+    if (messages.length > 0) {
+      scrollToBottom();
+    }
+  }, [messages]);
+
   const postChat = async (input: string, activeSession?: string) => {
     try {
+      // Immediately add the user's message to the UI
+      const tempMessage: Message = {
+        id: 'temp-' + Date.now(),
+        prompt: input,
+        response: ''
+      };
+      setMessages(prev => [...prev, tempMessage]);
+
       if (activeSession) {
-        // If we have an active session, post the message to it
         const data = await chatAPI.postNewChat(input, activeSession);
-
-        // Instead of just adding to current messages, refresh from server to ensure correct order
-        // This ensures consistent ordering with server-side timestamps
-        await getChats(activeSession);
-
+        setLatestMessageId(data.id);
+        // Replace the temporary message with the complete one
+        setMessages(prev => prev.map(msg => 
+          msg.id === tempMessage.id ? data : msg
+        ));
+        setTimeout(scrollToBottom, 100);
         return data;
       } else {
-        // If no active session, create a new session first
         let userId = user?.id;
 
-        // If not authenticated, use a default/guest ID or handle accordingly
         if (!userId && !isAuthenticated) {
-          userId = "guest"; // Use a guest ID or handle as needed
+          userId = "guest";
           console.log("Warning: User not authenticated. Using guest ID.");
         }
 
-        // Create a new chat session
         const sessionData = {
-          chat_title: input.substring(0, 30), // Using first 30 chars of message as title
-          user: userId || "guest", // Ensure it's always a string by providing a default
+          chat_title: input.substring(0, 30),
+          user: userId || "guest",
         };
 
         console.log("Creating new chat session with data:", sessionData);
         const sessionResponse = await chatAPI.createChatSession(sessionData);
         console.log("New session created:", sessionResponse);
 
-        // Set the new session as active
         setActiveSession(sessionResponse.id);
 
-        // Post the message to the new session
         const data = await chatAPI.postNewChat(input, sessionResponse.id);
+        
+        setLatestMessageId(data.id);
+        
+        // Replace the temporary message with the complete one
+        setMessages(prev => prev.map(msg => 
+          msg.id === tempMessage.id ? data : msg
+        ));
 
-        // Update the messages state
-        setMessages([data]); // Start with just this message in the new session
-
-        // Update the sessions list with the new session at the bottom
         setSessions((prev: any) => {
-          // Check if session already exists in the list
           const exists = prev.some((s: any) => s.id === sessionResponse.id);
           if (!exists) {
-            return [...prev, sessionResponse]; // Add to the bottom instead of the top
+            return [...prev, sessionResponse];
           }
           return prev;
         });
 
-        // Refresh sessions from server to ensure consistency
         setTimeout(() => {
           refreshSessions();
         }, 500);
 
+        setTimeout(scrollToBottom, 100);
         return data;
       }
     } catch (error: any) {
       console.error("Error in postChat:", error);
-
-      // Add better error information for debugging
       const errorDetails = {
         message: error.message,
         status: error.response?.status,
         data: error.response?.data,
       };
       console.error("Error details:", errorDetails);
-
-      // Re-throw the error to be handled by the caller
       throw error;
     }
   };
-
-  // Scroll to bottom of messages
-  useEffect(() => {
-    // Use a small timeout to ensure DOM has updated
-    const scrollTimer = setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
-
-    return () => clearTimeout(scrollTimer);
-  }, [messages]);
 
   const handleSubmit = React.useCallback(
     async (e: React.FormEvent) => {
@@ -283,25 +295,59 @@ export default function ChatPage() {
       if (!input.trim()) return;
 
       setIsLoading(true);
-      // Save the current message to show it immediately in the UI
       const currentMessage = input;
-      // Clear input immediately for better user experience
       setInput("");
+
+      // Immediately add user's message to UI
+      const tempId = 'temp-' + Date.now();
+      const userMessage: Message = {
+        id: tempId,
+        prompt: currentMessage,
+        response: ''
+      };
+      setMessages(prev => [...prev, userMessage]);
 
       try {
         if (activeSession) {
           console.log("Posting chat to existing session:", activeSession);
-          await postChat(currentMessage, activeSession);
+          const data = await chatAPI.postNewChat(currentMessage, activeSession);
+          setLatestMessageId(data.id);
+          // Add the response as a new message
+          setMessages(prev => [...prev, data]);
         } else {
           console.log("Creating new session for chat message");
-          await postChat(currentMessage);
+          const sessionData = {
+            chat_title: currentMessage.substring(0, 30),
+            user: user?.id || "guest",
+          };
+
+          const sessionResponse = await chatAPI.createChatSession(sessionData);
+          setActiveSession(sessionResponse.id);
+          
+          const data = await chatAPI.postNewChat(currentMessage, sessionResponse.id);
+          setLatestMessageId(data.id);
+          // Add the response as a new message
+          setMessages(prev => [...prev, data]);
+
+          setSessions((prev: any) => {
+            const exists = prev.some((s: any) => s.id === sessionResponse.id);
+            if (!exists) {
+              return [...prev, sessionResponse];
+            }
+            return prev;
+          });
+
+          setTimeout(() => {
+            refreshSessions();
+          }, 500);
         }
       } catch (error: any) {
         console.error("Error submitting chat:", error);
-
+        
+        // Remove the temporary message on error
+        setMessages(prev => prev.filter(msg => msg.id !== tempId));
+        
         let errorMessage = "Failed to get a response.";
-
-        // Check for various error sources to provide more specific messages
         if (error.response?.data?.detail) {
           errorMessage = error.response.data.detail;
         } else if (error.response?.data?.message) {
@@ -310,14 +356,12 @@ export default function ChatPage() {
           errorMessage = error.message;
         }
 
-        // Check for authentication errors
         if (error.response?.status === 401) {
           errorMessage = "Authentication required. Please log in to continue.";
         } else if (error.response?.status === 403) {
           errorMessage = "You don't have permission to perform this action.";
         } else if (error.response?.status === 404) {
-          errorMessage =
-            "Resource not found. The session may have been deleted.";
+          errorMessage = "Resource not found. The session may have been deleted.";
         } else if (error.response?.status === 500) {
           errorMessage = "Server error. Please try again later.";
         }
@@ -327,14 +371,12 @@ export default function ChatPage() {
           description: errorMessage,
           variant: "destructive",
         });
-
-        // Put the user's message back in the input if it failed
         setInput(currentMessage);
       } finally {
         setIsLoading(false);
       }
     },
-    [input, activeSession]
+    [input, activeSession, user?.id]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -628,7 +670,7 @@ export default function ChatPage() {
       </div>
 
       {/* Main Content */}
-      <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="flex flex-col flex-1 h-screen">
         {/* Top Bar - Fixed */}
         <div className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between gap-4 px-4 border-b h-14 border-border bg-background md:left-64">
           <div className="flex items-center">
@@ -664,9 +706,9 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Scrollable Chat Content - Adjusted for fixed header */}
-        <div className="flex-1 pb-32 overflow-y-auto pt-14">
-          <div className="flex flex-col w-full h-full max-w-5xl p-4 mx-auto">
+        {/* Scrollable Chat Content */}
+        <div className="flex-1 overflow-y-auto mt-14" style={{ paddingBottom: "calc(70px + 1rem)" }}>
+          <div className="flex flex-col w-full max-w-5xl p-4 mx-auto">
             {/* Show active session title when messages exist */}
             {activeSession && messages.length > 0 && (
               <div className="w-full pb-2 mb-4 border-b border-border">
@@ -681,8 +723,7 @@ export default function ChatPage() {
             )}
 
             {messages.length === 0 ? (
-              // Center the welcome message and cards vertically when no messages
-              <div className="flex flex-col items-center justify-center h-full">
+              <div className="flex flex-col items-center justify-center min-h-[calc(100vh-180px)]">
                 <h1 className="mb-8 text-xl text-center text-foreground">
                   {isAuthenticated
                     ? `Hi ${
@@ -692,7 +733,7 @@ export default function ChatPage() {
                       }! How can I assist you today?`
                     : "Hi! How can I assist you today?"}
                 </h1>
-                <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-2 md:max-w-[600px] w-full text-center mx-auto">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:max-w-[600px] w-full text-center mx-auto">
                   {actionCards.map((card) => (
                     <Card
                       key={card.title}
@@ -705,7 +746,7 @@ export default function ChatPage() {
                           alt={card.title}
                           width={44}
                           height={44}
-                          className="w-11 h-11 "
+                          className="w-11 h-11"
                           sizes="(max-width: 640px) 32px, 44px"
                         />
                         <div>
@@ -722,9 +763,9 @@ export default function ChatPage() {
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-start self-start w-full pb-20 space-y-6">
+              <div className="flex flex-col items-start self-start w-full pb-20 space-y-4">
                 {messages.map((message: any, index: number) => (
-                  <div key={index} className="w-full space-y-5">
+                  <div key={index} className="w-full space-y-2">
                     <div className={`flex justify-end w-full`}>
                       <div
                         className={`max-w-[80%] rounded-lg p-4 bg-card text-foreground `}
@@ -732,25 +773,30 @@ export default function ChatPage() {
                         <p className="whitespace-pre-wrap">{message?.prompt}</p>
                       </div>
                     </div>
-                    <div className={`flex justify-start w-full`}>
-                      <div className="flex items-start gap-2 md:gap-4 md:max-w-[80%] rounded-lg p-4 bg-card text-foreground">
-                        {/* Image - Added responsive sizing */}
-                        <Image
-                          src={star}
-                          alt="Response Image"
-                          className="object-cover w-8 h-8 rounded-full md:w-12 md:h-12"
-                        />
-
-                        {/* Response Text - Added better spacing */}
-                        <div className="flex-1 min-w-0">
-                          <AnimatedText 
-                            text={message?.response || ''} 
-                            speed={50}
-                            batchSize={1}
+                    {message?.response && (
+                      <div className={`flex justify-start w-full`}>
+                        <div className="flex items-start gap-2 md:gap-4 md:max-w-[80%] rounded-lg p-4 bg-card text-foreground">
+                          <Image
+                            src={star}
+                            alt="Response Image"
+                            className="object-cover w-8 h-8 rounded-full md:w-12 md:h-12"
                           />
+                          <div className="flex-1 min-w-0">
+                            {message.id === latestMessageId ? (
+                              <AnimatedText 
+                                text={message?.response} 
+                                speed={50}
+                                batchSize={3}
+                              />
+                            ) : (
+                              <p className="whitespace-pre-wrap">
+                                {message?.response}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 ))}
                 {isLoading && (
@@ -779,88 +825,90 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Fixed Bottom Input - Adjusted z-index and positioning */}
-        <div className="fixed bottom-0 left-0 right-0 z-40 p-4 bg-background md:left-64">
-          <div className="w-full max-w-[863px] mx-auto border md:rounded-[15px] border-border rounded-t-[15px] p-2 bg-card">
-            <form onSubmit={handleSubmit}>
-              <input
-                type="text"
-                placeholder="Ask me anything"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                disabled={isLoading}
-                className="w-full p-3 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-              />
-              {isMobile ? (
-                <div className="flex items-center justify-between pt-2 mt-2 border-t border-border">
-                  <div className="flex items-center gap-2">
+        {/* Fixed Bottom Input */}
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-background md:left-64">
+          <div className="w-full max-w-[863px] mx-auto p-4">
+            <div className="border rounded-[15px] border-border p-2 bg-card">
+              <form onSubmit={handleSubmit}>
+                <input
+                  type="text"
+                  placeholder="Ask me anything"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={isLoading}
+                  className="w-full p-3 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+                {isMobile ? (
+                  <div className="flex items-center justify-between pt-2 mt-2 border-t border-border">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={isLoading}
+                        className="flex items-center gap-2 p-2 transition-colors rounded-md"
+                      >
+                        <PaperclipIcon className="w-5 h-5 text-muted-foreground" />
+                        <span className="text-muted-foreground text-[15px]">
+                          Add Attachment
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isLoading}
+                        className="flex items-center gap-2 p-2 transition-colors rounded-md"
+                      >
+                        <ImageIcon className="w-5 h-5 text-muted-foreground" />
+                        <span className="text-muted-foreground text-[15px]">
+                          Use Images
+                        </span>
+                      </button>
+                    </div>
                     <button
-                      type="button"
-                      disabled={isLoading}
-                      className="flex items-center gap-2 p-2 transition-colors rounded-md"
+                      type="submit"
+                      disabled={isLoading || !input.trim()}
+                      className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-[#FFD700] to-[#780991] text-white"
                     >
-                      <PaperclipIcon className="w-5 h-5 text-muted-foreground" />
-                      <span className="text-muted-foreground text-[15px]">
-                        Add Attachment
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isLoading}
-                      className="flex items-center gap-2 p-2 transition-colors rounded-md"
-                    >
-                      <ImageIcon className="w-5 h-5 text-muted-foreground" />
-                      <span className="text-muted-foreground text-[15px]">
-                        Use Images
-                      </span>
-                    </button>
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={isLoading || !input.trim()}
-                    className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-[#FFD700] to-[#780991] text-white"
-                  >
-                    <Send className="w-5 h-5" />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-row items-center justify-between mt-4 md:flex-row">
-                  {/* Attachments */}
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <button
-                      type="button"
-                      disabled={isLoading}
-                      className="flex items-center gap-2 p-2 transition-colors rounded-md"
-                    >
-                      <PaperclipIcon className="w-5 h-5 text-muted-foreground" />
-                      <span className="text-muted-foreground text-[15px]">
-                        Add Attachment
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isLoading}
-                      className="flex items-center gap-2 p-2 transition-colors rounded-md"
-                    >
-                      <ImageIcon className="w-5 h-5 text-muted-foreground" />
-                      <span className="text-muted-foreground text-[15px]">
-                        Use Images
-                      </span>
+                      <Send className="w-5 h-5" />
                     </button>
                   </div>
+                ) : (
+                  <div className="flex flex-row items-center justify-between mt-4 md:flex-row">
+                    {/* Attachments */}
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <button
+                        type="button"
+                        disabled={isLoading}
+                        className="flex items-center gap-2 p-2 transition-colors rounded-md"
+                      >
+                        <PaperclipIcon className="w-5 h-5 text-muted-foreground" />
+                        <span className="text-muted-foreground text-[15px]">
+                          Add Attachment
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isLoading}
+                        className="flex items-center gap-2 p-2 transition-colors rounded-md"
+                      >
+                        <ImageIcon className="w-5 h-5 text-muted-foreground" />
+                        <span className="text-muted-foreground text-[15px]">
+                          Use Images
+                        </span>
+                      </button>
+                    </div>
 
-                  {/* Submit Button */}
-                  <Button
-                    type="submit"
-                    disabled={isLoading || !input.trim()}
-                    className="relative bg-gradient-to-r from-[#FFD700] to-[#780991] text-white rounded-[15px] mt-4 md:mt-0 overflow-hidden px-6"
-                  >
-                    {isLoading ? "Sending..." : "Send"}
-                  </Button>
-                </div>
-              )}
-            </form>
+                    {/* Submit Button */}
+                    <Button
+                      type="submit"
+                      disabled={isLoading || !input.trim()}
+                      className="relative bg-gradient-to-r from-[#FFD700] to-[#780991] text-white rounded-[15px] mt-4 md:mt-0 overflow-hidden px-6"
+                    >
+                      {isLoading ? "Sending..." : "Send"}
+                    </Button>
+                  </div>
+                )}
+              </form>
+            </div>
           </div>
         </div>
       </div>
@@ -902,3 +950,4 @@ export default function ChatPage() {
     </div>
   );
 }
+

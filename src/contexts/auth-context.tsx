@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { authAPI, userAPI, clearAuthToken, getAuthToken, setAuthToken, verifyToken } from "@/lib/api"
-import { toast } from "@/components/ui/use-toast"
+
 
 // ✅ Define user type
 export interface User {
@@ -375,6 +375,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log("Auth context: Update profile successful")
 
       return success
+
+      //eslint-disable-next-line
     } catch (error: any) {
       // Log the full error for debugging
       console.error("Auth context: Update profile error details:", {
