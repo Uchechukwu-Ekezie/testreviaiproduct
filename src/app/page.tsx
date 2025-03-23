@@ -45,27 +45,14 @@ export default function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  interface Message {
-    id: string;
-    prompt: string;
-    response: string;
-    created_at?: string;
-  }
-
-  const [messages, setMessages] = useState<Message[]>([]);
-  interface Session {
-    id: string;
-    chat_title: string;
-    created_at?: string;
-  }
-
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const [messages, setMessages] = useState<any>([]);
+  const [sessions, setSessions] = useState<any>([]);
   const [activeSession, setActiveSession] = useState<string | null>(null);
-
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [isRenaming, setIsRenaming] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -431,7 +418,9 @@ export default function ChatPage() {
     setInput(card.message);
   };
 
-  
+  const handleSelectQuery = (query: string) => {
+    setInput(query);
+  };
 
   const deleteChatSession = async (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent selecting the session when clicking delete
@@ -639,8 +628,8 @@ export default function ChatPage() {
 
       {/* Main Content */}
       <div className="flex flex-col flex-1 overflow-hidden">
-        {/* Top Bar */}
-        <div className="flex items-center justify-between gap-4 px-4 border-b h-14 border-border">
+        {/* Top Bar - Fixed */}
+        <div className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between gap-4 px-4 border-b h-14 border-border bg-background md:left-64">
           <div className="flex items-center">
             <Button
               variant="ghost"
@@ -659,11 +648,7 @@ export default function ChatPage() {
 
           {/* Right side elements */}
           <div className="flex items-center gap-4">
-            {/* Add search history component here */}
-            {/* {isAuthenticated && <SearchHistory onSelectQuery={handleSelectQuery} />} */}
-
             <ThemeToggle />
-
             {isAuthenticated ? (
               <ProfileDropdown />
             ) : (
@@ -678,9 +663,9 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Scrollable Chat Content */}
-        <div className="flex-1 p-4 overflow-y-auto">
-          <div className="flex flex-col w-full h-full max-w-5xl mx-auto">
+        {/* Scrollable Chat Content - Adjusted for fixed header */}
+        <div className="flex-1 pb-32 overflow-y-auto pt-14">
+          <div className="flex flex-col w-full h-full max-w-5xl p-4 mx-auto">
             {/* Show active session title when messages exist */}
             {activeSession && messages.length > 0 && (
               <div className="w-full pb-2 mb-4 border-b border-border">
@@ -788,8 +773,9 @@ export default function ChatPage() {
             )}
           </div>
         </div>
-        {/* Fixed Bottom Input */}
-        <div className="bottom-0 left-0 right-0 px-1 lg:pb-4">
+
+        {/* Fixed Bottom Input - Adjusted z-index and positioning */}
+        <div className="fixed bottom-0 left-0 right-0 z-40 p-4 bg-background md:left-64">
           <div className="w-full max-w-[863px] mx-auto border md:rounded-[15px] border-border rounded-t-[15px] p-2 bg-card">
             <form onSubmit={handleSubmit}>
               <input
