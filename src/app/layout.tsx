@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Inter, Public_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/auth-context";
+import { ChatProvider } from "@/contexts/chat-context";
+import { SearchHistoryProvider } from "@/contexts/search-history-context";
+import { ThemeProvider } from "@/contexts/theme-context";
 import { Toaster } from "@/components/toaster";
 
 const inter = Inter({
@@ -20,7 +23,7 @@ const publicSans = Public_Sans({
 
 
 export const metadata: Metadata = {
-  title: 'ReviAi Technologies',
+  title: 'Revi AI Technologies',
   description: 'Trusted property insights powered by AI',
 };
 
@@ -32,12 +35,19 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark ${inter.variable} ${publicSans.variable}`}>
       <body
-       className="bg-[#212121] font-sans"
+       className="font-sans bg-background text-foreground transition-colors duration-300"
+       suppressHydrationWarning
       >
-        <AuthProvider>
-        {children}
-        <Toaster/>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <ChatProvider>
+              <SearchHistoryProvider>
+                {children}
+                <Toaster/>
+              </SearchHistoryProvider>
+            </ChatProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

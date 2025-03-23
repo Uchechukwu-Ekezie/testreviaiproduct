@@ -48,7 +48,7 @@ export default function PropertyPreferencesPage() {
     <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-[#212121] ">
       <div className="flex flex-col items-center w-full gap-8 mx-auto lg:flex-row max-w-1440 ">
         {/* Logo */}
-        <Card className="w-full max-w-[503px] mx-auto   pt-[30px]  ">
+        <Card className="w-full max-w-[503px] mx-auto  ">
           <CardHeader className="mb-5 space-y-3 ">
             <div className="flex items-center justify-center">
               <Image src={logo} alt="Revi AI Logo" width={46} height={34} />
@@ -59,7 +59,7 @@ export default function PropertyPreferencesPage() {
           </CardHeader>
 
           {/* Progress Steps */}
-          <div className="flex-grow ml">
+          <div className="flex flex-col items-center justify-center flex-grow w-full space-y-4 " style={{height: 'calc(95vh - 200px)' }}>
             <ProgressSteps
               currentStep={3}
               steps={[
@@ -70,7 +70,7 @@ export default function PropertyPreferencesPage() {
             />
 
             {/* Form */}
-            <div className="space-y-6">
+            <div className="w-full space-y-2">
               {/* Budget Amount */}
               <div className="space-y-2">
                 <label className="text-[18px] text-[#979797]">
@@ -152,10 +152,7 @@ export default function PropertyPreferencesPage() {
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-3 mt-6">
+            <div className="flex w-full gap-3 mt-6">
             <Button
               onClick={handleContinue}
               className="flex text-[18px] text-white h-11 bg-gradient-to-r from-[#FFD700] to-[#780991] hover:from-yellow-600 hover:to-pink-600 w-2/3"
@@ -170,9 +167,14 @@ export default function PropertyPreferencesPage() {
               Skip
             </Button>
           </div>
+          </div>
+
+          {/* Action Buttons */}
+          
 
           {/* Footer */}
-          <PPTU />
+          <div><PPTU /></div>
+          
         </Card>
 
         {!isMobile && (

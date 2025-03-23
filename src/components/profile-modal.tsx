@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,36 +19,104 @@ interface ProfileModalProps {
 }
 
 export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
-  const { user } = useAuth()
+  const { user, updateProfile } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [formData, setFormData] = useState({
-    name: user?.name || "",
-    email: user?.email || "",
-    avatar: user?.avatar || "",
-    phone: user?.phone || "",
+    username: user?.username || "",
+    first_name: user?.first_name || "",
+    last_name: user?.last_name || "",
+    avatar: user?.avatar || ""
   })
+
+  // Update form data when user data changes or modal is opened
+  useEffect(() => {
+    if (user && isOpen) {
+      setFormData({
+        username: user.username || "",
+        first_name: user.first_name || "",
+        last_name: user.last_name || "",
+        avatar: user.avatar || ""
+      })
+    }
+  }, [user, isOpen])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
-
+    
     try {
-      // Here you would typically update the user profile via an API
-      await new Promise((resolve) => setTimeout(resolve, 1000)) // Simulate API call
+      // Only include fields that have actually changed from the original user data
+      const changedFields: any = {}; 
+      
+      if (user?.username !== formData.username) changedFields.username = formData.username;
+      if (user?.first_name !== formData.first_name) changedFields.first_name = formData.first_name;
+      if (user?.last_name !== formData.last_name) changedFields.last_name = formData.last_name;
+      
+      // Don't proceed if no changes were made
+      if (Object.keys(changedFields).length === 0) {
+        toast({
+          title: "No changes detected",
+          description: "You haven't made any changes to your profile.",
+        });
+        onClose();
+        return;
+      }
+      
+      console.log("Profile modal: Submitting profile update with changed fields:", changedFields);
+      
+      setIsLoading(true)
 
-      toast({
-        title: "Profile updated",
-        description: "Your profile has been updated successfully.",
-      })
-      onClose()
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (error) {
+      try {
+        // Update the user profile via the auth context with only changed fields
+        await updateProfile(changedFields)
+
+        toast({
+          title: "Profile updated",
+          description: "Your profile has been updated successfully.",
+        })
+        
+        // Add a small delay before closing the modal for better UX
+        setTimeout(() => {
+          onClose();
+        }, 1500);
+      } catch (error: any) {
+        console.error("Profile update error:", error)
+        
+        // Extract error message from API response if available
+        let errorMessage = "Failed to update profile. Please try again."
+
+        if (error.response?.data) {
+          const responseData = error.response.data
+          
+          // Handle multiple error messages
+          const errorMessages = []
+          if (responseData.username) errorMessages.push(`Username: ${responseData.username[0]}`)
+          if (responseData.first_name) errorMessages.push(`First Name: ${responseData.first_name[0]}`)
+          if (responseData.last_name) errorMessages.push(`Last Name: ${responseData.last_name[0]}`)
+          if (responseData.detail) errorMessages.push(responseData.detail)
+          if (responseData.error) errorMessages.push(responseData.error)
+          if (responseData.message) errorMessages.push(responseData.message)
+
+          errorMessage = errorMessages.join(". ") || "Failed to update profile. Please try again."
+        } else if (error.message) {
+          // Handle direct error message from auth context or elsewhere
+          errorMessage = error.message;
+        }
+        
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    } catch (outerError: any) {
+      console.error("Profile form error:", outerError)
       toast({
         title: "Error",
-        description: "Failed to update profile. Please try again.",
+        description: "There was a problem with the form submission.",
         variant: "destructive",
       })
-    } finally {
       setIsLoading(false)
     }
   }
@@ -68,7 +136,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
       <DialogContent className="sm:max-w-[425px] bg-zinc-900 border-zinc-800">
         <DialogHeader>
           <DialogTitle className="text-xl text-white">Profile Settings</DialogTitle>
-          <DialogDescription className="text-zinc-400">Update your profile information and settings.</DialogDescription>
+          <DialogDescription className="text-zinc-400">Update your basic profile information.</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="py-4 space-y-6">
@@ -79,14 +147,14 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                 {formData.avatar ? (
                   <Image
                     src={formData.avatar || "/placeholder.svg"}
-                    alt={formData.name || "User"}
+                    alt={formData.username || "User"}
                     width={80}
                     height={80}
                     className="object-cover rounded-full"
                   />
                 ) : (
                   <div className="flex items-center justify-center w-full h-full text-2xl rounded-full bg-zinc-800 text-zinc-400">
-                    {formData.name?.[0] || formData.email?.[0] || "U"}
+                    {formData.first_name?.[0] || formData.username?.[0] || "U"}
                   </div>
                 )}
               </Avatar>
@@ -106,49 +174,77 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
             </div>
           </div>
 
-          {/* Name */}
+          {/* Username */}
           <div className="space-y-2">
-            <Label htmlFor="name" className="text-zinc-400">
-              Name
+            <Label htmlFor="username" className="text-zinc-400">
+              Username
             </Label>
             <Input
-              id="name"
-              value={formData.name}
-              onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+              id="username"
+              value={formData.username}
+              onChange={(e) => setFormData((prev) => ({ ...prev, username: e.target.value }))}
               className="text-white bg-zinc-900 border-zinc-800"
-              placeholder="Enter your name"
+              placeholder="Enter your username"
             />
           </div>
 
-          {/* Email */}
+          {/* First Name */}
+          <div className="space-y-2">
+            <Label htmlFor="first_name" className="text-zinc-400">
+              First Name
+            </Label>
+            <Input
+              id="first_name"
+              value={formData.first_name}
+              onChange={(e) => setFormData((prev) => ({ ...prev, first_name: e.target.value }))}
+              className="text-white bg-zinc-900 border-zinc-800"
+              placeholder="Enter your first name"
+            />
+          </div>
+
+          {/* Last Name */}
+          <div className="space-y-2">
+            <Label htmlFor="last_name" className="text-zinc-400">
+              Last Name
+            </Label>
+            <Input
+              id="last_name"
+              value={formData.last_name}
+              onChange={(e) => setFormData((prev) => ({ ...prev, last_name: e.target.value }))}
+              className="text-white bg-zinc-900 border-zinc-800"
+              placeholder="Enter your last name"
+            />
+          </div>
+
+          {/* Email (Read-only) */}
           <div className="space-y-2">
             <Label htmlFor="email" className="text-zinc-400">
-              Email
+              Email (Read-only)
             </Label>
             <Input
               id="email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
-              className="text-white bg-zinc-900 border-zinc-800"
-              placeholder="Enter your email"
+              value={user?.email || ""}
+              readOnly
+              disabled
+              className="text-white bg-zinc-900 border-zinc-800 opacity-70"
             />
           </div>
 
-          {/* Phone */}
-          <div className="space-y-2">
-            <Label htmlFor="phone" className="text-zinc-400">
-              Phone Number
-            </Label>
-            <Input
-              id="phone"
-              type="tel"
-              value={formData.phone}
-              onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
-              className="text-white bg-zinc-900 border-zinc-800"
-              placeholder="Enter your phone number"
-            />
-          </div>
+          {/* Subscription Info (Read-only) */}
+          {user?.subscription_type && (
+            <div className="p-4 space-y-2 rounded-md bg-zinc-800">
+              <h3 className="text-sm font-medium text-white">Subscription Info</h3>
+              <div className="text-xs text-zinc-400">
+                <p>Type: <span className="text-white">{user.subscription_type}</span></p>
+                {user.subscription_start_date && (
+                  <p>Start: <span className="text-white">{new Date(user.subscription_start_date).toLocaleDateString()}</span></p>
+                )}
+                {user.subscription_end_date && (
+                  <p>End: <span className="text-white">{new Date(user.subscription_end_date).toLocaleDateString()}</span></p>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-3">
             <Button

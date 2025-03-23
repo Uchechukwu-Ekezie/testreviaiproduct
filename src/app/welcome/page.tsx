@@ -25,7 +25,7 @@ export default function WelcomePage() {
           </CardHeader>
 
           {/* Middle Section */}
-          <div className="flex flex-col items-center justify-center flex-grow space-y-4 text-center">
+          <div className="flex flex-col items-center justify-center flex-grow space-y-4 text-center" style={{height: 'calc(100vh - 200px)' }}>
             <div className="flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-r from-yellow-500 to-pink-500">
               <ThumbsUp className="w-10 h-10 text-white" />
             </div>

@@ -1,0 +1,559 @@
+"use client";
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosError, AxiosResponse } from 'axios';
+
+// Define base API URL (replace with your actual backend URL)
+const BASE_URL = "https://0gk1uxsrcg.execute-api.eu-north-1.amazonaws.com/prod"
+
+// Create an Axios instance
+const api: AxiosInstance = axios.create({
+  baseURL: BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+    ...(typeof window !== 'undefined' && window.localStorage && window.localStorage.getItem('authToken')
+      ? { Authorization: `Bearer ${window.localStorage.getItem('authToken')}` }
+      : {}),
+    Accept: 'application/json',
+  },
+});
+
+let isRefreshing = false;
+let failedQueue: { resolve: (value: AxiosResponse<any>) => void; reject: (error: AxiosError) => void }[] = [];
+
+const processQueue = (error: AxiosError | null, token: string | null = null): void => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else if (token) {
+      api.defaults.headers.common.Authorization = `Bearer ${token}`;
+      prom.resolve(api as any);
+    }
+  });
+
+  failedQueue = [];
+};
+
+api.interceptors.response.use(
+  (response: AxiosResponse) => response,
+  async (error: AxiosError) => {
+    const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then(() => api(originalRequest))
+          .catch((err) => Promise.reject(err));
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        const refreshToken = typeof window !== 'undefined' && window.localStorage.getItem('refreshToken');
+
+        if (!refreshToken) {
+          // Handle the case where there's no refresh token (e.g., logout)
+          return Promise.reject(error);
+        }
+
+        const response = await axios.post<{ access: string }>(`${BASE_URL}/auth/token/refresh`, {
+          refresh:refreshToken,
+        });
+        const { access: accessToken } = response.data;
+
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem('authToken', accessToken);
+        }
+
+        api.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
+        processQueue(null, accessToken);
+        return api(originalRequest);
+      } catch (refreshError: any) {
+        processQueue(refreshError, null);
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+
+// ✅ Function to set auth token in headers
+export const setAuthToken = (token: string) => {
+  if (token) {
+    api.defaults.headers.common["Authorization"] = `Bearer ${token}`
+    localStorage.setItem("authToken", token)
+  } else {
+    delete api.defaults.headers.common["Authorization"]
+    localStorage.removeItem("authToken")
+  }
+}
+
+// ✅ Function to get auth token
+export const getAuthToken = () => {
+  return localStorage.getItem("authToken")
+}
+
+// ✅ Function to clear auth token
+export const clearAuthToken = () => {
+  localStorage.removeItem("authToken")
+  delete api.defaults.headers.common["Authorization"]
+}
+
+// ✅ Export resetPassword function for direct import
+export const resetPassword = async (data: {
+  new_password1: string
+  new_password2: string
+  uid: string
+  token: string
+}) => {
+  // Map the parameters to match what the backend expects
+  const payload = {
+    uid: data.uid,
+    token: data.token,
+    new_password: data.new_password1,
+    confirm_password: data.new_password2
+  }
+  const response = await api.post("/auth/password/reset/confirm", payload)
+  return response.data
+}
+
+// ✅ Function to check if the current auth token is valid
+export const verifyToken = async (): Promise<boolean> => {
+  try {
+    const token = getAuthToken()
+    if (!token) return false
+
+    // Set the token in the headers
+    setAuthToken(token)
+
+    // Try to fetch user profile - this will fail if token is invalid
+    const response = await api.get("/auth/user")
+    return response.status === 200
+  } catch (error) {
+    console.error("Token verification error:", error)
+    clearAuthToken() // Clear invalid token
+    return false
+  }
+}
+
+// ✅ Auth API calls
+export const authAPI = {
+  login: async (email: string, password: string) => {
+    try {
+      console.log("API: Attempting login with email:", email)
+
+      const response = await api.post("/auth/token", {
+        email,
+        password
+      }, {
+        headers: {
+          "Content-Type": "application/json"
+        }
+      })
+
+      console.log("API: Login successful, response status:", response.status)
+      return response.data
+    } catch (error: any) {
+      console.error("API: Login failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      })
+
+      // Include the detailed response in the error
+      if (error.response?.data) {
+        error.detail = error.response.data
+      }
+
+      throw error
+    }
+  },
+
+  signup: async (userData: {
+    username: string
+    email: string
+    first_name: string
+    last_name: string
+    password: string
+  }) => {
+    const response = await api.post("/auth/", userData)
+    // Return the entire response so we can handle different response structures
+    return response
+  },
+
+  verifyEmail: async (token: string) => {
+    const response = await api.post("/auth/verify-email", { token })
+    return response.data
+  },
+
+  logout: async () => {
+    const response = await api.post("/auth/logout")
+    return response.data
+  },
+  requestPasswordReset: async (email: string) => {
+    try {
+      // Ensure email is properly formatted in the request
+      const payload = { email: email.trim() }
+      console.log("Sending password reset request with payload:", payload)
+
+      // First attempt: standard endpoint without trailing slash
+      try {
+        console.log("Attempting password reset with standard endpoint");
+        const response = await api.post("/auth/password/reset", payload, {
+          timeout: 15000, // Increased timeout
+          headers: {
+            "Content-Type": "application/json",
+          }
+        });
+        console.log("Password reset response:", response.data);
+        return response.data;
+      } catch (firstError: any) {
+        console.error("First attempt failed with error:", {
+          status: firstError.response?.status,
+          statusText: firstError.response?.statusText,
+          data: firstError.response?.data,
+          message: firstError.message
+        });
+
+        // If first attempt failed, try with trailing slash
+        try {
+          console.log("Attempting password reset with trailing slash endpoint");
+          const response = await api.post("/auth/password/reset/", payload, {
+            timeout: 15000,
+            headers: {
+              "Content-Type": "application/json",
+            }
+          });
+          console.log("Password reset response from trailing slash endpoint:", response.data);
+          return response.data;
+        } catch (secondError: any) {
+          console.error("Second attempt failed with error:", {
+            status: secondError.response?.status,
+            statusText: secondError.response?.statusText,
+            data: secondError.response?.data,
+            message: secondError.message
+          });
+
+          // Try with alternative payload format
+          try {
+            console.log("Attempting password reset with alternative payload format");
+            const altPayload = { username: email.trim() }; // Some APIs use 'username' instead of 'email'
+            const response = await api.post("/auth/password/reset", altPayload, {
+              timeout: 15000,
+              headers: {
+                "Content-Type": "application/json",
+              }
+            });
+            console.log("Password reset response with alternative payload:", response.data);
+            return response.data;
+          } catch (thirdError: any) {
+            console.error("All password reset attempts failed");
+            throw thirdError; // Throw the last error
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error("Password reset API error details:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+
+      // Re-throw the error for the calling code to handle
+      throw error;
+    }
+  },
+  passwordResetConfirm: async (data: {
+    uid: string
+    token: string
+    new_password: string
+    confirm_password: string
+  }) => {
+    const response = await api.post("/auth/password/reset/confirm", data)
+    return response.data
+  },
+  passwordChange: async (old_password: string, new_password: string) => {
+    const response = await api.post("/auth/password/change", {
+      old_password,
+      new_password,
+    })
+    return response.data
+  }
+}
+
+// ✅ User API calls
+export const userAPI = {
+  getProfile: async () => {
+    try {
+      console.log("API: Attempting to fetch user profile...")
+      const token = getAuthToken();
+      if (token) {
+        setAuthToken(token)
+        const response = await api.get("/auth/me")
+        console.log("API: Profile fetch successful, response status:", response.status)
+        return response.data
+      } else {
+        console.error("please login first");
+      }
+    } catch (error: any) {
+      console.error("API: Profile fetch failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      })
+
+      // Include the detailed response in the error
+      if (error.response?.data) {
+        error.detail = error.response.data
+      }
+
+      throw error
+    }
+  },
+
+  updatePreferences: async (data: { role: string }) => {
+    try {
+      console.log("API: Attempting to update user preferences...")
+      const response = await api.put("/user/preferences", data)
+      console.log("API: Preferences update successful, response status:", response.status)
+      return response.data
+    } catch (error: any) {
+      console.error("API: Preferences update failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      })
+
+      // Include the detailed response in the error
+      if (error.response?.data) {
+        error.detail = error.response.data
+      }
+
+      throw error
+    }
+  },
+
+  updateProfile: async (userData: {
+    first_name?: string
+    last_name?: string
+    username?: string
+  }) => {
+    try {
+      console.log("API: Attempting profile update with data:", userData)
+
+      // Use PATCH instead of PUT to update only the specified fields instead of replacing the entire resource
+      const response = await api.patch("/auth/user", userData)
+      console.log("API: Profile update successful, response status:", response.status)
+
+      return response.data
+    } catch (error: any) {
+      console.error("API: Profile update failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      })
+
+      // Include the detailed response in the error
+      if (error.response?.data) {
+        error.detail = error.response.data
+      }
+
+      throw error
+    }
+  }
+}
+
+
+// Debugging API
+export const debugAPI = {
+  checkEndpoint: async () => {
+    try {
+      const response = await api.get('/')
+      return {
+        status: response.status,
+        data: response.data,
+        success: true
+      }
+    } catch (error: any) {
+      return {
+        status: error.response?.status,
+        data: error.response?.data,
+        error: error.message,
+        success: false
+      }
+    }
+  }
+}
+
+// Chat API calls
+export const chatAPI = {
+// create chat session
+  createChatSession: async (data: { 
+    chat_title: string; 
+    unique_chat_id?: string; 
+    user: string;
+  }) => {
+    try {
+      console.log("API: Creating new chat session with data:", data);
+      const response = await api.post(`/chat-sessions/`, data);
+      console.log("API: Chat session created successfully, response:", response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error("API: Create chat session failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+
+      throw error;
+    }
+  },
+
+  // Get all chat sessions for the current user
+  getChatSessions: async () => {
+    try {
+      console.log("API: Fetching all chat sessions");
+      const response = await api.get(`/chat-sessions/`);
+      console.log("API: Chat sessions fetched successfully, count:", response.data.length);
+      return response.data;
+    } catch (error: any) {
+      console.error("API: Fetch chat sessions failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+
+      throw error;
+    }
+  },
+
+  getChatSession: async (sessionId: string) => {
+    try {
+      const response = await api.get(`/chat-sessions/${sessionId}/`);
+      return response.data;
+    } catch (error: any) {
+      console.error("API: Fetch chat session failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+
+      throw error;
+    }
+  },
+
+  // Delete a chat session by ID
+  deleteChatSession: async (sessionId: string) => {
+    try {
+      console.log("API: Deleting chat session:", sessionId);
+      const response = await api.delete(`/chat-sessions/${sessionId}/`);
+      console.log("API: Chat session deleted successfully, response status:", response.status);
+      return response.data;
+    } catch (error: any) {
+      console.error("API: Delete chat session failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+
+      throw error;
+    }
+  },
+
+  getChatsBySession: async (sessionId: string) => {
+    try {
+      const response = await api.get(`/chats/session/${sessionId}/`);
+      console.log("uchehe" , sessionId);
+      return response.data;
+    } catch (error: any) {
+      console.error("API: Fetch chats failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw error;
+    }
+  },
+
+  getSessionsMine: async () => {
+    try {
+      const response = await api.get(`/chat-sessions/mine/`);
+      return response.data;
+    } catch (error: any) {
+      console.error("API: fetch sessions failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw error;
+    }
+  },
+
+  postNewChat: async (message: string, sessionId?: string) => {
+    try {
+      console.log("API: Posting new chat message to session:", sessionId, "with message:", message);
+      let data;
+      if (sessionId) {
+        data = {
+          prompt: message,
+          session: sessionId  // This is the key: session should be the session ID
+        };
+      } else {
+        data = {
+          prompt: message
+        }
+      }
+      const response = await api.post(`/chats/ai-chat/`, data);
+      return response.data;
+    } catch (error: any) {  // Fixed: changed from incorrect catch syntax to proper error handling
+      console.error("API: post new chats failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw error;  // Re-throw the error to be handled by calling code
+    }
+  },
+
+
+  updateChatSession: async (sessionId: string, data: {
+    chat_title?: string;
+    unique_chat_id?: string;
+    user?: string;
+  }) => {
+    try {
+      console.log("API: Updating chat session:", sessionId, "with data:", data);
+      const response = await api.patch(`/chat-sessions/${sessionId}/`, data);
+      console.log("API: Chat session updated successfully, response:", response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error("API: Update chat session failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw error;
+    }
+  }
+}
+
+export default api
+

@@ -67,13 +67,13 @@ export default function PreferencesPage() {
     <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-[#212121] font-sf-pro ">
       <div className="flex flex-col items-center w-full gap-8 mx-auto lg:flex-row max-w-1440 ">
         {/* Logo */}
-        <Card className="w-full max-w-[503px] mx-auto lg:min-h-[96px]   ">
+        <Card className="w-full max-w-[503px] mx-auto   ">
           <CardHeader className="mb-4 space-y-3 ">
           <Logo/>
           </CardHeader>
 
           {/* Progress Steps */}
-          
+          <div className="flex flex-col items-center justify-center flex-grow space-y-4 text-center" style={{height: 'calc(95vh - 200px)' }}>
           <ProgressSteps
             currentStep={2}
             steps={[
@@ -84,7 +84,7 @@ export default function PreferencesPage() {
           />
 
           {/* Role Selection */}
-          <div className="flex-grow space-y-2">
+          <div className="space-y-2 ">
             {roles.map((role) => (
               <button
                 key={role.id}
@@ -164,11 +164,13 @@ export default function PreferencesPage() {
               </Button>
             </div>
           </div>
+          </div>
 
           {/* Action Buttons */}
 
           {/* Footer */}
-          <PPTU />
+          <div><PPTU /></div>
+          
         </Card>
 
 

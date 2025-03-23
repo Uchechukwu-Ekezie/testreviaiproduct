@@ -1,92 +1,121 @@
-"use client";
+"use client"
 
-import type React from "react";
+import type React from "react"
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-} from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import Image from "next/image";
-import Link from "next/link";
-import { useMediaQuery } from "@/hooks/use-mobile";
-
-import google from "../../../public/Image/Google - Original.png";
-import apple from "../../../public/Image/Apple - Negative.png";
-import Testimonial from "@/components/testimonial";
-import PPTU from "@/components/pptu";
-import { useAuth } from "@/contexts/auth-context";
-import { toast } from "@/components/ui/use-toast";
-import Logo from "@/components/logo";
-import { Eye, EyeOff} from "lucide-react";
-import sms from "../../../public/Image/sms.png";
-import  pass from "../../../public/Image/password-check.png";
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import Image from "next/image"
+import Link from "next/link"
+import { useMediaQuery } from "@/hooks/use-mobile"
+import google from "../../../../public/Image/Google - Original.png"
+import apple from "../../../../public/Image/Apple - Negative.png"
+import Testimonial from "@/components/testimonial"
+import PPTU from "@/components/pptu"
+import { useAuth } from "@/contexts/auth-context"
+import { toast } from "@/components/ui/use-toast"
+import Logo from "@/components/logo"
+import { Eye, EyeOff } from "lucide-react"
+import sms from "../../../../public/Image/sms.png"
+import pass from "../../../../public/Image/password-check.png"
+import axios from "axios"
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const isMobile = useMediaQuery("(max-width: 1024px)");
-  const { login } = useAuth();
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [rememberMe, setRememberMe] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const isMobile = useMediaQuery("(max-width: 1024px)")
+  const { login } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
+    e.preventDefault()
+    setIsLoading(true)
 
     try {
-      await login(email, password);
-      // Success toast
+      // Validate input first
+      if (!email || !email.includes('@')) {
+        throw new Error("Please enter a valid email address")
+      }
+      
+      if (!password || password.length < 6) {
+        throw new Error("Password must be at least 6 characters")
+      }
+      
+      await login(email, password)
+
+      // Show success toast after login completes
       toast({
         title: "Login successful",
         description: "Welcome back to Revi.ai!",
-      });
+      })
       // Router push is handled inside the login function
     } catch (error) {
-      console.error("Login failed", error);
-      // Error toast
+      console.error("Login failed:", error)
+      
+      if (axios.isAxiosError(error)) {
+        console.error("Response error data:", error.response?.data)
+
+      // Extract error message from API response if available
+      let errorMessage = "Invalid credentials"
+
+      if (error.response?.data) {
+        errorMessage =
+          error.response.data.detail ||
+          error.response.data.message ||
+          error.response.data.error ||
+          "Invalid credentials"
+          
+        // Handle specific status codes
+        if (error.response.status === 401) {
+          errorMessage = "Invalid email or password. Please try again."
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message
+      }
+
       toast({
         title: "Login failed",
-        description: "Please check your credentials and try again.",
+        description: errorMessage,
         variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
+      })
     }
-  };
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleProviderLogin = async (provider: "google" | "apple") => {
+    toast({
+      title: "Not implemented",
+      description: `${provider} login is not available yet.`,
+      variant: "destructive",
+    })
+  }
 
   return (
     <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-[#212121] font-sf-pro ">
       <div className="flex flex-col items-center w-full gap-8 mx-auto lg:flex-row max-w-1440 ">
-        <Card className="w-full max-w-[503px] mx-auto  lg:min-h-[96vh]   ">
-          <CardHeader className="space-y-3 ">
+        <Card className="w-full max-w-[503px] mx-auto bg-transparent border-transparent">
+          <CardHeader className="pb-6 space-y-3 ">
             <Logo />
-            <h2 className="text-center text-[25px] font-[500] text-white pt-[33.5px] ">
-              Welcome back to Revi.ai
-            </h2>
+            <h2 className="text-center text-[25px] font-[500] text-white pt-[33.5px] ">Welcome back to Revi.ai</h2>
           </CardHeader>
 
-          <CardContent className="flex-grow">
+          <CardContent className="flex-grow py-4" style={{ height: "calc(85vh - 200px)" }}>
             <div className="space-y-4">
               <div className="grid gap-3">
                 <Button
                   variant="outline"
                   className="w-full text-white rounded-[15px] text-[15px] font-[400] border-white/15 hover:bg-zinc-800 py-5 h-11"
                   disabled={isLoading}
+                  onClick={() => handleProviderLogin("google")}
                 >
-                  <Image
-                    src={google || "/placeholder.svg"}
-                    alt="Google Logo"
-                    width={24}
-                    height={24}
-                  />
+                  <Image src={google || "/placeholder.svg"} alt="Google Logo" width={24} height={24} />
                   Sign in with Google
                 </Button>
 
@@ -94,18 +123,14 @@ export default function LoginPage() {
                   variant="outline"
                   className="w-full text-white rounded-[15px] text-[15px] font-[400] bg-transparent border-white/15 hover:bg-zinc-800 py-5 h-11"
                   disabled={isLoading}
+                  onClick={() => handleProviderLogin("apple")}
                 >
-                  <Image
-                    src={apple || "/placeholder.svg"}
-                    alt="Apple Logo"
-                    width={24}
-                    height={24}
-                  />
+                  <Image src={apple || "/placeholder.svg"} alt="Apple Logo" width={24} height={24} />
                   Sign in with Apple
                 </Button>
               </div>
 
-              <div className="relative py-6">
+              <div className="relative py-4">
                 <div className="absolute inset-0 flex items-center">
                   <span className="w-full border-t border-zinc-700" />
                 </div>
@@ -133,7 +158,11 @@ export default function LoginPage() {
                       required
                     />
                     {/* Mail icon inside the input */}
-                    <Image src={sms} alt="email icon" className="absolute w-[20px] h-[17px] transform -translate-y-1/2 left-3 top-1/2 text-zinc-400" />
+                    <Image
+                      src={sms || "/placeholder.svg"}
+                      alt="email icon"
+                      className="absolute w-[20px] h-[17px] transform -translate-y-1/2 left-3 top-1/2 text-zinc-400"
+                    />
                   </div>
                 </div>
 
@@ -157,7 +186,11 @@ export default function LoginPage() {
                     />
 
                     {/* Lock Icon (Left) */}
-                    <Image src={pass} alt="pass" className="absolute w-[20px] h-[17px] transform -translate-y-1/2 left-3 top-1/2 text-zinc-400" />
+                    <Image
+                      src={pass || "/placeholder.svg"}
+                      alt="pass"
+                      className="absolute w-[20px] h-[17px] transform -translate-y-1/2 left-3 top-1/2 text-zinc-400"
+                    />
 
                     {/* Password Toggle Button (Right) */}
                     <button
@@ -165,11 +198,7 @@ export default function LoginPage() {
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute transform -translate-y-1/2 right-3 top-1/2 text-zinc-400"
                     >
-                      {showPassword ? (
-                        <EyeOff className="w-5 h-5" />
-                      ) : (
-                        <Eye className="w-5 h-5" />
-                      )}
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                     </button>
                   </div>
                 </div>
@@ -180,18 +209,13 @@ export default function LoginPage() {
                       id="remember"
                       className="text-white border-white/15"
                       checked={rememberMe}
-                      onCheckedChange={(checked) =>
-                        setRememberMe(checked === true)
-                      }
+                      onCheckedChange={(checked) => setRememberMe(checked === true)}
                     />
                     <Label htmlFor="remember" className="text-sm text-zinc-400">
                       Remember me
                     </Label>
                   </div>
-                  <Link
-                    href="/forgot-password"
-                    className="text-sm text-zinc-400 hover:text-white"
-                  >
+                  <Link href="/forgot-password" className="text-sm text-zinc-400 hover:text-white">
                     Forgot Password?
                   </Link>
                 </div>
@@ -214,8 +238,9 @@ export default function LoginPage() {
               </p>
             </CardFooter>
           </CardContent>
-
-          <PPTU />
+          <div>
+            <PPTU />
+          </div>
         </Card>
 
         {!isMobile && (
@@ -225,5 +250,6 @@ export default function LoginPage() {
         )}
       </div>
     </div>
-  );
+  )
 }
+

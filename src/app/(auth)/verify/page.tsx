@@ -59,7 +59,7 @@ export default function VerifyPage() {
           </CardHeader>
 
           {/* Main Content (Flex-grow makes this take available space) */}
-          <CardContent className="flex flex-col justify-center flex-grow space-y-4">
+          <CardContent className="flex flex-col justify-center flex-grow space-y-4" style={{ height: 'calc(100vh - 200px)' }}>
             <h2 className="text-center text-white text-[25px]">
               Sign Up to Revi.ai
             </h2>

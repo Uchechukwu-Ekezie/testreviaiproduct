@@ -19,29 +19,27 @@ import { UpgradePlanModal } from "./upgrade-plan-modal"
 
 export function ProfileDropdown() {
   const { user, logout } = useAuth()
-  
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isUpgradeOpen, setIsUpgradeOpen] = useState(false)
-
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button className="flex items-center gap-3 hover:opacity-80">
-            <span className="text-sm text-zinc-400">{user?.name || user?.email}</span>
+            <span className="text-sm text-zinc-400">{user?.username || user?.email}</span>
             <Avatar className="w-8 h-8">
               {user?.avatar ? (
                 <Image
                   src={user.avatar || "/placeholder.svg"}
-                  alt={user.name || "User"}
+                  alt={user.username || "User"}
                   width={32}
                   height={32}
                   className="rounded-full"
                 />
               ) : (
                 <div className="flex items-center justify-center text-sm rounded-full bg-zinc-800 text-zinc-400">
-                  {user?.name?.[0] || user?.email?.[0] || "U"}
+                  {user?.username?.[0] || user?.email?.split("@")[0] || "U"}
                 </div>
               )}
             </Avatar>
