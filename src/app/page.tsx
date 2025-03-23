@@ -38,6 +38,7 @@ import three from "../../public/Image/three.png";
 import four from "../../public/Image/four.png";
 import star from "../../public/Image/Star 1.png";
 import { useMediaQuery } from "@/hooks/use-mobile";
+import { AnimatedText } from "@/components/animated-text";
 
 import { chatAPI } from "@/lib/api";
 
@@ -732,18 +733,22 @@ export default function ChatPage() {
                       </div>
                     </div>
                     <div className={`flex justify-start w-full`}>
-                      <div className="flex items-start gap-4 md:max-w-[80%] rounded-lg p-4 bg-card text-foreground">
-                        {/* Image */}
+                      <div className="flex items-start gap-2 md:gap-4 md:max-w-[80%] rounded-lg p-4 bg-card text-foreground">
+                        {/* Image - Added responsive sizing */}
                         <Image
                           src={star}
                           alt="Response Image"
-                          className="object-cover w-12 h-12 rounded-full"
+                          className="object-cover w-8 h-8 rounded-full md:w-12 md:h-12"
                         />
 
-                        {/* Response Text */}
-                        <p className="whitespace-pre-wrap">
-                          {message?.response}
-                        </p>
+                        {/* Response Text - Added better spacing */}
+                        <div className="flex-1 min-w-0">
+                          <AnimatedText 
+                            text={message?.response || ''} 
+                            speed={50}
+                            batchSize={1}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>

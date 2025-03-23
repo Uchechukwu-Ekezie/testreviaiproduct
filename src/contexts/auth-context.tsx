@@ -152,80 +152,57 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const response = await authAPI.login(email, password)
       console.log("Auth context: Login response:", response)
 
-      // Extract data from the response based on the actual API structure
-      // The response might contain access, refresh tokens and user info
-      const responseData = response
-
-      if (!responseData || !responseData.access) {
-        console.error("Auth context: Invalid login response structure:", responseData)
+      if (!response || !response.access) {
+        console.error("Auth context: Invalid login response structure:", response)
         throw new Error("Invalid login response structure")
       }
 
-      // Extract the access token and user data
-      const token = responseData.access
-      const refresh = responseData.refresh
-      const apiUser = responseData.user
+      // First set the token
+      const token = response.access
+      setAuthToken(token)
 
-      localStorage.setItem("authToken", token);
-      localStorage.setItem("refreshToken", refresh);
-
-      console.log("Auth context: Login successful, fetching user profile...")
-
-      if (!apiUser) {
-        setAuthToken(token)
-        try {
-          const userData = await userAPI.getProfile()
-          console.log("Auth context: Fetched user profile after login:", userData)
-          const userObj: User = {
-            id: userData.id || userData.pk,
-            username: userData.username || userData.email.split("@")[0],
-            email: userData.email,
-            first_name: userData.first_name || "",
-            last_name: userData.last_name || "",
-            type: userData.type,
-            subscription_type: userData.subscription_type,
-            subscription_start_date: userData.subscription_start_date,
-            subscription_end_date: userData.subscription_end_date,
-            is_active: userData.is_active,
-            avatar: userData.avatar || "/placeholder.svg",
-            date_joined: userData.date_joined,
-            last_login: userData.last_login
-          }
-
-          setUser(userObj)
-        } catch (profileError: any) {
-          console.error("Auth context: Failed to fetch user profile after login:", profileError)
-          // Clear token if profile fetch fails
-          clearAuthToken()
-          throw new Error("Could not fetch user profile: " + (profileError.message || "Unknown error"))
-        }
+      // Then fetch user profile
+      let userObj: User;
+      if (response.user) {
+        // If user data is included in login response, use it
+        userObj = {
+          id: response.user.id || response.user.pk,
+          username: response.user.username || response.user.email.split("@")[0],
+          email: response.user.email,
+          first_name: response.user.first_name || "",
+          last_name: response.user.last_name || "",
+          type: response.user.type || "user",
+          subscription_type: response.user.subscription_type,
+          subscription_start_date: response.user.subscription_start_date,
+          subscription_end_date: response.user.subscription_end_date,
+          is_active: response.user.is_active,
+          avatar: response.user.avatar || "/placeholder.svg",
+          date_joined: response.user.date_joined,
+          last_login: response.user.last_login
+        };
       } else {
-        // If user data is included in login response
-        setAuthToken(token)
-
-        // Create a user object from the login API response
-        const userObj: User = {
-          id: apiUser.id || apiUser.pk,
-          username: apiUser.username || apiUser.email.split("@")[0],
-          email: apiUser.email,
-          first_name: apiUser.first_name || "",
-          last_name: apiUser.last_name || "",
-          type: apiUser.type || "user",
-          subscription_type: apiUser.subscription_type,
-          subscription_start_date: apiUser.subscription_start_date,
-          subscription_end_date: apiUser.subscription_end_date,
-          is_active: apiUser.is_active,
-          avatar: apiUser.avatar || "/placeholder.svg",
-          date_joined: apiUser.date_joined,
-          last_login: apiUser.last_login
-        }
-
-        setUser(userObj)
+        // Otherwise fetch user profile
+        const userData = await userAPI.getProfile()
+        userObj = {
+          id: userData.id || userData.pk,
+          username: userData.username || userData.email.split("@")[0],
+          email: userData.email,
+          first_name: userData.first_name || "",
+          last_name: userData.last_name || "",
+          type: userData.type || "user",
+          subscription_type: userData.subscription_type,
+          subscription_start_date: userData.subscription_start_date,
+          subscription_end_date: userData.subscription_end_date,
+          is_active: userData.is_active,
+          avatar: userData.avatar || "/placeholder.svg",
+          date_joined: userData.date_joined,
+          last_login: userData.last_login
+        };
       }
 
-      // Mark as successful
+      // Set user state after we have all the data
+      setUser(userObj)
       success = true
-      console.log("Auth context: Login successful, will navigate to dashboard")
 
       // Navigate to dashboard
       router.push("/")
@@ -235,27 +212,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.error("Auth context: Login error details:", {
         error,
         response: error.response,
-        data: error.response?.data || error.detail, // Include the detail we added
+        data: error.response?.data || error.detail,
         status: error.response?.status,
         message: error.message
       })
 
-      // Display a toast with the error message
-      let errorMessage = "Invalid email or password. Please try again."
-
-      if (error.response?.status === 401) {
-        errorMessage = "Invalid credentials. Please check your email and password."
-      } else if (error.response?.data?.detail) {
-        errorMessage = error.response.data.detail
-      } else if (error.detail) {
-        errorMessage = typeof error.detail === 'string' ? error.detail : 'Authentication failed'
-      }
-
-      toast({
-        title: "Login Failed",
-        description: errorMessage,
-        variant: "destructive"
-      })
+      // Clear any partial state on error
+      clearAuthToken()
+      setUser(null)
 
       // Re-throw the error to be caught by the component
       throw error
