@@ -42,7 +42,7 @@ export default function SignUpPage() {
   const [isProviderLoading, setIsProviderLoading] = useState<"google" | "apple" | null>(null)
   const isMobile = useMediaQuery("(max-width: 1024px)")
   const router = useRouter()
-  const { signupWithProvider } = useAuth()
+  const { signupWithProvider, signup } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -56,16 +56,44 @@ export default function SignUpPage() {
       return
     }
 
+    // Basic validation
+    if (!formData.email || !formData.email.includes('@')) {
+      toast({
+        title: "Invalid Email",
+        description: "Please enter a valid email address.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!formData.password || formData.password.length < 6) {
+      toast({
+        title: "Invalid Password",
+        description: "Password must be at least 6 characters long.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!formData.username) {
+      toast({
+        title: "Username Required",
+        description: "Please enter a username.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsLoading(true)
 
     try {
-      
+      await signup(formData)
 
       // Only show success toast if we get here (no error was thrown)
       // The navigation is handled in the auth context
       toast({
         title: "Account created",
-        description: "Please check your email for verification.",
+        description: "please sign in to continue",
       })
     } catch (error) {
       console.error(error, "Signup form submission")
