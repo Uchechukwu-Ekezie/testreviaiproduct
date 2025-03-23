@@ -397,18 +397,20 @@ export default function ForgotPasswordPage() {
   return (
     <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-[#212121] font-sf-pro">
       <div className="flex flex-col items-center w-full gap-8 mx-auto lg:flex-row max-w-1440">
-        <Card className="w-full max-w-[503px] mx-auto min-h-[96vh] ">
-          {/* Update the CardHeader to match the design */}
-          <CardHeader className="space-y-3 ">
+        <Card className="w-full max-w-[503px] mx-auto lg:min-h-[96vh] bg-transparent border-transparent flex flex-col">
+          <CardHeader className="space-y-3">
             <Logo />
           </CardHeader>
 
-          {currentStep === "email" && renderEmailStep()}
-          {currentStep === "verification" && renderVerificationStep()}
-          {currentStep === "success" && renderSuccessStep()}
-
-          {/* Update the footer to match the design */}
-          <PPTU />
+          <CardContent className="flex-grow py-4 overflow-y-auto">
+            {currentStep === "email" && renderEmailStep()}
+            {currentStep === "verification" && renderVerificationStep()}
+            {currentStep === "success" && renderSuccessStep()}
+          </CardContent>
+          
+          <div className="mt-auto">
+            <PPTU />
+          </div>
         </Card>
 
         {!isMobile && (

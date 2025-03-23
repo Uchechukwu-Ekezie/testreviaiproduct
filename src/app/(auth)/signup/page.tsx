@@ -168,13 +168,13 @@ export default function SignUpPage() {
   return (
     <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-[#212121] font-sf-pro">
       <div className="flex flex-col items-center w-full gap-8 mx-auto lg:flex-row max-w-1440">
-        <Card className="w-full max-w-[503px] mx-auto lg:min-h-[96vh] bg-transparent border-transparent">
+        <Card className="w-full max-w-[503px] mx-auto lg:min-h-[96vh] bg-transparent border-transparent flex flex-col">
           <CardHeader className="space-y-3">
             <Logo />
             <h2 className="text-center text-[25px] font-[500] text-white pt-[33.5px]">Sign Up to Revi.ai</h2>
           </CardHeader>
 
-          <CardContent className="flex-grow py-4" style={{ height: "calc(100vh - 200px)" }}>
+          <CardContent className="flex-grow py-4 overflow-y-auto">
             <div className="space-y-2">
               <div className="grid gap-3">
                 <Button
@@ -353,7 +353,7 @@ export default function SignUpPage() {
               </form>
             </div>
             <CardFooter className="flex flex-col space-y-4 text-center">
-              <p className="mt-5 text-4 text-zinc-400">
+              <p className="mt-5 text-sm text-zinc-400">
                 Already have an account?{" "}
                 <Button
                   variant="link"
@@ -366,7 +366,8 @@ export default function SignUpPage() {
               </p>
             </CardFooter>
           </CardContent>
-          <div>
+          
+          <div className="mt-auto">
             <PPTU />
           </div>
         </Card>

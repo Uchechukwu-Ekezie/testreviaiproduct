@@ -98,15 +98,15 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-[#212121] font-sf-pro ">
-      <div className="flex flex-col items-center w-full gap-8 mx-auto lg:flex-row max-w-1440 ">
-        <Card className="w-full max-w-[503px] mx-auto bg-transparent border-transparent">
-          <CardHeader className="pb-6 space-y-3 ">
+    <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-[#212121] font-sf-pro">
+      <div className="flex flex-col items-center w-full gap-8 mx-auto lg:flex-row max-w-1440">
+        <Card className="w-full max-w-[503px] mx-auto lg:min-h-[96vh] bg-transparent border-transparent flex flex-col">
+          <CardHeader className="space-y-3">
             <Logo />
-            <h2 className="text-center text-[25px] font-[500] text-white pt-[33.5px] ">Welcome back to Revi.ai</h2>
+            <h2 className="text-center text-[25px] font-[500] text-white pt-[33.5px]">Welcome back to Revi.ai</h2>
           </CardHeader>
 
-          <CardContent className="flex-grow py-4" style={{ height: "calc(85vh - 200px)" }}>
+          <CardContent className="flex-grow py-4 overflow-y-auto">
             <div className="space-y-4">
               <div className="grid gap-3">
                 <Button
@@ -229,8 +229,8 @@ export default function LoginPage() {
                 </Button>
               </form>
             </div>
-            <CardFooter className="flex flex-col text-center ">
-              <p className="mt-5 space-y-4 text-sm text-zinc-400">
+            <CardFooter className="flex flex-col text-center">
+              <p className="mt-5 text-sm text-zinc-400">
                 Don&apos;t have an account?{" "}
                 <Link href="/signup" className="text-white hover:underline">
                   Sign Up
@@ -238,7 +238,8 @@ export default function LoginPage() {
               </p>
             </CardFooter>
           </CardContent>
-          <div>
+          
+          <div className="mt-auto">
             <PPTU />
           </div>
         </Card>
