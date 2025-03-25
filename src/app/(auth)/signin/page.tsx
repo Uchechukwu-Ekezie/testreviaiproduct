@@ -106,7 +106,7 @@ export default function LoginPage() {
             <h2 className="text-center text-[25px] font-[500] text-white pt-[33.5px]">Welcome back to Revi.ai</h2>
           </CardHeader>
 
-          <CardContent className="flex-grow py-4 overflow-y-auto">
+          <CardContent className="items-center justify-center flex-grow w-full py-4 overflow-y-auto ">
             <div className="space-y-4">
               <div className="grid gap-3">
                 <Button
@@ -228,8 +228,7 @@ export default function LoginPage() {
                   {isLoading ? "Signing in..." : "Sign In"}
                 </Button>
               </form>
-            </div>
-            <CardFooter className="flex flex-col text-center">
+              <CardFooter className="flex flex-col text-center">
               <p className="mt-5 text-sm text-zinc-400">
                 Don&apos;t have an account?{" "}
                 <Link href="/signup" className="text-white hover:underline">
@@ -237,6 +236,8 @@ export default function LoginPage() {
                 </Link>
               </p>
             </CardFooter>
+            </div>
+       
           </CardContent>
           
           <div className="mt-auto">

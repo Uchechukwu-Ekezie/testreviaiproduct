@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-import { Settings, User, Lock, Trash2, Eye, EyeOff } from "lucide-react"
+import { Settings, User, Lock, Trash2, Eye, EyeOff, Share, Check, Copy } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { DeleteAccountModal } from "./delete-account-modal"
 import { FilteredResponseModal } from "./filtered-response-modal"
@@ -19,7 +19,7 @@ interface SettingsModalProps {
   onClose: () => void
 }
 
-type SettingsTab = "general" | "personalization" | "password" | "delete"
+type SettingsTab = "general" | "personalization" | "password" | "delete" | "invite"
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const isMobile = useIsMobile()
@@ -39,11 +39,32 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [showFilteredResponse, setShowFilteredResponse] = useState(false)
   const [filteredResponseEnabled, setFilteredResponseEnabled] = useState(false)
   const [selectedRole, setSelectedRole] = useState<string | null>(null)
+  const [referralCode] = useState("FL3598KJ")
+  const [referralPoints] = useState(5)
+  const [referralUsers] = useState(5)
+  const [copied, setCopied] = useState(false)
+
+  // const handleFilteredResponseToggle = (checked: boolean) => {
+  //   if (checked) {
+  //     setShowFilteredResponse(true)
+  //   } else {
+  //     setFilteredResponseEnabled(false)
+  //     setSelectedRole(null)
+  //   }
+  // }
+
 
   const handleRoleSelect = (role: string) => {
     setSelectedRole(role)
     setFilteredResponseEnabled(true)
   }
+  
+  const copyReferralCode = () => {
+    navigator.clipboard.writeText(referralCode)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -83,6 +104,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const tabs = [
     { id: "general" as const, label: "General", icon: Settings },
     { id: "personalization" as const, label: "Personalization", icon: User },
+    { id: "invite" as const, label: "Invite & Earn", icon: Share },
     { id: "password" as const, label: "Password", icon: Lock },
     { id: "delete" as const, label: "Delete Account", icon: Trash2 },
   ]
@@ -99,21 +121,21 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
           {/* Mobile Tabs - Only show when not changing password */}
           {isMobile && !isChangingPassword && (
-            <div className="flex overflow-x-auto border-b border-zinc-800 scrollbar-hide">
+            <div className="grid items-center grid-cols-2 px-2 border-b border-zinc-800">
               {tabs.map((tab) => {
                 const Icon = tab.icon
                 return (
                   <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={cn(
-                      "flex items-center gap-1 px-3 py-2 text-xs whitespace-nowrap text-zinc-400 hover:bg-zinc-800/50",
-                      activeTab === tab.id && "bg-zinc-800/50 text-white border-b-2 border-pink-500",
-                    )}
-                  >
-                    <Icon className="w-3 h-3 sm:w-4 sm:h-4" />
-                    <span>{tab.label}</span>
-                  </button>
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={cn(
+                    "flex items-center gap-1 px-3 py-3 text-xs whitespace-nowrap text-zinc-400 hover:bg-zinc-800/50",
+                    activeTab === tab.id && "bg-[#3B3B3B] text-white rounded-[10px]",
+                  )}
+                >
+                  <Icon className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="text-[15px]">{tab.label}</span>
+                </button>
                 )
               })}
             </div>
@@ -411,6 +433,55 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       </div>
                     </div>
                   )}
+                  
+                  {activeTab === "invite" && (
+                    <div className="space-y-6">
+                      <div className="flex flex-col items-center justify-center mb-6">
+                        <div className="mb-1 text-4xl font-bold text-white">
+                          {referralPoints.toString().padStart(2, "0")}
+                        </div>
+                        <div className="text-sm text-zinc-400">Referral Points Earned</div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm text-zinc-400">Share your referral link</label>
+                        <div className="relative">
+                          <Input
+                            value={referralCode}
+                            readOnly
+                            className="pr-10 text-white bg-zinc-800/50 border-zinc-700"
+                          />
+                          <button
+                            type="button"
+                            onClick={copyReferralCode}
+                            className="absolute -translate-y-1/2 right-3 top-1/2 text-zinc-400 hover:text-zinc-300"
+                          >
+                            {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="text-sm text-zinc-400">
+                        Invite your friends and earn rewards! For every friend that signs up and purchases tokens using
+                        your referral link, you both get 5 free tokens. The more you share, the more you earn!
+                      </div>
+
+                      <div className="mt-6 space-y-2">
+                        <label className="text-sm text-zinc-400">Number of People Who Used the Link</label>
+                        <div className="flex items-center justify-center w-16 h-10 text-white border rounded-md bg-zinc-800/50 border-zinc-700">
+                          {referralUsers.toString().padStart(2, "0")}
+                        </div>
+                      </div>
+
+                      <div className="p-4 mt-6 border rounded-lg border-yellow-600/30 bg-yellow-600/10">
+                        <p className="text-xs text-yellow-400">
+                          Share your referral link on social media or directly with friends to maximize your rewards.
+                          Each successful referral helps both you and your friend!
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
 
                   {activeTab === "password" && (
                     <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center sm:gap-0">

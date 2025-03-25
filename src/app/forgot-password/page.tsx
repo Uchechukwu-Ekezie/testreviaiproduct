@@ -402,7 +402,7 @@ export default function ForgotPasswordPage() {
             <Logo />
           </CardHeader>
 
-          <CardContent className="flex-grow py-4 overflow-y-auto">
+          <CardContent className="flex items-center flex-grow py-4 overflow-y-auto">
             {currentStep === "email" && renderEmailStep()}
             {currentStep === "verification" && renderVerificationStep()}
             {currentStep === "success" && renderSuccessStep()}
