@@ -718,27 +718,59 @@ export const chatAPI = {
   postNewChat: async (message: string, sessionId?: string) => {
     try {
       console.log("API: Posting new chat message to session:", sessionId, "with message:", message);
-      let data;
-      if (sessionId) {
-        data = {
-          prompt: message,
-          session: sessionId  // This is the key: session should be the session ID
-        };
-      } else {
-        data = {
-          prompt: message
-        }
+      
+      // Ensure auth token is set
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error("Authentication token is missing");
       }
-      const response = await api.post(`/chats/ai-chat/`, data);
-      return response.data;
-    } catch (error: any) {  // Fixed: changed from incorrect catch syntax to proper error handling
+      setAuthToken(token);
+
+      // Construct request data
+      const data = {
+        prompt: message.trim(),
+        ...(sessionId && { session_id: sessionId })  // Use session_id instead of session
+      };
+
+      console.log("API: Sending chat request with data:", data);
+      
+      const response = await api.post(`/chats/ai-chat/`, data, {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      
+      console.log("API: Chat response received:", response.data);
+
+      // Create a complete message object with both prompt and response
+      const messageObj = {
+        id: response.data.id,
+        prompt: message.trim(),  // Include the original prompt
+        response: response.data.response || response.data.message || "",  // Handle different response formats
+        session: sessionId || response.data.session_id,
+        created_at: response.data.created_at || new Date().toISOString(),
+        updated_at: response.data.updated_at || new Date().toISOString()
+      };
+
+      return messageObj;
+    } catch (error: any) {
       console.error("API: post new chats failed with detailed error:", {
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data,
-        message: error.message
+        message: error.message,
+        stack: error.stack
       });
-      throw error;  // Re-throw the error to be handled by calling code
+
+      // Add more specific error handling
+      if (error.response?.status === 401) {
+        throw new Error("Authentication failed. Please log in again.");
+      } else if (error.response?.status === 500) {
+        throw new Error("Server error occurred. Please try again later.");
+      }
+
+      throw error;
     }
   },
 

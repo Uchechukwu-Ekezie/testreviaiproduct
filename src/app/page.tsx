@@ -28,12 +28,19 @@ interface Message {
   response?: string
 }
 
+interface ChatSession {
+  id: string;
+  chat_title: string;
+  user: string;
+  created_at?: string;
+}
+
 export default function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
-  const [sessions, setSessions] = useState<any>([])
+  const [sessions, setSessions] = useState<ChatSession[]>([])
   const [activeSession, setActiveSession] = useState<string | null>(null)
   const [newTitle, setNewTitle] = useState("")
   const [showRenameDialog, setShowRenameDialog] = useState(false)
@@ -210,62 +217,55 @@ export default function ChatPage() {
 
   const postChat = async (input: string, activeSession?: string) => {
     try {
+      // Create a temporary message ID that we'll use to track this message
+      const tempMessageId = "temp-" + Date.now()
+      
       // Immediately add the user's message to the UI
       const tempMessage: Message = {
-        id: "temp-" + Date.now(),
+        id: tempMessageId,
         prompt: input,
         response: "",
       }
       setMessages((prev) => [...prev, tempMessage])
 
-      if (activeSession) {
-        const data = await chatAPI.postNewChat(input, activeSession)
-        setLatestMessageId(data.id)
-        // Replace the temporary message with the complete one
-        setMessages((prev) => prev.map((msg) => (msg.id === tempMessage.id ? data : msg)))
-        setTimeout(scrollToBottom, 100)
-        return data
-      } else {
-        let userId = user?.id
+      let sessionId = activeSession
+      let newSessionData: ChatSession | null = null
 
-        if (!userId && !isAuthenticated) {
-          userId = "guest"
-          console.log("Warning: User not authenticated. Using guest ID.")
-        }
-
+      // If no active session, create one first
+      if (!sessionId) {
+        const userId = user?.id || "guest"
         const sessionData = {
           chat_title: input.substring(0, 30),
-          user: userId || "guest",
+          user: userId,
         }
 
         console.log("Creating new chat session with data:", sessionData)
-        const sessionResponse = await chatAPI.createChatSession(sessionData)
-        console.log("New session created:", sessionResponse)
-
-        setActiveSession(sessionResponse.id)
-
-        const data = await chatAPI.postNewChat(input, sessionResponse.id)
-
-        setLatestMessageId(data.id)
-
-        // Replace the temporary message with the complete one
-        setMessages((prev) => prev.map((msg) => (msg.id === tempMessage.id ? data : msg)))
-
-        setSessions((prev: any) => {
-          const exists = prev.some((s: any) => s.id === sessionResponse.id)
-          if (!exists) {
-            return [...prev, sessionResponse]
-          }
-          return prev
-        })
-
-        setTimeout(() => {
-          refreshSessions()
-        }, 500)
-
-        setTimeout(scrollToBottom, 100)
-        return data
+        newSessionData = await chatAPI.createChatSession(sessionData)
+        console.log("New session created:", newSessionData)
+        
+        // Set the session ID for the chat message
+        sessionId = newSessionData.id
+        
+        // Update sessions list and set active session
+        setSessions((prev: ChatSession[]) => [newSessionData!, ...prev])
+        setActiveSession(sessionId)
       }
+
+      // Now post the chat message
+      const data = await chatAPI.postNewChat(input, sessionId!)
+      setLatestMessageId(data.id)
+
+      // Replace the temporary message with the complete one
+      setMessages((prev) => prev.map((msg) => (msg.id === tempMessageId ? data : msg)))
+
+      // If this was a new session, make sure it's properly set in state
+      if (newSessionData) {
+        // Fetch the updated session list to ensure everything is in sync
+        await getSessions()
+      }
+
+      setTimeout(scrollToBottom, 100)
+      return data
     } catch (error: any) {
       console.error("Error in postChat:", error)
       const errorDetails = {
@@ -338,8 +338,8 @@ export default function ChatPage() {
       })
 
       // Update the sessions list with the new title
-      setSessions((prev: any) =>
-        prev.map((session: any) => (session.id === sessionId ? { ...session, ...updatedSession } : session)),
+      setSessions((prev: ChatSession[]) =>
+        prev.map((session: ChatSession) => (session.id === sessionId ? { ...session, ...updatedSession } : session)),
       )
 
       setShowRenameDialog(false)
