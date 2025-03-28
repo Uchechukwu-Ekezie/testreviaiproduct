@@ -13,6 +13,7 @@ import { toast } from "@/hooks/use-toast"
 import { DeleteAccountModal } from "./delete-account-modal"
 import { FilteredResponseModal } from "./filtered-response-modal"
 import { useIsMobile } from "../hooks/use-mobile"
+import { authAPI } from "@/lib/api"
 
 interface SettingsModalProps {
   isOpen: boolean
@@ -31,9 +32,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [passwordForm, setPasswordForm] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
+    new_password1: "",
+    new_password2: "",
   })
   const [showDeleteAccount, setShowDeleteAccount] = useState(false)
   const [showFilteredResponse, setShowFilteredResponse] = useState(false)
@@ -66,40 +66,43 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   }
 
 
-  const handlePasswordChange = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handlePasswordChange = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
 
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    if (passwordForm.new_password1 !== passwordForm.new_password2) {
       toast({
         title: "Error",
         description: "New passwords do not match",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     try {
-      // Here you would typically call your API to change the password
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      await authAPI.passwordChange(
+        passwordForm.new_password1,
+        passwordForm.new_password2
+      );
 
       toast({
         title: "Success",
         description: "Password has been changed successfully",
-      })
-      setIsChangingPassword(false)
+      });
+      setIsChangingPassword(false);
       setPasswordForm({
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      })
-    } catch {
+        new_password1: "",
+        new_password2: "",
+      });
+    } catch (error: any) {
+      console.error("Password change error:", error);
+      const errorMessage = error.detail || "Failed to change password";
       toast({
         title: "Error",
-        description: "Failed to change password",
+        description: errorMessage,
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   const tabs = [
     { id: "general" as const, label: "General", icon: Settings },
@@ -219,36 +222,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               {isChangingPassword ? (
                 <form onSubmit={handlePasswordChange} className="space-y-3 sm:space-y-4">
                   <div className="space-y-1 sm:space-y-2">
-                    <label className="text-xs sm:text-sm text-zinc-400">Current Password</label>
-                    <div className="relative">
-                      <Input
-                        type={showCurrentPassword ? "text" : "password"}
-                        value={passwordForm.currentPassword}
-                        onChange={(e) => setPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
-                        className="pr-10 text-xs text-white bg-zinc-800/50 border-zinc-700 sm:text-sm"
-                        placeholder="Enter your password"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                        className="absolute -translate-y-1/2 right-3 top-1/2 text-zinc-400 hover:text-zinc-300"
-                      >
-                        {showCurrentPassword ? (
-                          <EyeOff className="w-3 h-3 sm:w-4 sm:h-4" />
-                        ) : (
-                          <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1 sm:space-y-2">
                     <label className="text-xs sm:text-sm text-zinc-400">New Password</label>
                     <div className="relative">
                       <Input
                         type={showNewPassword ? "text" : "password"}
-                        value={passwordForm.newPassword}
-                        onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
+                        value={passwordForm.new_password1}
+                        onChange={(e) => setPasswordForm((prev) => ({ ...prev, new_password1: e.target.value }))}
                         className="pr-10 text-xs text-white bg-zinc-800/50 border-zinc-700 sm:text-sm"
                         placeholder="Enter new password"
                       />
@@ -271,8 +250,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     <div className="relative">
                       <Input
                         type={showConfirmPassword ? "text" : "password"}
-                        value={passwordForm.confirmPassword}
-                        onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+                        value={passwordForm.new_password2}
+                        onChange={(e) => setPasswordForm((prev) => ({ ...prev, new_password2: e.target.value }))}
                         className="pr-10 text-xs text-white bg-zinc-800/50 border-zinc-700 sm:text-sm"
                         placeholder="Confirm new password"
                       />
@@ -303,9 +282,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       onClick={() => {
                         setIsChangingPassword(false)
                         setPasswordForm({
-                          currentPassword: "",
-                          newPassword: "",
-                          confirmPassword: "",
+                          new_password1: "",
+                          new_password2: "",
                         })
                       }}
                       className="flex-1 border-zinc-700 hover:bg-zinc-800 text-zinc-400 rounded-[10px] text-xs sm:text-sm"

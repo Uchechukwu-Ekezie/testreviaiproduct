@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { CardHeader } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/card";
 import { useMediaQuery } from "@/hooks/use-mobile";
 import { useRouter } from "next/navigation";
 import { ThumbsUp, Home } from "lucide-react";
@@ -18,9 +18,8 @@ export default function WelcomePage() {
     <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-[#212121] font-sf-pro">
       <div className="flex flex-col items-center w-full gap-8 mx-auto lg:flex-row max-w-1440">
         {/* Left Section */}
-        <div className="w-full max-w-[503px] mx-auto lg:min-h-[96vh] flex flex-col justify-between h-full">
-          {/* Logo at the Top */}
-          <CardHeader className="flex items-center justify-center mt-5">
+        <Card className="w-full max-w-[503px] mx-auto lg:min-h-[96vh] bg-transparent border-transparent flex flex-col min-h-[100vh] justify-between p-4 sm:p-6">
+          <CardHeader className="space-y-3 flex-shrink-0">
             <Logo />
           </CardHeader>
 
@@ -50,8 +49,8 @@ export default function WelcomePage() {
             </div>
 
             <Button
-              onClick={() => router.push("/")}
-              className="px-6 text-white border border-zinc-700 hover:bg-zinc-700 rounded-[15px] text-[18px] font-[400] py-5 mt-8"
+              onClick={() => router.push("/signin")}
+              className="px-6 text-white border bg-transparent    border-zinc-700 hover:bg-zinc-700 rounded-[15px] text-[18px] font-[400] py-5 mt-8"
             >
               <Home className="mr-2" />
               Go to Home Page
@@ -60,7 +59,7 @@ export default function WelcomePage() {
 
           {/* PPTU at the Bottom */}
           <PPTU />
-        </div>
+        </Card>
 
         {/* Right Section - AI Features */}
         {!isMobile && (

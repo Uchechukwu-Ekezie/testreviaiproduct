@@ -20,11 +20,12 @@ const publicSans = Public_Sans({
   display: "swap",
 })
 
-
-
 export const metadata: Metadata = {
-  title: 'Revi AI Technologies',
-  description: 'Trusted property insights powered by AI',
+  title: "Revi.ai",
+  description: "Your AI Assistant",
+  icons: {
+    icon: '/favicon.ico',
+  },
 };
 
 export default function RootLayout({

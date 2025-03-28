@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { authAPI, userAPI, clearAuthToken, getAuthToken, setAuthToken, verifyToken } from "@/lib/api"
+import { toast } from "@/components/ui/use-toast"
 
 
 // ✅ Define user type
@@ -246,53 +247,49 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const response = await authAPI.signup(userData)
       console.log("Auth context: Signup response:", response)
 
-      // Extract data from the response based on the actual API structure
-      // The response contains data.data which has access, refresh tokens and user info
+      // Extract data from the response
       const responseData = response.data
-
-      if (!responseData || !responseData.access || !responseData.user) {
-        console.error("Auth context: Invalid signup response structure:", responseData)
-        throw new Error("Invalid signup response structure")
-      }
-
-      // Extract the access token and user data
-      const token = responseData.access
-      const apiUser = responseData.user
 
       // Create a user object from the API response
       const userObj: User = {
-        id: apiUser.pk || apiUser.id,
-        username: apiUser.username || apiUser.email.split("@")[0],
-        email: apiUser.email,
-        first_name: apiUser.first_name || "",
-        last_name: apiUser.last_name || "",
-        type: apiUser.type,
-        subscription_type: apiUser.subscription_type,
-        subscription_start_date: apiUser.subscription_start_date,
-        subscription_end_date: apiUser.subscription_end_date,
-        is_active: apiUser.is_active,
-        avatar: apiUser.avatar || "/placeholder.svg",
-        date_joined: apiUser.date_joined,
-        last_login: apiUser.last_login
+        id: responseData.id || responseData.pk,
+        username: responseData.username || userData.username,
+        email: responseData.email || userData.email,
+        first_name: responseData.first_name || userData.first_name,
+        last_name: responseData.last_name || userData.last_name,
+        type: responseData.type || "user",
+        is_active: responseData.is_active !== undefined ? responseData.is_active : true,
+        avatar: responseData.avatar || "/placeholder.svg",
+        date_joined: responseData.date_joined || new Date().toISOString(),
       }
 
-      // Set user and token
+      // Set user in state
       setUser(userObj)
-      setAuthToken(token)
+
+      // If there's an access token in the response, set it
+      if (responseData.access) {
+        setAuthToken(responseData.access)
+      }
 
       // Mark as successful
       success = true
       console.log("Auth context: Signup successful, will navigate to verify")
 
+      // Show success toast
+      toast({
+        title: "Account created",
+        description: "Please verify your email to continue.",
+      })
+
       // Navigate to verify page
-      router.push("/signin")
+      router.push("/verify")
       return true
     } catch (error: any) {
       // Log the full error for debugging
       console.error("Auth context: Signup error details:", {
         error,
         response: error.response,
-        data: error.response?.data.username,
+        data: error.response?.data,
         status: error.response?.status,
       })
 

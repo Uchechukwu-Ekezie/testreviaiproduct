@@ -36,14 +36,20 @@ api.interceptors.response.use(
   (response: AxiosResponse) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
-
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    
+    // Don't attempt to refresh token for login/register endpoints
+    const isAuthEndpoint = originalRequest.url?.includes('/auth/token') || 
+                          originalRequest.url?.includes('/auth/register');
+    
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        })
-          .then(() => api(originalRequest))
-          .catch((err) => Promise.reject(err));
+        try {
+          return new Promise((resolve, reject) => {
+            failedQueue.push({ resolve, reject });
+          }).then(() => api(originalRequest));
+        } catch (err) {
+          return Promise.reject(err);
+        }
       }
 
       originalRequest._retry = true;
@@ -53,25 +59,34 @@ api.interceptors.response.use(
         const refreshToken = typeof window !== 'undefined' && window.localStorage.getItem('refreshToken');
 
         if (!refreshToken) {
-          // Handle the case where there's no refresh token (e.g., logout)
+          // Clear tokens and reject if no refresh token
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('refreshToken');
+          delete api.defaults.headers.common["Authorization"];
           return Promise.reject(error);
         }
 
-        const response = await axios.post<{ access: string }>(`${BASE_URL}/auth/token/refresh`, {
-          refresh:refreshToken,
+        const response = await axios.post<{ access: string }>(`${BASE_URL}/auth/token/refresh/`, {
+          refresh: refreshToken,
         });
-        const { access: accessToken } = response.data;
+
+        const { access: newAccessToken } = response.data;
 
         if (typeof window !== 'undefined') {
-          window.localStorage.setItem('authToken', accessToken);
+          localStorage.setItem('authToken', newAccessToken);
+          api.defaults.headers.common["Authorization"] = `Bearer ${newAccessToken}`;
         }
 
-        api.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
-        processQueue(null, accessToken);
+        processQueue(null, newAccessToken);
         return api(originalRequest);
       } catch (refreshError: any) {
+        // If refresh fails, clear all tokens and reject
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('refreshToken');
+        delete api.defaults.headers.common["Authorization"];
+        
         processQueue(refreshError, null);
-        return Promise.reject(refreshError);
+        return Promise.reject(error);
       } finally {
         isRefreshing = false;
       }
@@ -147,31 +162,69 @@ export const authAPI = {
     try {
       console.log("API: Attempting login with email:", email)
 
-      const response = await api.post("/auth/token", {
-        email,
-        password
-      }, {
-        headers: {
-          "Content-Type": "application/json"
-        }
-      })
+      // Clear any existing tokens before login attempt
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('refreshToken');
+      delete api.defaults.headers.common["Authorization"];
 
-      console.log("API: Login successful, response status:", response.status)
-      return response.data
+      const response = await api.post("/auth/login/", {
+        email: email.trim(),
+        password: password.trim()
+      });
+
+      console.log("API: Login successful, response:", response.data)
+      
+      // Handle both possible response formats
+      const accessToken = response.data.access_token || response.data.access;
+      const refreshToken = response.data.refresh_token || response.data.refresh;
+      const userData = response.data.user || response.data;
+
+      if (!accessToken) {
+        throw new Error("No access token received from server");
+      }
+
+      // Store tokens
+      localStorage.setItem('authToken', accessToken);
+      api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
+      
+      if (refreshToken) {
+        localStorage.setItem('refreshToken', refreshToken);
+      }
+
+      return {
+        access: accessToken,
+        refresh: refreshToken,
+        user: userData
+      }
     } catch (error: any) {
       console.error("API: Login failed with detailed error:", {
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data,
-        message: error.message
+        message: error.message,
+        detail: error.response?.data?.detail
       })
 
-      // Include the detailed response in the error
-      if (error.response?.data) {
-        error.detail = error.response.data
+      // Handle specific error cases
+      if (error.response?.status === 500) {
+        error.detail = "An internal server error occurred. Please try again later.";
+      } else if (error.response?.status === 401 || error.response?.status === 403) {
+        const errorDetail = error.response?.data?.detail?.toLowerCase() || '';
+        
+        if (errorDetail.includes("no active account") || errorDetail.includes("invalid credentials")) {
+          error.detail = "The email or password you entered is incorrect. Please check your credentials and try again.";
+        } else if (errorDetail.includes("not verified") || errorDetail.includes("verify")) {
+          error.detail = "Please verify your email before logging in. If you haven't received a verification email, try signing up again.";
+        } else {
+          error.detail = "Invalid email or password. Please check your credentials and try again.";
+        }
+      } else if (error.response?.data?.detail) {
+        error.detail = error.response.data.detail;
+      } else {
+        error.detail = "An error occurred during login. Please try again.";
       }
 
-      throw error
+      throw error;
     }
   },
 
@@ -182,14 +235,78 @@ export const authAPI = {
     last_name: string
     password: string
   }) => {
-    const response = await api.post("/auth/", userData)
+    const response = await api.post("/auth/register/", userData)
     // Return the entire response so we can handle different response structures
     return response
   },
 
-  verifyEmail: async (token: string) => {
-    const response = await api.post("/auth/verify-email", { token })
-    return response.data
+  verifyEmail: async (email: string, otp: string) => {
+    try {
+      console.log("API: Attempting to verify email with payload:", { email, otp });
+      const response = await api.post("/auth/email/verify/confirm/", {
+        email: email.trim(),
+        otp: otp.trim()
+      }, {
+        headers: {
+          "Content-Type": "application/json"
+        }
+      });
+      console.log("API: Email verification successful, response:", response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error("API: Email verification failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+
+      // Include the detailed response in the error
+      if (error.response?.data) {
+        error.detail = error.response.data.detail || error.response.data;
+      }
+
+      throw error;
+    }
+  },
+
+  verifyEmailOtp: async (email: string, otp: string) => {
+    try {
+      console.log("API: Attempting to verify password reset OTP with payload:", { email, otp });
+      const response = await api.post("/auth/password/reset/confirm", {
+        email: email.trim(),
+        otp: otp.trim()
+      }, {
+        headers: {
+          "Content-Type": "application/json"
+        }
+      });
+      console.log("API: Password reset OTP verification successful, response:", response.data);
+      
+      // Store email, OTP, and any token received from the response
+      localStorage.setItem('resetEmail', email.trim());
+      localStorage.setItem('resetOtp', otp.trim());
+      if (response.data.token) {
+        localStorage.setItem('resetToken', response.data.token);
+      }
+      
+      return response.data;
+    } catch (error: any) {
+      console.error("API: Password reset OTP verification failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        details: error.response?.data?.detail || error.response?.data
+      });
+
+      // Include the detailed response in the error
+      if (error.response?.data) {
+        error.detail = error.response.data.detail || error.response.data;
+      }
+
+      throw error;
+    }
   },
 
   logout: async () => {
@@ -205,7 +322,7 @@ export const authAPI = {
       // First attempt: standard endpoint without trailing slash
       try {
         console.log("Attempting password reset with standard endpoint");
-        const response = await api.post("/auth/password/reset", payload, {
+        const response = await api.post("/auth/password/reset/request/", payload, {
           timeout: 15000, // Increased timeout
           headers: {
             "Content-Type": "application/json",
@@ -220,72 +337,117 @@ export const authAPI = {
           data: firstError.response?.data,
           message: firstError.message
         });
-
-        // If first attempt failed, try with trailing slash
-        try {
-          console.log("Attempting password reset with trailing slash endpoint");
-          const response = await api.post("/auth/password/reset/", payload, {
-            timeout: 15000,
-            headers: {
-              "Content-Type": "application/json",
-            }
-          });
-          console.log("Password reset response from trailing slash endpoint:", response.data);
-          return response.data;
-        } catch (secondError: any) {
-          console.error("Second attempt failed with error:", {
-            status: secondError.response?.status,
-            statusText: secondError.response?.statusText,
-            data: secondError.response?.data,
-            message: secondError.message
-          });
-
-          // Try with alternative payload format
-          try {
-            console.log("Attempting password reset with alternative payload format");
-            const altPayload = { username: email.trim() }; // Some APIs use 'username' instead of 'email'
-            const response = await api.post("/auth/password/reset", altPayload, {
-              timeout: 15000,
-              headers: {
-                "Content-Type": "application/json",
-              }
-            });
-            console.log("Password reset response with alternative payload:", response.data);
-            return response.data;
-          } catch (thirdError: any) {
-            console.error("All password reset attempts failed");
-            throw thirdError; // Throw the last error
-          }
-        }
       }
     } catch (error: any) {
-      console.error("Password reset API error details:", {
+      console.error("Password reset request failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw error;
+    }
+  },
+
+  
+
+  passwordResetConfirm: async (data: {
+    new_password1: string
+    new_password2: string
+  }) => {
+    try {
+      // Get email, OTP, and token from localStorage
+      const resetEmail = localStorage.getItem('resetEmail');
+      const resetOtp = localStorage.getItem('resetOtp');
+      const resetToken = localStorage.getItem('resetToken');
+      
+      if (!resetEmail || !resetOtp) {
+        throw new Error("No email or OTP found for password reset. Please restart the password reset process.");
+      }
+
+      console.log("API: Attempting to confirm password reset");
+      const response = await api.post("/auth/password/reset/change/", {
+        email: resetEmail.trim(),
+        otp: resetOtp.trim(),
+        new_password1: data.new_password1,
+        new_password2: data.new_password2
+      }, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(resetToken ? { "Authorization": `Bearer ${resetToken}` } : {})
+        }
+      });
+      console.log("API: Password reset confirmation successful");
+      
+      // Clear all stored values after successful reset
+      localStorage.removeItem('resetEmail');
+      localStorage.removeItem('resetOtp');
+      localStorage.removeItem('resetToken');
+      
+      return response.data;
+    } catch (error: any) {
+      console.error("API: Password reset confirmation failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+      
+      if (error.response?.data) {
+        error.detail = error.response.data.detail || error.response.data;
+      }
+      
+      throw error;
+    }
+  },
+  passwordChange: async (new_password1: string, new_password2: string) => {
+    try {
+      console.log("API: Attempting to change password");
+      const response = await api.post("/auth/password/change/", {
+        new_password1,
+        new_password2
+      });
+      console.log("API: Password change successful");
+      return response.data;
+    } catch (error: any) {
+      console.error("API: Password change failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+      
+      if (error.response?.data) {
+        error.detail = error.response.data.detail || error.response.data;
+      }
+      
+      throw error;
+    }
+  },
+  deleteUser: async () => {
+    try {
+      console.log("API: Attempting to delete user account...");
+      const response = await api.delete("/auth/user/");
+      console.log("API: User account deleted successfully");
+      // Clear auth tokens after successful deletion
+      clearAuthToken();
+      return response.data;
+    } catch (error: any) {
+      console.error("API: Delete user account failed with detailed error:", {
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data,
         message: error.message
       });
 
-      // Re-throw the error for the calling code to handle
+      // Include the detailed response in the error
+      if (error.response?.data) {
+        error.detail = error.response.data;
+      }
+
       throw error;
     }
   },
-  passwordResetConfirm: async (data: {
-    uid: string
-    token: string
-    new_password: string
-    confirm_password: string
-  }) => {
-    const response = await api.post("/auth/password/reset/confirm", data)
-    return response.data
-  },
-  passwordChange: async (old_password: string, new_password: string) => {
-    const response = await api.post("/auth/password/change", {
-      old_password,
-      new_password,
-    })
-    return response.data
-  }
 }
 
 // ✅ User API calls
@@ -316,6 +478,29 @@ export const userAPI = {
       }
 
       throw error
+    }
+  },
+
+  deleteUserById: async (userId: string) => {
+    try {
+      console.log("API: Attempting to delete user by ID:", userId);
+      const response = await api.delete(`/auth/users/${userId}/`);
+      console.log("API: User deletion successful, response status:", response.status);
+      return response.data;
+    } catch (error: any) {
+      console.error("API: Delete user by ID failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+
+      // Include the detailed response in the error
+      if (error.response?.data) {
+        error.detail = error.response.data;
+      }
+
+      throw error;
     }
   },
 
@@ -370,10 +555,22 @@ export const userAPI = {
 
       throw error
     }
-  }
+  },
+
+  resendVerificationOtp: async (email: string) => {
+    console.log("Attempting to resend verification OTP for email:", email)
+    try {
+      const response = await api.post(`/auth/email/verify/request/`, {
+        email: email.trim()
+      })
+      console.log("Successfully sent verification OTP")
+      return response.data
+    } catch (error) {
+      console.error("Failed to resend verification OTP:", error)
+      throw error
+    }
+  },
 }
-
-
 // Debugging API
 export const debugAPI = {
   checkEndpoint: async () => {
@@ -423,11 +620,24 @@ export const chatAPI = {
   // Get all chat sessions for the current user
   getChatSessions: async () => {
     try {
+      // Check if user is authenticated before making the request
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        console.log("User not authenticated, skipping chat sessions fetch");
+        return [];
+      }
+
       console.log("API: Fetching all chat sessions");
       const response = await api.get(`/chat-sessions/`);
       console.log("API: Chat sessions fetched successfully, count:", response.data.length);
       return response.data;
     } catch (error: any) {
+      // If unauthorized, return empty array instead of throwing error
+      if (error.response?.status === 401) {
+        console.log("User not authenticated, returning empty chat sessions list");
+        return [];
+      }
+
       console.error("API: Fetch chat sessions failed with detailed error:", {
         status: error.response?.status,
         statusText: error.response?.statusText,

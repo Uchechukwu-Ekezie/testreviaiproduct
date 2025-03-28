@@ -1,13 +1,12 @@
 "use client";
 
 import type React from "react";
-
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import pass from "../../../../public/Image/password-check.png";
 import Testimonial from "@/components/testimonial";
@@ -15,8 +14,10 @@ import { useMediaQuery } from "@/hooks/use-mobile";
 import { Eye, EyeOff } from "lucide-react";
 import Logo from "@/components/logo";
 import PPTU from "@/components/pptu";
+import { toast } from "@/components/ui/use-toast";
+import { authAPI } from "@/lib/api";
 
-export default function SetNewPasswordPage() {
+function ResetPasswordContent() {
   const [passwords, setPasswords] = useState({
     newPassword: "",
     confirmPassword: "",
@@ -26,8 +27,14 @@ export default function SetNewPasswordPage() {
     confirmPassword: false,
   });
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const isMobile = useMediaQuery("(max-width: 1024px)");
+
+  // Get uid and token from URL parameters
+  const uid = searchParams?.get("uid") || "";
+  const token = searchParams?.get("token") || "";
 
   const togglePasswordVisibility = (
     field: "newPassword" | "confirmPassword"
@@ -41,30 +48,72 @@ export default function SetNewPasswordPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setIsLoading(true);
+
+    if (!uid || !token) {
+      setError("Invalid reset link. Please request a new password reset.");
+      setIsLoading(false);
+      return;
+    }
 
     if (passwords.newPassword !== passwords.confirmPassword) {
       setError("Passwords do not match");
+      setIsLoading(false);
       return;
     }
 
     if (passwords.newPassword.length < 8) {
       setError("Password must be at least 8 characters long");
+      setIsLoading(false);
       return;
     }
 
     try {
-      // Here you would typically call your API to update the password
-      // await updatePassword(passwords.newPassword)
-      router.push("/forgot-password/verifyhuman"); // Redirect to login page after successful password reset
-    } catch {
-      setError("Failed to update password. Please try again.");
+      await authAPI.passwordResetConfirm({
+        new_password1: passwords.newPassword,
+        new_password2: passwords.confirmPassword,
+      });
+
+      toast({
+        title: "Password reset successful",
+        description: "You can now log in with your new password.",
+      });
+
+      router.push("/signin");
+    } catch (error) {
+      console.error("Password reset error:", error);
+      setError("Failed to update password. Please try again or request a new reset link.");
+    } finally {
+      setIsLoading(false);
     }
   };
+
+  // If no uid or token is present, show an error
+  if (!uid || !token) {
+    return (
+      <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-[#212121] font-sf-pro">
+        <Card className="w-full max-w-[503px] mx-auto p-6">
+          <CardContent className="text-center">
+            <h2 className="text-xl text-white mb-4">Invalid Reset Link</h2>
+            <p className="text-zinc-400 mb-6">
+              This password reset link is invalid or has expired. Please request a new password reset.
+            </p>
+            <Button
+              onClick={() => router.push("/forgot-password")}
+              className="w-full text-white h-11 bg-gradient-to-r from-[#FFD700] to-[#780991] hover:from-yellow-600 hover:to-pink-600 rounded-[15px]"
+            >
+              Request Password Reset
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-[#212121] font-sf-pro">
       <div className="flex flex-col items-center w-full gap-8 mx-auto lg:flex-row max-w-1440">
-        <Card className="w-full max-w-[503px] mx-auto min-h-[96vh]">
+        <Card className="w-full max-w-[503px] mx-auto min-h-[96vh] bg-transparent border-transparent">
           <CardHeader className="flex-grow space-y-3">
             <Logo />
           </CardHeader>
@@ -94,6 +143,7 @@ export default function SetNewPasswordPage() {
                       placeholder="Enter your password"
                       className="border border-white/15 h-11 rounded-[15px] text-white !text-[17px] placeholder:text-[17px] placeholder:text-zinc-500 pl-10 pr-10"
                       required
+                      disabled={isLoading}
                     />
                     <Image
                       src={pass}
@@ -136,6 +186,7 @@ export default function SetNewPasswordPage() {
                       placeholder="Enter your password"
                       className="border border-white/15 h-11 rounded-[15px] text-white !text-[18px] placeholder:text-[17px] placeholder:text-zinc-500 pl-10 pr-10"
                       required
+                      disabled={isLoading}
                     />
                     <Image
                       src={pass}
@@ -164,8 +215,9 @@ export default function SetNewPasswordPage() {
               <Button
                 type="submit"
                 className="w-full text-white font-medium h-11 bg-gradient-to-r from-[#FFD700] to-[#780991] hover:from-yellow-600 hover:to-pink-600 rounded-[15px]"
+                disabled={isLoading}
               >
-                Confirm
+                {isLoading ? "Updating Password..." : "Confirm"}
               </Button>
 
               <p className="text-sm text-center text-zinc-500">
@@ -177,7 +229,9 @@ export default function SetNewPasswordPage() {
             </form>
           </CardContent>
 
-          <PPTU />
+          <div className="mt-auto">
+            <PPTU />
+          </div>
         </Card>
 
         {!isMobile && (
@@ -187,5 +241,13 @@ export default function SetNewPasswordPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function SetNewPasswordPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ResetPasswordContent />
+    </Suspense>
   );
 }
