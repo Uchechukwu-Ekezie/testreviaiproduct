@@ -244,16 +244,17 @@ export default function ChatPage() {
         console.log("New session created:", newSessionData)
         
         // Set the session ID for the chat message
-        sessionId = newSessionData.id
+        sessionId = newSessionData?.id
         
         // Update sessions list and set active session
         setSessions((prev: ChatSession[]) => [newSessionData!, ...prev])
-        setActiveSession(sessionId)
+        setActiveSession(sessionId ?? null)
       }
 
       // Now post the chat message
       const data = await chatAPI.postNewChat(input, sessionId!)
       setLatestMessageId(data.id)
+      setActiveSession(data.session)
 
       // Replace the temporary message with the complete one
       setMessages((prev) => prev.map((msg) => (msg.id === tempMessageId ? data : msg)))
