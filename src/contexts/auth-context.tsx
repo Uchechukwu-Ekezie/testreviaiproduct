@@ -400,8 +400,114 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // 🔹 Compute isAuthenticated
   const isAuthenticated = !!user
 
+  const signupWithProvider = async (provider: "google" | "apple") => {
+    if (provider === "google") {
+      try {
+        // Get the Google OAuth URL
+        const url = await authAPI.googleAuth()
+        
+        // Store the current URL to redirect back after auth
+        localStorage.setItem('redirectAfterAuth', window.location.pathname)
+        
+        // Redirect to Google OAuth
+        window.location.href = url
+      } catch (error) {
+        console.error("Google auth failed:", error)
+        toast({
+          title: "Authentication Failed",
+          description: "Failed to authenticate with Google. Please try again.",
+          variant: "destructive",
+        })
+      }
+    } else {
+      toast({
+        title: "Not Available",
+        description: "Apple sign-in is not available yet.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Handle Google OAuth callback
+  useEffect(() => {
+    const handleGoogleCallback = async () => {
+      const urlParams = new URLSearchParams(window.location.search)
+      const code = urlParams.get('code')
+      const error = urlParams.get('error')
+
+      if (error) {
+        toast({
+          title: "Authentication Failed",
+          description: "Failed to authenticate with Google. Please try again.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (code) {
+        try {
+          const response = await authAPI.googleCallback(code)
+          
+          // Set the auth token
+          if (response.access) {
+            setAuthToken(response.access)
+          }
+
+          // Set user data
+          if (response.user) {
+            setUser({
+              id: response.user.id,
+              username: response.user.username || response.user.email.split('@')[0],
+              email: response.user.email,
+              first_name: response.user.first_name || '',
+              last_name: response.user.last_name || '',
+              type: response.user.type || 'user',
+              is_active: response.user.is_active !== undefined ? response.user.is_active : true,
+              avatar: response.user.avatar || '/placeholder.svg',
+              date_joined: response.user.date_joined || new Date().toISOString(),
+            })
+          }
+
+          // Get the redirect URL or default to home
+          const redirectUrl = localStorage.getItem('redirectAfterAuth') || '/'
+          localStorage.removeItem('redirectAfterAuth')
+          
+          // Show success message
+          toast({
+            title: "Success",
+            description: "Successfully signed in with Google!",
+          })
+
+          // Redirect
+          router.push(redirectUrl)
+        } catch (error) {
+          console.error("Failed to complete Google authentication:", error)
+          toast({
+            title: "Authentication Failed",
+            description: "Failed to complete Google authentication. Please try again.",
+            variant: "destructive",
+          })
+        }
+      }
+    }
+
+    handleGoogleCallback()
+  }, [router])
+
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, isLoading, login, signup, logout, requestPasswordReset, updateProfile }}>
+    <AuthContext.Provider 
+      value={{ 
+        user, 
+        isAuthenticated, 
+        isLoading, 
+        login, 
+        signup, 
+        logout, 
+        requestPasswordReset, 
+        updateProfile,
+        signupWithProvider 
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )

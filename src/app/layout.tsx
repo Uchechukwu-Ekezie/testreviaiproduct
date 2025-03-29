@@ -6,6 +6,7 @@ import { ChatProvider } from "@/contexts/chat-context";
 import { SearchHistoryProvider } from "@/contexts/search-history-context";
 import { ThemeProvider } from "@/contexts/theme-context";
 import { Toaster } from "@/components/toaster";
+import { GoogleOAuthProvider } from '@react-oauth/google'
 
 const inter = Inter({
   subsets: ["latin"],
@@ -39,16 +40,18 @@ export default function RootLayout({
        className="font-sans bg-background text-foreground transition-colors duration-300"
        suppressHydrationWarning
       >
-        <ThemeProvider>
-          <AuthProvider>
-            <ChatProvider>
-              <SearchHistoryProvider>
-                {children}
-                <Toaster/>
-              </SearchHistoryProvider>
-            </ChatProvider>
-          </AuthProvider>
-        </ThemeProvider>
+        <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ''}>
+          <ThemeProvider>
+            <AuthProvider>
+              <ChatProvider>
+                <SearchHistoryProvider>
+                  {children}
+                  <Toaster/>
+                </SearchHistoryProvider>
+              </ChatProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </GoogleOAuthProvider>
       </body>
     </html>
   );
