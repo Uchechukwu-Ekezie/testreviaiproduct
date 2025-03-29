@@ -4,7 +4,6 @@ import React, { createContext, useContext, useState, useCallback, useEffect, Rea
 import { chatAPI } from "@/lib/api";
 import { toast } from "@/components/ui/use-toast";
 import { useAuth } from "./auth-context";
-import { Session } from "inspector/promises";
 
 // Define interfaces for chat data
 interface ChatSession {
@@ -166,42 +165,78 @@ export function ChatProvider({ children }: ChatProviderProps) {
       if (!message.trim()) {
         throw new Error("Message cannot be empty");
       }
+
+      // Check authentication
+      if (!isAuthenticated) {
+        throw new Error("Please log in to send messages");
+      }
       
       const targetSessionId = sessionId || activeSession;
       
       if (!targetSessionId) {
         // Create a new session if none exists
+        console.log("No active session, creating new one...");
         const newSession = await createChatSession(message.substring(0, 30));
+        console.log("New session created:", newSession);
+        
+        // Set as active session and update sessions list
+        setActiveSession(newSession.id);
+        setSessions(prev => [newSession, ...prev]);
         
         // Use the chatAPI postNewChat function
-        // This would need to be available in the chatAPI
+        console.log("Posting message to new session...");
         const response = await chatAPI.postNewChat(message, newSession.id);
-
+        console.log("Message posted successfully:", response);
+        
+        // Update messages - ensure we have both prompt and response
         const newMessage = {
           ...response,
-          prompt: message.trim(),
-          session: newSession.id,
-        }
-        
-        // Update messages
+          prompt: message.trim(),  // Ensure we keep the original prompt
+          session: newSession.id
+        };
         setMessages([newMessage]);
         
         return newMessage;
       } else {
         // Post to existing session
+        console.log("Posting message to existing session:", targetSessionId);
         const response = await chatAPI.postNewChat(message, targetSessionId);
+        console.log("Message posted successfully:", response);
         
-        // Update messages
-        setMessages(prev => [...prev, response]);
+        // Update messages - ensure we have both prompt and response
+        const newMessage = {
+          ...response,
+          prompt: message.trim(),  // Ensure we keep the original prompt
+          session: targetSessionId
+        };
+        setMessages(prev => [...prev, newMessage]);
         
-        return response;
+        // Ensure the session is still in our list and active
+        if (!sessions.some(s => s.id === targetSessionId)) {
+          // If session not in list, fetch it and add it
+          try {
+            const sessionData = await chatAPI.getChatSession(targetSessionId);
+            setSessions(prev => [sessionData, ...prev]);
+          } catch (err) {
+            console.error("Failed to fetch session data:", err);
+          }
+        }
+        
+        // Ensure this session is set as active
+        setActiveSession(targetSessionId);
+        
+        return newMessage;
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to post chat message:", error);
       
-      const errorMessage = error instanceof Error
-        ? error.message
-        : "Failed to post chat message";
+      let errorMessage = "Failed to post chat message";
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error.response?.data) {
+        errorMessage = error.response.data.detail || error.response.data;
+      }
       
       setError(errorMessage);
       
@@ -215,7 +250,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [activeSession, createChatSession]);
+  }, [activeSession, createChatSession, isAuthenticated, sessions]);
 
   // Delete a chat session
   const deleteSession = useCallback(async (sessionId: string) => {

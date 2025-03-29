@@ -22,8 +22,6 @@ import { Eye, EyeOff } from "lucide-react"
 import sms from "../../../../public/Image/sms.png"
 import pass from "../../../../public/Image/password-check.png"
 import axios from "axios"
-import { authAPI } from "@/lib/api"
-import { useGoogleLogin } from '@react-oauth/google'
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -33,58 +31,6 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const isMobile = useMediaQuery("(max-width: 1024px)")
   const { login } = useAuth()
-
-  const googleLogin = useGoogleLogin({
-    onSuccess: async (response) => {
-      try {
-        // Store the access token
-        localStorage.setItem('googleAccessToken', response.access_token);
-        
-        toast({
-          title: "Success",
-          description: "Successfully signed in with Google!",
-        })
-
-        // Redirect to home page
-        window.location.href = '/'
-      } catch (error) {
-        console.error('Google login failed:', error)
-        toast({
-          title: "Login Failed",
-          description: "Could not complete Google sign-in. Please try again.",
-          variant: "destructive",
-        })
-      }
-    },
-    onError: () => {
-      toast({
-        title: "Login Failed",
-        description: "Could not sign in with Google. Please try again.",
-        variant: "destructive",
-      })
-    }
-  })
-
-  const handleProviderLogin = async (provider: "google" | "apple") => {
-    try {
-      if (provider === "google") {
-        googleLogin()
-      } else {
-        toast({
-          title: "Not implemented",
-          description: "Apple login is not available yet.",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error(`${provider} login failed:`, error)
-      toast({
-        title: "Login failed",
-        description: `Failed to login with ${provider}. Please try again.`,
-        variant: "destructive",
-      })
-    }
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -141,6 +87,14 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleProviderLogin = async (provider: "google" | "apple") => {
+    toast({
+      title: "Not implemented",
+      description: `${provider} login is not available yet.`,
+      variant: "destructive",
+    })
   }
 
   return (
