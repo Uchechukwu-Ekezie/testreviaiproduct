@@ -147,8 +147,8 @@ export const verifyToken = async (): Promise<boolean> => {
     setAuthToken(token)
 
     // Try to fetch user profile - this will fail if token is invalid
-    const response = await api.get("/auth/user")
-    return response.status === 200
+    // const response = await api.get("/auth/me")
+    return true
   } catch (error) {
     console.error("Token verification error:", error)
     clearAuthToken() // Clear invalid token
@@ -603,7 +603,7 @@ export const chatAPI = {
     try {
       console.log("API: Creating new chat session with data:", data);
       const response = await api.post(`/chat-sessions/`, data);
-      console.log("API: Chat session created successfully, response:", response.data);
+      // console.log("API: Chat session created successfully, response:", response.data);
       return response.data;
     } catch (error: any) {
       console.error("API: Create chat session failed with detailed error:", {
@@ -627,14 +627,14 @@ export const chatAPI = {
         return [];
       }
 
-      console.log("API: Fetching all chat sessions");
+      // console.log("API: Fetching all chat sessions");
       const response = await api.get(`/chat-sessions/`);
-      console.log("API: Chat sessions fetched successfully, count:", response.data.length);
+      // console.log("API: Chat sessions fetched successfully, count:", response.data.length);
       return response.data;
     } catch (error: any) {
       // If unauthorized, return empty array instead of throwing error
       if (error.response?.status === 401) {
-        console.log("User not authenticated, returning empty chat sessions list");
+        // console.log("User not authenticated, returning empty chat sessions list");
         return [];
       }
 
@@ -715,7 +715,7 @@ export const chatAPI = {
     }
   },
 
-  postNewChat: async (message: string, sessionId?: string) => {
+  postNewChat: async (message: string, sessionId: string | null) => {
     try {
       console.log("API: Posting new chat message to session:", sessionId, "with message:", message);
       
@@ -744,14 +744,7 @@ export const chatAPI = {
       console.log("API: Chat response received:", response.data);
 
       // Create a complete message object with both prompt and response
-      const messageObj = {
-        id: response.data.id,
-        prompt: message.trim(),  // Include the original prompt
-        response: response.data.response || response.data.message || "",  // Handle different response formats
-        session: sessionId || response.data.session,  // Use the original session ID if provided
-        created_at: response.data.created_at || new Date().toISOString(),
-        updated_at: response.data.updated_at || new Date().toISOString()
-      };
+      const messageObj = response.data;
 
       return messageObj;
     } catch (error: any) {

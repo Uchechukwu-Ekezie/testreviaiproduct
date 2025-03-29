@@ -3,8 +3,12 @@
 import React from "react"
 import Image from "next/image"
 import { Card } from "@/components/ui/card"
-import { AnimatedText } from "@/components/animated-text"
 import star from "../../../public/Image/Star 1.png"
+import { marked } from 'marked';
+import hljs from 'highlight.js';
+import DOMPurify from 'dompurify';
+import 'highlight.js/styles/default.css';
+import { AnimatedMarkdownText } from "../animated-markdown"
 
 interface Message {
   id: string
@@ -54,7 +58,7 @@ const ThinkingAnimation = () => {
   )
 }
 
-const ChatMessages: React.FC<ChatMessagesProps> = ({
+const ChatMessages: React.FC<ChatMessagesProps> = React.memo(({
   messages,
   isLoading,
   latestMessageId,
@@ -83,9 +87,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
           <div className="flex flex-col items-center justify-center min-h-[calc(100vh-180px)]">
             <h1 className="mb-8 text-xl text-center text-foreground">
               {isAuthenticated
-                ? `Hi ${
-                    user?.first_name ? user?.first_name + " " + user?.last_name : "there"
-                  }! How can I assist you today?`
+                ? `Hi ${user?.first_name ? user?.first_name + " " + user?.last_name : "there"
+                }! How can I assist you today?`
                 : "Hi! How can I assist you today?"}
             </h1>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:max-w-[600px] w-full text-center mx-auto">
@@ -123,22 +126,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                   </div>
                 </div>
                 {message?.response && (
-                  <div className={`flex justify-start w-full`}>
-                    <div className="flex items-start gap-2 md:gap-4 md:max-w-[80%] rounded-lg p-4 text-foreground">
-                      <Image
-                        src={star || "/placeholder.svg"}
-                        alt="Response Image"
-                        className="object-cover w-8 h-8 rounded-full md:w-8 md:h-8"
-                      />
-                      <div className="flex-1 min-w-0">
-                        {message.id === latestMessageId ? (
-                          <AnimatedText text={message?.response} speed={50} batchSize={3} />
-                        ) : (
-                          <p className="whitespace-pre-wrap">{message?.response}</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  <Llmresponsecard message={message} latestMessageId={latestMessageId} />
                 )}
               </div>
             ))}
@@ -162,7 +150,48 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
       </div>
     </div>
   )
-}
+});
 
 export default ChatMessages
 
+
+const Llmresponsecard = ({ message, latestMessageId }: { [key: string]: any }) => {
+
+  const outputRef = React.useRef<HTMLDivElement>(null);
+
+  marked.setOptions({
+    highlight: function (code:any, lang:any) {
+      return hljs.highlight(code, { language: lang }).value;
+    },
+  } as any);
+
+  React.useEffect(() => {
+    const mes = async (message: any) => {
+    if(message?.response) {
+        const html = await marked.parse(message.response as string);
+        const sanitizedHTML = DOMPurify.sanitize(html);
+        if (outputRef.current)
+        outputRef.current.innerHTML = sanitizedHTML;
+      }
+    }
+    mes(message);
+  }, [message]);
+  return (
+    <div className={`flex justify-start w-full`}>
+      <div className="flex items-start gap-2 md:gap-4 md:max-w-[80%] rounded-lg p-4 text-foreground">
+        <Image
+          src={star || "/placeholder.svg"}
+          alt="Response Image"
+          className="object-cover w-8 h-8 rounded-full md:w-8 md:h-8"
+        />
+        <div className="flex-1 min-w-0">
+          {message.id === latestMessageId ? (
+            <AnimatedMarkdownText markdownText={message?.response} speed={50} batchSize={3} />
+          ) : (
+            <div ref={outputRef} className="whitespace-pre-wrap text-[13px]"></div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

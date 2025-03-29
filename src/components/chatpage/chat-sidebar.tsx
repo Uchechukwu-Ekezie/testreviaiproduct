@@ -9,22 +9,16 @@ import { chatAPI } from "@/lib/api"
 
 interface ChatSidebarProps {
   sidebarOpen: boolean
-  setSidebarOpen: (open: boolean) => void
   sessions: any[]
-  setSessions: React.Dispatch<React.SetStateAction<any[]>>
   activeSession: string | null
-  setActiveSession: React.Dispatch<React.SetStateAction<string | null>>
-  setMessages: React.Dispatch<React.SetStateAction<any[]>>
   isAuthenticated: boolean
   logout: () => void
   isMobile: boolean
   showRenameDialog: boolean
-  setShowRenameDialog: React.Dispatch<React.SetStateAction<boolean>>
-  setSelectedSessionId: React.Dispatch<React.SetStateAction<string | null>>
-  setNewTitle: React.Dispatch<React.SetStateAction<string>>
+  [key:string]: any
 }
 
-const ChatSidebar: React.FC<ChatSidebarProps> = ({
+const ChatSidebar: React.FC<ChatSidebarProps> = React.memo(({
   sidebarOpen,
   setSidebarOpen,
   sessions,
@@ -37,8 +31,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
   isMobile,
   showRenameDialog,
   setShowRenameDialog,
-  setSelectedSessionId,
-  setNewTitle,
+  setSelectedSessionId
 }) => {
   const [isDeleting, setIsDeleting] = React.useState<string | null>(null)
 
@@ -56,7 +49,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
   }
 
   const selectSession = (id: string) => {
-    // Set this session as active
+    // set this session as active
     setActiveSession(id)
 
     // Close sidebar on mobile
@@ -102,7 +95,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
   const openRenameDialog = (sessionId: string, currentTitle: string) => {
     setSelectedSessionId(sessionId)
-    setNewTitle(currentTitle)
+    // setNewTitle(currentTitle)
     setShowRenameDialog(true)
   }
 
@@ -135,7 +128,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
         </Button>
       </div>
 
-      <div className="flex flex-col flex-1 overflow-auto">
+      <div className="flex flex-col flex-1 overflow-y-scroll">
         {/* Real sessions (if you have any) */}
         <div className="px-2 py-2">
           <div className="px-2 py-2 text-xs font-medium text-muted-foreground">Recent Chats</div>
@@ -150,7 +143,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
                     : "text-muted-foreground hover:bg-muted/50"
                 }`}
               >
-                <span className="truncate max-w-[80%] cursor-pointer" onClick={() => selectSession(session.id)}>
+                <span className="truncate w-full max-w-[80%] cursor-pointer" onClick={() => selectSession(session.id)}>
                   {session.chat_title || "Untitled Chat"}
                 </span>
                 <DropdownMenu>
@@ -210,7 +203,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
       </div>
     </div>
   )
-}
+})
 
 export default ChatSidebar
 

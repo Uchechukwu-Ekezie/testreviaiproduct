@@ -1,12 +1,10 @@
 "use client"
 
-import type React from "react"
+import React from "react"
 
 import { useRef, useState, useEffect } from "react"
 import { PaperclipIcon, ImageIcon, Send, X } from "lucide-react"
 import Image from "next/image"
-import { toast } from "@/components/ui/use-toast"
-import { chatAPI } from "@/lib/api"
 
 interface ChatInputProps {
   input: string
@@ -14,28 +12,14 @@ interface ChatInputProps {
   handleSubmit: (e: React.FormEvent) => void
   isLoading: boolean
   isMobile: boolean
-  activeSession?: string | null
-  user?: { id: string } | null
-  isAuthenticated?: boolean
-  setMessages?: (messages: any[] | ((prev: any[]) => any[])) => void
-  setActiveSession?: (sessionId: string | null) => void
-  setSessions?: (sessions: any[] | ((prev: any[]) => any[])) => void
-  refreshSessions?: () => void
 }
 
-const ChatInput: React.FC<ChatInputProps> = ({
+const ChatInput: React.FC<ChatInputProps> = React.memo(({
   input,
   setInput,
   handleSubmit,
   isLoading,
   isMobile,
-  activeSession,
-  user,
-  isAuthenticated,
-  setMessages,
-  setActiveSession,
-  setSessions,
-  refreshSessions,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -43,7 +27,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const [images, setImages] = useState<File[]>([])
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const [attachments, setAttachments] = useState<File[]>([])
-  const [localIsLoading, setLocalIsLoading] = useState(false)
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value)
@@ -91,83 +74,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
     setAttachments((prev) => prev.filter((_, i) => i !== index))
   }
 
-  const handleLocalSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    // If we're using the external handleSubmit function
-    if (handleSubmit) {
-      handleSubmit(e)
-      return
-    }
-
-    // Otherwise use the internal implementation
-    if (!input.trim() && images.length === 0 && attachments.length === 0) return
-
-    setLocalIsLoading(true)
-    const currentMessage = input
-    setInput("")
-
-    if (!setMessages || !setActiveSession || !setSessions || !refreshSessions) {
-      console.error("Required props for internal submit handling are missing")
-      return
-    }
-
-    const tempId = `temp-${Date.now()}`
-    const userMessage = { id: tempId, prompt: currentMessage, response: "" }
-    setMessages((prev) => [...prev, userMessage])
-
-    try {
-      const messageData = {
-        message: currentMessage,
-        ...(attachments.length > 0 && { attachment: attachments[0] }),
-        ...(images.length > 0 && { image: images[0] }),
-      }
-
-      let data
-      if (activeSession) {
-        data = await chatAPI.postNewChat(messageData.message, activeSession)
-      } else {
-        const sessionData = {
-          chat_title: currentMessage.substring(0, 30),
-          user: user?.id || "guest",
-        }
-        const sessionResponse = await chatAPI.createChatSession(sessionData)
-        setActiveSession(sessionResponse.id)
-        data = await chatAPI.postNewChat(messageData.message, sessionResponse.id)
-
-        setSessions((prev) => {
-          if (!prev.some((s) => s.id === sessionResponse.id)) {
-            return [...prev, sessionResponse]
-          }
-          return prev
-        })
-
-        setTimeout(refreshSessions, 500)
-      }
-
-      setMessages((prev) => prev.map((msg) => (msg.id === tempId ? data : msg)))
-      setAttachments([])
-      setImages([])
-      setImagePreviews([])
-    } catch (error: any) {
-      console.error("Error submitting chat:", error)
-      setMessages((prev) => prev.filter((msg) => msg.id !== tempId))
-      toast({
-        title: "Error",
-        description: error.response?.data?.message || "Failed to send message.",
-        variant: "destructive",
-      })
-      setInput(currentMessage)
-    } finally {
-      setLocalIsLoading(false)
-    }
-  }
-
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 bg-background md:left-64">
       <div className="w-full max-w-[863px] mx-auto p-4">
         <div className="border rounded-[15px] border-border p-2 bg-card">
-          <form onSubmit={handleLocalSubmit}>
+          <form onSubmit={handleSubmit}>
             <textarea
               ref={textareaRef}
               placeholder="Ask me anything..."
@@ -176,10 +87,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault()
-                  handleLocalSubmit(e)
+                  handleSubmit(e)
                 }
               }}
-              disabled={isLoading || localIsLoading}
+              disabled={isLoading}
               rows={1}
               className="w-full p-3 overflow-y-auto bg-transparent resize-none text-foreground placeholder:text-muted-foreground focus:outline-none max-h-72"
             />
@@ -246,7 +157,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                 {/* Image Upload */}
                 <button
                   type="button"
-                  disabled={isLoading || localIsLoading}
+                  disabled={isLoading}
                   onClick={() => imageInputRef.current?.click()}
                   className="flex items-center gap-2 p-2 transition-colors rounded-md"
                 >
@@ -257,7 +168,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                 {/* Document Upload */}
                 <button
                   type="button"
-                  disabled={isLoading || localIsLoading}
+                  disabled={isLoading}
                   onClick={() => attachmentInputRef.current?.click()}
                   className="flex items-center gap-2 p-2 transition-colors rounded-md"
                 >
@@ -270,7 +181,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
               <button
                 type="submit"
                 disabled={
-                  isLoading || localIsLoading || (!input.trim() && images.length === 0 && attachments.length === 0)
+                  isLoading || (!input.trim() && images.length === 0 && attachments.length === 0)
                 }
                 className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-[#FFD700] to-[#780991] text-white"
               >
@@ -282,7 +193,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
       </div>
     </div>
   )
-}
+})
 
 export default ChatInput
 

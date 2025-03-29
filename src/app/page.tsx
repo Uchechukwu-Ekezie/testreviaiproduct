@@ -43,7 +43,6 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [activeSession, setActiveSession] = useState<string | null>(null)
-  const [newTitle, setNewTitle] = useState("")
   const [showRenameDialog, setShowRenameDialog] = useState(false)
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [latestMessageId, setLatestMessageId] = useState<string | null>(null)
@@ -110,17 +109,12 @@ export default function ChatPage() {
       if (activeSession) {
         const sessionExists = sortedSessions.some((session) => session.id === activeSession)
         if (!sessionExists) {
-          // Session no longer exists, reset active session
-          console.log("Active session no longer exists, resetting")
-          setActiveSession(null)
-          setMessages([])
+          getSessions()
         }
       }
 
       return sortedSessions
     } catch (error: any) {
-      console.error("Error fetching sessions:", error)
-      // Don't show toast for unauthorized errors as they're expected for non-logged-in users
       if (error.response?.status !== 401) {
         toast({
           title: "Error",
@@ -137,14 +131,12 @@ export default function ChatPage() {
     try {
       console.log("Fetching chats for session:", activeSession)
       const data = await chatAPI.getChatsBySession(activeSession)
-
+      console.log(data.result);
       if (!data || !data.results) {
         console.warn("No results returned for session:", activeSession)
         setMessages([])
         return []
       }
-
-      console.log(`Loaded ${data.results.length} messages for session:`, activeSession)
 
       // Sort messages by created_at to ensure chronological order (oldest first)
       const sortedMessages = [...data.results].sort((a, b) => {
@@ -154,7 +146,7 @@ export default function ChatPage() {
         return 0
       })
 
-      setMessages(sortedMessages || [])
+      setMessages(sortedMessages)
 
       // Ensure the messages display is scrolled to the bottom after loading
       setTimeout(() => {
@@ -194,10 +186,10 @@ export default function ChatPage() {
     if (activeSession) {
       getChats(activeSession)
     }
-  }, [activeSession])
+  }, [activeSession, isAuthenticated])
 
   // Add a function to refresh sessions
-  const refreshSessions = async () => {
+  const refreshSessions = async (isAuthenticated: any) => {
     if (isAuthenticated) {
       await getSessions()
     }
@@ -216,76 +208,14 @@ export default function ChatPage() {
     }
   }, [messages])
 
-  const postChat = async (input: string, activeSession?: string) => {
+  const postChat = async (input: string, activeSession: string|null =null) => {
     try {
-      // Create a temporary message ID that we'll use to track this message
-      const tempMessageId = "temp-" + Date.now()
-      
-      // Immediately add the user's message to the UI
-      const tempMessage: Message = {
-        id: tempMessageId,
-        prompt: input,
-        response: "",
-        session: activeSession
-      }
-      setMessages((prev) => [...prev, tempMessage])
 
-      let sessionId = activeSession
-      let newSessionData: ChatSession | null = null
-
-      // If no active session, create one first
-      if (!sessionId) {
-        const userId = user?.id || "guest"
-        const sessionData = {
-          chat_title: input.substring(0, 30),
-          user: userId,
-        }
-
-        console.log("Creating new chat session with data:", sessionData)
-        newSessionData = await chatAPI.createChatSession(sessionData)
-        console.log("New session created:", newSessionData)
-        
-        if (!newSessionData) {
-          throw new Error("Failed to create new chat session")
-        }
-        
-        sessionId = newSessionData.id
-        
-        // Update sessions list and set active session
-        setSessions((prev: ChatSession[]) => [newSessionData!, ...prev])
-        setActiveSession(sessionId)
-        
-        // Update the temporary message with the new session ID
-        tempMessage.session = sessionId
-        setMessages((prev) => prev.map(msg => 
-          msg.id === tempMessageId ? { ...msg, session: sessionId } : msg
-        ))
-      }
-
-      // Now post the chat message
-      console.log("Posting chat message...")
-      const data = await chatAPI.postNewChat(input, sessionId!)
-      setLatestMessageId(data.id)
-
+      const data = await chatAPI.postNewChat(input, activeSession)
+      setLatestMessageId(prev => data?.id ? data.id : prev)
+      console.log(data)
       // Update the messages with the response
-      setMessages((prev) => prev.map(msg => 
-        msg.id === tempMessageId ? { ...data, session: sessionId } : msg
-      ))
-
-      // If this was a new session, update the sessions list
-      if (newSessionData) {
-        setSessions((prev) => {
-          const existingSession = prev.find(s => s.id === sessionId)
-          if (!existingSession) {
-            return [{
-              ...newSessionData!,
-              chat_title: newSessionData!.chat_title,
-              first_message: input
-            }, ...prev]
-          }
-          return prev
-        })
-      }
+      if (data?.id) {setMessages((prev) => [...prev, data])}
 
       setTimeout(scrollToBottom, 100)
       return data
@@ -298,6 +228,10 @@ export default function ChatPage() {
       }
       console.error("Error details:", errorDetails)
       throw error
+    } finally {
+      if (!activeSession) {
+        refreshSessions(isAuthenticated)
+      }
     }
   }
 
@@ -311,7 +245,7 @@ export default function ChatPage() {
       setInput("")
 
       try {
-        await postChat(currentMessage, activeSession || undefined)
+        await postChat(currentMessage, activeSession ?? null)
       } catch (error: any) {
         console.error("Error submitting chat:", error)
 
@@ -351,7 +285,7 @@ export default function ChatPage() {
     setInput(card.message)
   }
 
-  const handleRename = async (sessionId: string) => {
+  const handleRename = async (sessionId: string, newTitle: string) => {
     if (!newTitle.trim()) return
 
     try {
@@ -366,7 +300,7 @@ export default function ChatPage() {
       )
 
       setShowRenameDialog(false)
-      setNewTitle("")
+      // setNewTitle("")
       setSelectedSessionId(null)
 
       toast({
@@ -397,14 +331,13 @@ export default function ChatPage() {
         setSessions={setSessions}
         activeSession={activeSession}
         setActiveSession={setActiveSession}
-        setMessages={setMessages}
+        setMessages={(x:any)=> setMessages}
         isAuthenticated={isAuthenticated}
         logout={logout}
         isMobile={isMobile}
         showRenameDialog={showRenameDialog}
-        setShowRenameDialog={setShowRenameDialog}
+        handeleShowRenameDialog={setShowRenameDialog}
         setSelectedSessionId={setSelectedSessionId}
-        setNewTitle={setNewTitle}
       />
 
       {/* Main Content */}
@@ -440,8 +373,6 @@ export default function ChatPage() {
       <RenameDialog
         showRenameDialog={showRenameDialog}
         setShowRenameDialog={setShowRenameDialog}
-        newTitle={newTitle}
-        setNewTitle={setNewTitle}
         selectedSessionId={selectedSessionId}
         setSelectedSessionId={setSelectedSessionId}
         handleRename={handleRename}

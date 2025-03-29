@@ -1,6 +1,6 @@
 "use client"
 
-import type React from "react"
+import React from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -8,22 +8,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 interface RenameDialogProps {
   showRenameDialog: boolean
   setShowRenameDialog: React.Dispatch<React.SetStateAction<boolean>>
-  newTitle: string
-  setNewTitle: React.Dispatch<React.SetStateAction<string>>
   selectedSessionId: string | null
   setSelectedSessionId: React.Dispatch<React.SetStateAction<string | null>>
-  handleRename: (sessionId: string) => Promise<void>
+  handleRename: (sessionId: string, newTitle: string) => Promise<void>
 }
 
-const RenameDialog: React.FC<RenameDialogProps> = ({
+const RenameDialog: React.FC<RenameDialogProps> = React.memo(({
   showRenameDialog,
   setShowRenameDialog,
-  newTitle,
-  setNewTitle,
   selectedSessionId,
   setSelectedSessionId,
   handleRename,
 }) => {
+  const [newTitle, setNewTitle] = React.useState("")
+
   return (
     <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
       <DialogContent>
@@ -49,16 +47,16 @@ const RenameDialog: React.FC<RenameDialogProps> = ({
           >
             Cancel
           </Button>
-          <Button 
-          className=" bg-gradient-to-r from-[#FFD700] to-[#780991] hover:from-yellow-600 hover:to-pink-600 rounded-[15px]"
-          onClick={() => selectedSessionId && handleRename(selectedSessionId)} disabled={!newTitle.trim()}>
+          <Button
+            className=" bg-gradient-to-r from-[#FFD700] to-[#780991] hover:from-yellow-600 hover:to-pink-600 rounded-[15px]"
+            onClick={() => selectedSessionId && handleRename(selectedSessionId, newTitle)} disabled={!newTitle.trim()}>
             Save
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   )
-}
+})
 
 export default RenameDialog
 
