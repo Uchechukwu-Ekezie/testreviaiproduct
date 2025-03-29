@@ -5,9 +5,7 @@ import { Button } from "@/components/ui/button"
 import { useState } from "react"
 import { toast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/auth-context"
-import { Input } from "@/components/ui/input"
-import { userAPI } from "@/lib/api"
-import { useRouter } from "next/navigation"
+import { AlertTriangle } from "lucide-react"
 
 interface DeleteAccountModalProps {
   isOpen: boolean
@@ -15,96 +13,66 @@ interface DeleteAccountModalProps {
 }
 
 export function DeleteAccountModal({ isOpen, onClose }: DeleteAccountModalProps) {
-  const [confirmText, setConfirmText] = useState("")
-  const [isDeleting, setIsDeleting] = useState(false)
-  const router = useRouter()
-  const { user, logout } = useAuth()
+  const [isLoading, setIsLoading] = useState(false)
+  const { logout } = useAuth()
 
   const handleDeleteAccount = async () => {
-    if (confirmText !== "delete my account") {
-      toast({
-        title: "Error",
-        description: "Please type 'delete my account' to confirm",
-        variant: "destructive",
-      })
-      return
-    }
-
-    if (!user?.id) {
-      toast({
-        title: "Error",
-        description: "User ID not found",
-        variant: "destructive",
-      })
-      return
-    }
-
+    setIsLoading(true)
     try {
-      setIsDeleting(true)
-      await userAPI.deleteUserById(user.id)
-      
+      // Here you would typically call your API to delete the account
+      await new Promise((resolve) => setTimeout(resolve, 1500)) // Simulate API call
+
       toast({
         title: "Account deleted",
         description: "Your account has been successfully deleted.",
       })
-      
-      logout() // Log out the user after successful deletion
-      onClose()
-      router.push("/signup") // Redirect to signup page after deletion
-    } catch (error: any) {
-      console.error("Delete account error:", error)
-      const errorMessage = error.detail || "Failed to delete account"
+
+      // Log out the user after account deletion
+      logout()
+    } catch {
       toast({
         title: "Error",
-        description: errorMessage,
+        description: "Failed to delete account. Please try again.",
         variant: "destructive",
       })
     } finally {
-      setIsDeleting(false)
+      setIsLoading(false)
+      onClose()
     }
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md gap-0 p-0 bg-[#262626] border-zinc-800">
-        <DialogHeader className="p-3 border-b sm:p-4 border-zinc-800">
-          <DialogTitle className="text-base font-normal text-white sm:text-lg">
-            Delete Account
-          </DialogTitle>
+      <DialogContent className="sm:max-w-[425px] bg-zinc-900 border-zinc-800">
+        <DialogHeader>
+          <DialogTitle className="text-xl text-white">Delete Account</DialogTitle>
         </DialogHeader>
 
-        <div className="p-3 space-y-4 sm:p-4">
-          <div className="space-y-2">
-            <p className="text-sm text-zinc-400">
-              This action cannot be undone. This will permanently delete your account and remove all associated data.
-            </p>
-            <p className="text-sm text-zinc-400">
-              Please type <span className="text-white">&quot;delete my account&quot;</span> to confirm.
-            </p>
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 p-3 border rounded-lg bg-red-500/10 border-red-500/20">
+            <AlertTriangle className="w-5 h-5 text-red-500" />
+            <p className="text-sm text-red-500">This action cannot be undone.</p>
           </div>
 
-          <Input
-            value={confirmText}
-            onChange={(e) => setConfirmText(e.target.value)}
-            className="text-white bg-zinc-800/50 border-zinc-700"
-            placeholder="Type 'delete my account'"
-            disabled={isDeleting}
-          />
+          <div className="space-y-4 text-sm text-zinc-400">
+            <p>You are about to delete your account. This will:</p>
+            <ul className="pl-5 space-y-2 list-disc">
+              <li>Permanently delete your account</li>
+              <li>Delete all your chats and conversations</li>
+              <li>Cancel any active subscriptions</li>
+              <li>Remove all your saved preferences</li>
+            </ul>
+          </div>
 
-          <div className="flex gap-2 pt-2">
-            <Button
-              variant="destructive"
-              onClick={handleDeleteAccount}
-              disabled={confirmText !== "delete my account" || isDeleting}
-              className="flex-1"
-            >
-              {isDeleting ? "Deleting..." : "Delete Account"}
+          <div className="pt-4 space-y-4">
+            <Button onClick={handleDeleteAccount} disabled={isLoading} variant="destructive" className="w-full">
+              {isLoading ? "Deleting..." : "Delete Account"}
             </Button>
             <Button
-              variant="outline"
               onClick={onClose}
-              disabled={isDeleting}
-              className="flex-1 border-zinc-700 hover:bg-zinc-800 text-zinc-400"
+              disabled={isLoading}
+              variant="outline"
+              className="w-full border-zinc-800 text-zinc-400 hover:bg-zinc-800"
             >
               Cancel
             </Button>

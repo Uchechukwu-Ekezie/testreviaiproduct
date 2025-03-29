@@ -88,7 +88,13 @@ export default function SignUpPage() {
 
     try {
       await signup(formData)
-    
+
+      // Only show success toast if we get here (no error was thrown)
+      // The navigation is handled in the auth context
+      toast({
+        title: "Account created",
+        description: "please sign in to continue",
+      })
     } catch (error) {
       console.error(error, "Signup form submission")
 
