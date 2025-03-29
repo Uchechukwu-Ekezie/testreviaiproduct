@@ -43,11 +43,13 @@ api.interceptors.response.use(
     
     if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        })
-          .then(() => api(originalRequest))
-          .catch((err) => Promise.reject(err));
+        try {
+          return new Promise((resolve, reject) => {
+            failedQueue.push({ resolve, reject });
+          }).then(() => api(originalRequest));
+        } catch (err) {
+          return Promise.reject(err);
+        }
       }
 
       originalRequest._retry = true;
@@ -57,21 +59,25 @@ api.interceptors.response.use(
         const refreshToken = typeof window !== 'undefined' && window.localStorage.getItem('refreshToken');
 
         if (!refreshToken) {
-          // Handle the case where there's no refresh token (e.g., logout)
+          // Clear tokens and reject if no refresh token
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('refreshToken');
+          delete api.defaults.headers.common["Authorization"];
           return Promise.reject(error);
         }
 
-        const response = await axios.post<{ access: string }>(`${BASE_URL}/auth/token/refresh`, {
-          refresh:refreshToken,
+        const response = await axios.post<{ access: string }>(`${BASE_URL}/auth/token/refresh/`, {
+          refresh: refreshToken,
         });
-        const { access: accessToken } = response.data;
+
+        const { access: newAccessToken } = response.data;
 
         if (typeof window !== 'undefined') {
-          window.localStorage.setItem('authToken', accessToken);
+          localStorage.setItem('authToken', newAccessToken);
+          api.defaults.headers.common["Authorization"] = `Bearer ${newAccessToken}`;
         }
 
-        api.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
-        processQueue(null, accessToken);
+        processQueue(null, newAccessToken);
         return api(originalRequest);
       } catch (refreshError: any) {
         // If refresh fails, clear all tokens and reject
@@ -80,7 +86,7 @@ api.interceptors.response.use(
         delete api.defaults.headers.common["Authorization"];
         
         processQueue(refreshError, null);
-        return Promise.reject(refreshError);
+        return Promise.reject(error);
       } finally {
         isRefreshing = false;
       }
@@ -195,7 +201,8 @@ export const authAPI = {
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data,
-        message: error.message
+        message: error.message,
+        detail: error.response?.data?.detail
       })
 
       // Handle specific error cases
@@ -217,7 +224,7 @@ export const authAPI = {
         error.detail = "An error occurred during login. Please try again.";
       }
 
-      throw error
+      throw error;
     }
   },
 
@@ -228,7 +235,7 @@ export const authAPI = {
     last_name: string
     password: string
   }) => {
-    const response = await api.post("/auth/", userData)
+    const response = await api.post("/auth/register/", userData)
     // Return the entire response so we can handle different response structures
     return response
   },
@@ -315,7 +322,7 @@ export const authAPI = {
       // First attempt: standard endpoint without trailing slash
       try {
         console.log("Attempting password reset with standard endpoint");
-        const response = await api.post("/auth/password/reset", payload, {
+        const response = await api.post("/auth/password/reset/request/", payload, {
           timeout: 15000, // Increased timeout
           headers: {
             "Content-Type": "application/json",
@@ -403,7 +410,7 @@ export const authAPI = {
       console.log("API: Password change successful");
       return response.data;
     } catch (error: any) {
-      console.error("Password reset API error details:", {
+      console.error("API: Password change failed with detailed error:", {
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data,
@@ -474,6 +481,29 @@ export const userAPI = {
     }
   },
 
+  deleteUserById: async (userId: string) => {
+    try {
+      console.log("API: Attempting to delete user by ID:", userId);
+      const response = await api.delete(`/auth/users/${userId}/`);
+      console.log("API: User deletion successful, response status:", response.status);
+      return response.data;
+    } catch (error: any) {
+      console.error("API: Delete user by ID failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+
+      // Include the detailed response in the error
+      if (error.response?.data) {
+        error.detail = error.response.data;
+      }
+
+      throw error;
+    }
+  },
+
   updatePreferences: async (data: { role: string }) => {
     try {
       console.log("API: Attempting to update user preferences...")
@@ -525,10 +555,22 @@ export const userAPI = {
 
       throw error
     }
-  }
+  },
+
+  resendVerificationOtp: async (email: string) => {
+    console.log("Attempting to resend verification OTP for email:", email)
+    try {
+      const response = await api.post(`/auth/email/verify/request/`, {
+        email: email.trim()
+      })
+      console.log("Successfully sent verification OTP")
+      return response.data
+    } catch (error) {
+      console.error("Failed to resend verification OTP:", error)
+      throw error
+    }
+  },
 }
-
-
 // Debugging API
 export const debugAPI = {
   checkEndpoint: async () => {
@@ -552,10 +594,10 @@ export const debugAPI = {
 
 // Chat API calls
 export const chatAPI = {
-  // create chat session
-  createChatSession: async (data: {
-    chat_title: string;
-    unique_chat_id?: string;
+// create chat session
+  createChatSession: async (data: { 
+    chat_title: string; 
+    unique_chat_id?: string; 
     user: string;
   }) => {
     try {
@@ -578,11 +620,24 @@ export const chatAPI = {
   // Get all chat sessions for the current user
   getChatSessions: async () => {
     try {
+      // Check if user is authenticated before making the request
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        console.log("User not authenticated, skipping chat sessions fetch");
+        return [];
+      }
+
       console.log("API: Fetching all chat sessions");
       const response = await api.get(`/chat-sessions/`);
       console.log("API: Chat sessions fetched successfully, count:", response.data.length);
       return response.data;
     } catch (error: any) {
+      // If unauthorized, return empty array instead of throwing error
+      if (error.response?.status === 401) {
+        console.log("User not authenticated, returning empty chat sessions list");
+        return [];
+      }
+
       console.error("API: Fetch chat sessions failed with detailed error:", {
         status: error.response?.status,
         statusText: error.response?.statusText,
@@ -632,7 +687,7 @@ export const chatAPI = {
   getChatsBySession: async (sessionId: string) => {
     try {
       const response = await api.get(`/chats/session/${sessionId}/`);
-      console.log("uchehe", sessionId);
+      console.log("uchehe" , sessionId);
       return response.data;
     } catch (error: any) {
       console.error("API: Fetch chats failed with detailed error:", {
@@ -663,41 +718,59 @@ export const chatAPI = {
   postNewChat: async (message: string, sessionId?: string) => {
     try {
       console.log("API: Posting new chat message to session:", sessionId, "with message:", message);
-      let data;
-      if (sessionId) {
-        data = {
-          prompt: message,
-          session: sessionId  // This is the key: session should be the session ID
-        };
-      } else {
-        data = {
-          prompt: message
-        }
+      
+      // Ensure auth token is set
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error("Authentication token is missing");
       }
-      const response = await api.post(`/chats/ai-chat/`, data);
-      return response.data;
+      setAuthToken(token);
 
+      // Construct request data
+      const data = {
+        prompt: message.trim(),
+        ...(sessionId && { session: sessionId })  // Use session instead of session_id
+      };
+
+      console.log("API: Sending chat request with data:", data);
+      
+      const response = await api.post(`/chats/ai-chat/`, data, {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      
+      console.log("API: Chat response received:", response.data);
+
+      // Create a complete message object with both prompt and response
       const messageObj = {
         id: response.data.id,
-        prompt: message.trim(),  // Include the original prompt
-        response: response.data.response || response.data.message || "",  // Handle different response formats
-        session: sessionId || response.data.session_id,
+        prompt: message.trim(),  // Include the original prompt
+        response: response.data.response || response.data.message || "",  // Handle different response formats
+        session: sessionId || response.data.session,  // Use the original session ID if provided
         created_at: response.data.created_at || new Date().toISOString(),
         updated_at: response.data.updated_at || new Date().toISOString()
       };
 
       return messageObj;
-
-
-
-    } catch (error: any) {  // Fixed: changed from incorrect catch syntax to proper error handling
+    } catch (error: any) {
       console.error("API: post new chats failed with detailed error:", {
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data,
-        message: error.message
+        message: error.message,
+        stack: error.stack
       });
-      throw error;  // Re-throw the error to be handled by calling code
+
+      // Add more specific error handling
+      if (error.response?.status === 401) {
+        throw new Error("Authentication failed. Please log in again.");
+      } else if (error.response?.status === 500) {
+        throw new Error("Server error occurred. Please try again later.");
+      }
+
+      throw error;
     }
   },
 
