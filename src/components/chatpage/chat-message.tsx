@@ -1,6 +1,6 @@
 "use client"
 
-import React from "react"
+import React, { useCallback } from "react"
 import Image from "next/image"
 import { Card } from "@/components/ui/card"
 import { AnimatedText } from "@/components/animated-text"
@@ -66,8 +66,35 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
   isAuthenticated,
   user,
 }) => {
+  const chatContainerRef = React.useRef<HTMLDivElement>(null)
+
+  // Function to scroll to bottom
+  const scrollToBottom = useCallback(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
+    }
+  }, [])
+
+  // Scroll when messages change or loading state changes
+  React.useEffect(() => {
+    scrollToBottom()
+  }, [messages, isLoading, scrollToBottom])
+
+  // Handle text updates during animation
+  const handleTextUpdate = useCallback(() => {
+    scrollToBottom()
+  }, [scrollToBottom])
+
   return (
-    <div className="flex-1 overflow-y-auto mt-14" style={{ paddingBottom: "calc(70px + 1rem)" }}>
+    <div
+      ref={chatContainerRef}
+      className="flex-1 overflow-y-auto mt-14"
+      style={{
+        paddingBottom: "calc(70px + 1rem)",
+        // height: "calc(100vh - 180px)", // Add fixed height
+        // maxHeight: "calc(80vh - 180px)", // Add max height
+      }}
+    >
       <div className="flex flex-col w-full max-w-5xl p-4 mx-auto">
         {/* Show active session title when messages exist */}
         {activeSession && messages.length > 0 && (
@@ -114,7 +141,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
             </div>
           </div>
         ) : (
-          <div className="flex flex-col items-start self-start w-full pb-20 space-y-4">
+          <div className="flex flex-col items-start self-start w-full pb-20 space-y-4 text-[15px] ">
             {messages.map((message: any, index: number) => (
               <div key={index} className="w-full space-y-2">
                 <div className={`flex justify-end w-full`}>
@@ -132,7 +159,12 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                       />
                       <div className="flex-1 min-w-0">
                         {message.id === latestMessageId ? (
-                          <AnimatedText text={message?.response} speed={50} batchSize={3} />
+                          <AnimatedText
+                            text={message?.response}
+                            speed={50}
+                            batchSize={3}
+                            onTextUpdate={handleTextUpdate} // Add callback
+                          />
                         ) : (
                           <p className="whitespace-pre-wrap">{message?.response}</p>
                         )}

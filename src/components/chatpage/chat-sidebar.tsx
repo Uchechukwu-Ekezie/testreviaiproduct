@@ -1,6 +1,6 @@
 "use client"
 
-import React from "react"
+import React, { useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Search, Settings, Plus, LogOut, X, Trash, MoreVertical, Pencil } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -41,6 +41,23 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
   setNewTitle,
 }) => {
   const [isDeleting, setIsDeleting] = React.useState<string | null>(null)
+  const sidebarRef = useRef<HTMLDivElement | null>(null)
+  
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
+        setSidebarOpen(false) // Close the sidebar
+      }
+    }
+
+    if (sidebarOpen) {
+      document.addEventListener("mousedown", handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [sidebarOpen, setSidebarOpen])
 
   const startNewChat = () => {
     // Clear messages
@@ -108,6 +125,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
   return (
     <div
+    ref={sidebarRef}
       className={`fixed inset-y-0 left-0 z-50 w-64 bg-card border-r border-border p-4 transition-transform md:relative md:translate-x-0 ${
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
       }`}
@@ -120,9 +138,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
           <Button variant="ghost" size="icon">
             <Search className="w-4 h-4 text-muted-foreground" />
           </Button>
-          <Button variant="ghost" size="icon">
-            <Settings className="w-4 h-4 text-muted-foreground" />
-          </Button>
+        
         </div>
       </div>
 

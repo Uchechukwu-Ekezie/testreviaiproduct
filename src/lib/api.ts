@@ -535,8 +535,23 @@ export const userAPI = {
     try {
       console.log("API: Attempting profile update with data:", userData)
 
-      // Use PATCH instead of PUT to update only the specified fields instead of replacing the entire resource
-      const response = await api.patch("/auth/user", userData)
+      // Get the current user's ID from the auth token
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error("Authentication token is missing");
+      }
+      setAuthToken(token);
+
+      // Get current user profile to get the ID
+      const currentUser = await api.get("/auth/me");
+      const userId = currentUser.data.id;
+
+      if (!userId) {
+        throw new Error("User ID not found");
+      }
+
+      // Use the correct endpoint with user ID
+      const response = await api.patch(`/auth/users/${userId}/`, userData)
       console.log("API: Profile update successful, response status:", response.status)
 
       return response.data

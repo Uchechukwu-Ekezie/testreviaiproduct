@@ -1,48 +1,65 @@
-import React, { useState, useEffect } from 'react';
+"use client"
+
+import type React from "react"
+import { useEffect, useState, useRef } from "react"
 
 interface AnimatedTextProps {
-  text: string;
-  speed?: number; // Speed of typing in milliseconds
-  onComplete?: () => void;
-  batchSize?: number; // Number of characters to process in each batch
+  text: string
+  speed?: number
+  batchSize?: number
+  onTextUpdate?: () => void // Add callback for text updates
 }
 
-export function AnimatedText({ 
-  text, 
-  speed = 50, // Increased default speed from 30 to 50ms
-  onComplete,
-  batchSize = 1 // Default batch size
-}: AnimatedTextProps) {
-  const [displayedText, setDisplayedText] = useState('');
-  const [currentIndex, setCurrentIndex] = useState(0);
+export const AnimatedText: React.FC<AnimatedTextProps> = ({
+  text,
+  speed = 30,
+  batchSize = 1,
+  onTextUpdate = () => {},
+}) => {
+  const [displayedText, setDisplayedText] = useState("")
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    if (currentIndex < text.length) {
-      const timeout = setTimeout(() => {
-        const nextIndex = Math.min(currentIndex + batchSize, text.length);
-        const nextChunk = text.slice(currentIndex, nextIndex);
-        setDisplayedText(prev => prev + nextChunk);
-        setCurrentIndex(nextIndex);
-      }, speed);
+    let currentIndex = 0
 
-      return () => clearTimeout(timeout);
-    } else if (onComplete) {
-      onComplete();
+    // Reset displayed text when input text changes
+    setDisplayedText("")
+
+    // Clear any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
     }
-  }, [currentIndex, text, speed, batchSize, onComplete]);
 
-  // Reset animation when text changes
-  useEffect(() => {
-    setDisplayedText('');
-    setCurrentIndex(0);
-  }, [text]);
+    // Set up new interval for text animation
+    intervalRef.current = setInterval(() => {
+      if (currentIndex < text.length) {
+        // Calculate end index for current batch
+        const endIndex = Math.min(currentIndex + batchSize, text.length)
+        // Add next batch of characters
+        const nextChunk = text.substring(currentIndex, endIndex)
 
-  return (
-    <span className="whitespace-pre-wrap">
-      {displayedText}
-      {currentIndex < text.length && (
-        <span className="animate-pulse">▋</span>
-      )}
-    </span>
-  );
-} 
+        setDisplayedText((prev) => prev + nextChunk)
+        currentIndex = endIndex
+
+        // Call the callback after each update
+        onTextUpdate()
+      } else {
+        // Clear interval when done
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current)
+          intervalRef.current = null
+        }
+      }
+    }, speed)
+
+    // Cleanup on unmount or when text changes
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+      }
+    }
+  }, [text, speed, batchSize, onTextUpdate])
+
+  return <p className="whitespace-pre-wrap">{displayedText}</p>
+}
+
