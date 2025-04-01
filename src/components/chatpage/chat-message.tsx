@@ -129,28 +129,28 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
             </h1>
             <div
               className="md:grid flex flex-nowrap overflow-y-auto snap-x snap-mandatory  gap-4 w-full text-center mx-auto md:max-w-[600px] 
-      md:grid-cols-2 md:static fixed bottom-44 left-0 right-0 bg-background p-4 border-t border-border"
+      md:grid-cols-2 md:static fixed bottom-44 left-0 right-0 bg-background p-4  border-border "
             >
               {actionCards.map((card) => (
                 <Card
                   key={card.title}
-                  className="p-2 transition-colors cursor-pointer md:py-8 bg-card border-border hover:bg-muted"
+                  className="p-2 transition-colors cursor-pointer border-[1px] border-border md:py-8 bg-card hover:bg-muted"
                   onClick={() => handleCardClick(card)}
                 >
-                  <div className="flex items-center justify-center gap-3 lg:flex-col">
+                  <div className="flex items-center justify-center w-64 gap-3 lg:flex-col ">
                     <Image
                       src={card.image || "/placeholder.svg"}
                       alt={card.title}
                       width={44}
                       height={44}
-                      className="w-8 h-8 ml-5 md:ml-0 md:w-11 md:h-11"
+                      className="hidden w-8 h-8 ml-5 md:ml-0 md:w-11 md:h-11 md:block"
                     
                     />
                     <div>
                       <h3 className="md:mb-1 md:font-medium text-foreground text-[14px] px-5 md:text-[15px] whitespace-nowrap overflow-hidden text-ellipsis">
                         {card.title}
                       </h3>
-                      <p className="hidden text-sm text-muted-foreground md:block">
+                      <p className="text-sm text-muted-foreground md:block">
                         {card.description}
                       </p>
                     </div>
@@ -160,19 +160,19 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
             </div>
           </div>
         ) : (
-          <div className="flex flex-col items-start self-start w-full pb-20 space-y-4 text-[12px] font-normal ">
+          <div className="flex flex-col items-start self-start w-full pb-20 space-y-4 text-[15px] font-normal ">
             {messages.map((message: any, index: number) => (
               <div key={index} className="w-full space-y-2">
                 <div className={`flex justify-end w-full`}>
                   <div
-                    className={`max-w-[80%] rounded-lg p-4 bg-card text-foreground `}
+                    className={`max-w-[80%] rounded-lg p-4 bg-card `}
                   >
                     <p className="whitespace-pre-wrap">{message?.prompt}</p>
                   </div>
                 </div>
                 {message?.response && (
                   <div className={`flex justify-start w-full`}>
-                    <div className="flex items-start gap-2 md:gap-4 md:max-w-[80%] rounded-lg p-4 text-foreground">
+                    <div className="flex items-start gap-2 md:gap-4 md:max-w-[80%] rounded-lg p-4 ">
                       <Image
                         src={star || "/placeholder.svg"}
                         alt="Response Image"

@@ -31,7 +31,7 @@ module.exports = {
         'accent-foreground': 'hsl(var(--accent-foreground))',
         destructive: 'hsl(var(--destructive))',
         'destructive-foreground': 'hsl(var(--destructive-foreground))',
-        border: 'hsl(var(--border))',
+        border: 'rgba(255, 255, 255, 0.08)',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
       },
