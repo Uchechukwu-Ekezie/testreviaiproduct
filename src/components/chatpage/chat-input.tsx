@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useRef, useState, useEffect } from "react"
-import { PaperclipIcon, ImageIcon, Send, X } from "lucide-react"
+import { PaperclipIcon, ImageIcon, Send, X, Plus } from "lucide-react"
 import Image from "next/image"
 import { toast } from "@/components/ui/use-toast"
 import { chatAPI } from "@/lib/api"
@@ -40,10 +40,31 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const attachmentInputRef = useRef<HTMLInputElement>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
   const [images, setImages] = useState<File[]>([])
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const [attachments, setAttachments] = useState<File[]>([])
   const [localIsLoading, setLocalIsLoading] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+
+  // Close modal when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      // Only close if clicking outside the modal
+      if (isModalOpen && modalRef.current && !modalRef.current.contains(event.target as Node)) {
+        setIsModalOpen(false)
+      }
+    }
+
+    if (isModalOpen) {
+      // Use mousedown instead of click to ensure this fires before button click handlers
+      document.addEventListener("mousedown", handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [isModalOpen])
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value)
@@ -241,42 +262,110 @@ const ChatInput: React.FC<ChatInputProps> = ({
               accept=".pdf,.doc,.docx,.txt,.csv,.xlsx"
             />
 
-            <div className="flex items-center justify-between pt-2 mt-2 border-t border-border">
+            <div className="flex items-center justify-between pt-2 mt-2 border-border">
               <div className="flex items-center gap-2">
-                {/* Image Upload */}
-                <button
-                  type="button"
-                  disabled={isLoading || localIsLoading}
-                  onClick={() => imageInputRef.current?.click()}
-                  className="flex items-center gap-2 p-2 transition-colors rounded-md"
-                >
-                  <ImageIcon className="w-5 h-5 text-muted-foreground" />
-                  <span className="text-muted-foreground text-[15px]">Upload Image</span>
-                </button>
+                {/* On larger screens, show buttons directly */}
+                <div className="items-center hidden gap-2 sm:flex">
+                  {/* Image Upload */}
+                  <button
+                    type="button"
+                    disabled={isLoading || localIsLoading}
+                    onClick={() => imageInputRef.current?.click()}
+                    className="flex items-center gap-2 p-2 transition-colors rounded-md"
+                  >
+                    <ImageIcon className="w-5 h-5 text-muted-foreground" />
+                    <span className="text-muted-foreground text-[15px]">Upload Image</span>
+                  </button>
 
-                {/* Document Upload */}
+                  {/* Document Upload */}
+                  <button
+                    type="button"
+                    disabled={isLoading || localIsLoading}
+                    onClick={() => attachmentInputRef.current?.click()}
+                    className="flex items-center gap-2 p-2 transition-colors rounded-md"
+                  >
+                    <PaperclipIcon className="w-5 h-5 text-muted-foreground" />
+                    <span className="text-muted-foreground text-[15px]">Attach Document</span>
+                  </button>
+                </div>
+
+                {/* On small screens, show dot icon */}
                 <button
                   type="button"
-                  disabled={isLoading || localIsLoading}
-                  onClick={() => attachmentInputRef.current?.click()}
-                  className="flex items-center gap-2 p-2 transition-colors rounded-md"
+                  onClick={() => setIsModalOpen(true)}
+                  className="flex items-center justify-center w-8 h-8 rounded-full sm:hidden hover:bg-muted"
                 >
-                  <PaperclipIcon className="w-5 h-5 text-muted-foreground" />
-                  <span className="text-muted-foreground text-[15px]">Attach Document</span>
+                  <div className="flex items-center gap-2 p-1 border-2 rounded-full border-border">
+                    <Plus className="w-5 h-5 text-muted-foreground whitespace-nowrap" />
+                  </div>
                 </button>
+                <h1 className="sm:hidden">Add Attachment</h1>
               </div>
 
               {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={
-                  isLoading || localIsLoading || (!input.trim() && images.length === 0 && attachments.length === 0)
-                }
-                className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-[#FFD700] to-[#780991] text-white"
-              >
-                <Send className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <div className="px-3 py-2 text-sm bg-border rounded-[10px] text-muted-foreground whitespace-nowrap">
+                  15 tokens left
+                </div>
+                <button
+                  type="submit"
+                  disabled={
+                    isLoading || localIsLoading || (!input.trim() && images.length === 0 && attachments.length === 0)
+                  }
+                  className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-[#FFD700] to-[#780991] text-white"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              </div>
             </div>
+            {/* Modal for small screens */}
+            {isModalOpen && (
+              <div className="fixed inset-0 z-50 flex bottom-16 left-[-80px] items-end justify-center sm:hidden">
+                <div
+                  ref={modalRef}
+                  className="w-full p-4 max-w-[270px] bg-card rounded-xl animate-in slide-in-from-bottom border-[2px] border-border"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-medium">Add to your message</h3>
+                    <button
+                      type="button"
+                      onClick={() => setIsModalOpen(false)}
+                      className="p-1 border-2 rounded-full hover:bg-muted border-border"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="grid gap-1">
+                    <button
+                      type="button"
+                      disabled={isLoading || localIsLoading}
+                      onClick={() => {
+                        imageInputRef.current?.click()
+                        setIsModalOpen(false)
+                      }}
+                      className="flex items-center w-full gap-3 p-3 transition-colors rounded-md hover:bg-muted "
+                    >
+                      <ImageIcon className="w-5 h-5 text-muted-foreground" />
+                      <span className="text-foreground">Upload Image</span>
+                    </button>
+                    <div className="w-full border-b-2 border-border"></div>
+                    <button
+                      type="button"
+                      disabled={isLoading || localIsLoading}
+                      onClick={() => {
+                        attachmentInputRef.current?.click()
+                        setIsModalOpen(false)
+                      }}
+                      className="flex items-center w-full gap-3 p-3 transition-colors rounded-md hover:bg-muted"
+                    >
+                      <PaperclipIcon className="w-5 h-5 text-muted-foreground" />
+                      <span className="text-foreground">Attach Document</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </form>
         </div>
       </div>
