@@ -1,58 +1,58 @@
-"use client"
+"use client";
 
-import React, { useCallback } from "react"
-import Image from "next/image"
-import { Card } from "@/components/ui/card"
-import { AnimatedText } from "@/components/animated-text"
-import star from "../../../public/Image/Star 1.png"
+import React, { useCallback, useEffect, useRef } from "react";
+import Image from "next/image";
+import { Card } from "@/components/ui/card";
+import { AnimatedText } from "@/components/animated-text";
+import star from "../../../public/Image/Star 1.png";
 
 interface Message {
-  id: string
-  prompt?: string
-  response?: string
+  id: string;
+  prompt?: string;
+  response?: string;
 }
 
 interface ActionCard {
-  title: string
-  description: string
-  image: any
-  message: string
+  title: string;
+  description: string;
+  image: any;
+  message: string;
 }
 
 interface ChatMessagesProps {
-  messages: Message[]
-  isLoading: boolean
-  latestMessageId: string | null
-  messagesEndRef: React.RefObject<HTMLDivElement>
-  activeSession: string | null
-  sessions: any[]
-  actionCards: ActionCard[]
-  handleCardClick: (card: ActionCard) => void
-  isAuthenticated: boolean
-  user: any
+  messages: Message[];
+  isLoading: boolean;
+  latestMessageId: string | null;
+  messagesEndRef: React.RefObject<HTMLDivElement>;
+  activeSession: string | null;
+  sessions: any[];
+  actionCards: ActionCard[];
+  handleCardClick: (card: ActionCard) => void;
+  isAuthenticated: boolean;
+  user: any;
 }
 
 const ThinkingAnimation = () => {
-  const [dots, setDots] = React.useState("")
+  const [dots, setDots] = React.useState("");
 
-  React.useEffect(() => {
+  useEffect(() => {
     const interval = setInterval(() => {
       setDots((prev) => {
-        if (prev.length >= 3) return ""
-        return prev + "."
-      })
-    }, 500)
+        if (prev.length >= 3) return "";
+        return prev + ".";
+      });
+    }, 500);
 
-    return () => clearInterval(interval)
-  }, [])
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="flex items-center">
       <span className="font-medium">Revi AI is thinking</span>
       <span className="inline-block w-8">{dots}</span>
     </div>
-  )
-}
+  );
+};
 
 const ChatMessages: React.FC<ChatMessagesProps> = ({
   messages,
@@ -66,24 +66,31 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
   isAuthenticated,
   user,
 }) => {
-  const chatContainerRef = React.useRef<HTMLDivElement>(null)
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // Function to scroll to bottom
   const scrollToBottom = useCallback(() => {
     if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
+      chatContainerRef.current.scrollTop =
+        chatContainerRef.current.scrollHeight;
     }
-  }, [])
+  }, []);
 
   // Scroll when messages change or loading state changes
-  React.useEffect(() => {
-    scrollToBottom()
-  }, [messages, isLoading, scrollToBottom])
+  useEffect(() => {
+    // Add a small delay to ensure the new message is rendered
+    setTimeout(() => {
+      scrollToBottom();
+    }, 100); // Adjust the delay as needed
+  }, [messages, isLoading, scrollToBottom]);
 
   // Handle text updates during animation
   const handleTextUpdate = useCallback(() => {
-    scrollToBottom()
-  }, [scrollToBottom])
+    // Add a small delay after text update as well
+    setTimeout(() => {
+      scrollToBottom();
+    }, 100);
+  }, [scrollToBottom]);
 
   return (
     <div
@@ -100,9 +107,12 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         {activeSession && messages.length > 0 && (
           <div className="w-full pb-2 mb-4 border-b border-border">
             <h2 className="font-medium text-md text-foreground">
-              {sessions.find((s: any) => s.id === activeSession)?.chat_title || "Chat Session"}
+              {sessions.find((s: any) => s.id === activeSession)?.chat_title ||
+                "Chat Session"}
             </h2>
-            <p className="text-xs text-muted-foreground">Continue your conversation in this session</p>
+            <p className="text-xs text-muted-foreground">
+              Continue your conversation in this session
+            </p>
           </div>
         )}
 
@@ -111,15 +121,20 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
             <h1 className="mb-8 text-xl text-center text-foreground">
               {isAuthenticated
                 ? `Hi ${
-                    user?.first_name ? user?.first_name + " " + user?.last_name : "there"
+                    user?.first_name
+                      ? user?.first_name + " " + user?.last_name
+                      : "there"
                   }! How can I assist you today?`
                 : "Hi! How can I assist you today?"}
             </h1>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:max-w-[600px] w-full text-center mx-auto">
+            <div
+              className="md:grid flex flex-nowrap overflow-y-auto snap-x snap-mandatory  gap-4 w-full text-center mx-auto md:max-w-[600px] 
+      md:grid-cols-2 md:static fixed bottom-44 left-0 right-0 bg-background p-4 border-t border-border"
+            >
               {actionCards.map((card) => (
                 <Card
                   key={card.title}
-                  className="p-4 transition-colors cursor-pointer md:py-8 bg-card border-border hover:bg-muted"
+                  className="p-2 transition-colors cursor-pointer md:py-8 bg-card border-border hover:bg-muted"
                   onClick={() => handleCardClick(card)}
                 >
                   <div className="flex items-center justify-center gap-3 lg:flex-col">
@@ -128,12 +143,16 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                       alt={card.title}
                       width={44}
                       height={44}
-                      className="w-11 h-11"
-                      sizes="(max-width: 640px) 32px, 44px"
+                      className="w-8 h-8 ml-5 md:ml-0 md:w-11 md:h-11"
+                    
                     />
                     <div>
-                      <h3 className="mb-1 font-medium text-foreground">{card.title}</h3>
-                      <p className="hidden text-sm text-muted-foreground md:block">{card.description}</p>
+                      <h3 className="md:mb-1 md:font-medium text-foreground text-[14px] px-5 md:text-[15px] whitespace-nowrap overflow-hidden text-ellipsis">
+                        {card.title}
+                      </h3>
+                      <p className="hidden text-sm text-muted-foreground md:block">
+                        {card.description}
+                      </p>
                     </div>
                   </div>
                 </Card>
@@ -141,11 +160,13 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
             </div>
           </div>
         ) : (
-          <div className="flex flex-col items-start self-start w-full pb-20 space-y-4 text-[15px] ">
+          <div className="flex flex-col items-start self-start w-full pb-20 space-y-4 text-[12px] font-normal ">
             {messages.map((message: any, index: number) => (
               <div key={index} className="w-full space-y-2">
                 <div className={`flex justify-end w-full`}>
-                  <div className={`max-w-[80%] rounded-lg p-4 bg-card text-foreground `}>
+                  <div
+                    className={`max-w-[80%] rounded-lg p-4 bg-card text-foreground `}
+                  >
                     <p className="whitespace-pre-wrap">{message?.prompt}</p>
                   </div>
                 </div>
@@ -166,7 +187,9 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                             onTextUpdate={handleTextUpdate} // Add callback
                           />
                         ) : (
-                          <p className="whitespace-pre-wrap">{message?.response}</p>
+                          <p className="whitespace-pre-wrap">
+                            {message?.response}
+                          </p>
                         )}
                       </div>
                     </div>
@@ -193,8 +216,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         )}
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default ChatMessages
-
+export default ChatMessages;

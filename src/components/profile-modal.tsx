@@ -133,9 +133,9 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px] bg-zinc-900 border-zinc-800">
+      <DialogContent className="sm:max-w-[425px] bg-card border-zinc-800">
         <DialogHeader>
-          <DialogTitle className="text-xl text-white">Profile Settings</DialogTitle>
+          <DialogTitle className="text-xl text-muted-foreground">Profile Settings</DialogTitle>
           <DialogDescription className="text-zinc-400">Update your basic profile information.</DialogDescription>
         </DialogHeader>
 
@@ -160,7 +160,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
               </Avatar>
               <label
                 htmlFor="avatar-upload"
-                className="absolute bottom-0 right-0 p-1 rounded-full cursor-pointer bg-zinc-800 hover:bg-zinc-700"
+                className="absolute bottom-0 right-0 p-1 rounded-full cursor-pointer bg-background hover:bg-zinc-700"
               >
                 <Camera className="w-4 h-4 text-zinc-400" />
                 <input
@@ -176,49 +176,49 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
 
           {/* Username */}
           <div className="space-y-2">
-            <Label htmlFor="username" className="text-zinc-400">
+            <Label htmlFor="username" className="text-muted-foreground">
               Username
             </Label>
             <Input
               id="username"
               value={formData.username}
               onChange={(e) => setFormData((prev) => ({ ...prev, username: e.target.value }))}
-              className="text-white bg-zinc-900 border-zinc-800"
+              className=" border-border bg-card"
               placeholder="Enter your username"
             />
           </div>
 
           {/* First Name */}
           <div className="space-y-2">
-            <Label htmlFor="first_name" className="text-zinc-400">
+            <Label htmlFor="first_name" className="text-muted-foreground">
               First Name
             </Label>
             <Input
               id="first_name"
               value={formData.first_name}
               onChange={(e) => setFormData((prev) => ({ ...prev, first_name: e.target.value }))}
-              className="text-white bg-zinc-900 border-zinc-800"
+              className=" border-border bg-card"
               placeholder="Enter your first name"
             />
           </div>
 
           {/* Last Name */}
           <div className="space-y-2">
-            <Label htmlFor="last_name" className="text-zinc-400">
+            <Label htmlFor="last_name" className="text-muted-foreground">
               Last Name
             </Label>
             <Input
               id="last_name"
               value={formData.last_name}
               onChange={(e) => setFormData((prev) => ({ ...prev, last_name: e.target.value }))}
-              className="text-white bg-zinc-900 border-zinc-800"
+              className="border-border bg-card"
               placeholder="Enter your last name"
             />
           </div>
 
           {/* Email (Read-only) */}
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-zinc-400">
+            <Label htmlFor="email" className="text-muted-foreground">
               Email (Read-only)
             </Label>
             <Input
@@ -226,7 +226,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
               value={user?.email || ""}
               readOnly
               disabled
-              className="text-white bg-zinc-900 border-zinc-800 opacity-70"
+              className=" border-border bg-card opacity-70"
             />
           </div>
 
@@ -251,7 +251,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
               type="button"
               variant="outline"
               onClick={onClose}
-              className="text-zinc-400 border-zinc-800 hover:bg-zinc-800"
+              className="border-border text-zinc-400 "
               disabled={isLoading}
             >
               Cancel

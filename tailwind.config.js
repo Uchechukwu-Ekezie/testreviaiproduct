@@ -56,6 +56,8 @@ module.exports = {
           "var(--font-inter)",
           "sans-serif",
         ],
+          "google": ["Google Sans", "sans-serif"]
+
       },
     },
   },

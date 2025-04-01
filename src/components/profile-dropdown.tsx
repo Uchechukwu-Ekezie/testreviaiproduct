@@ -45,7 +45,7 @@ export function ProfileDropdown() {
             </Avatar>
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-56 border-zinc-800 bg-zinc-900" align="end">
+        <DropdownMenuContent className="w-56 bg-card" align="end">
           <DropdownMenuItem
             className="flex items-center gap-2 cursor-pointer text-zinc-400 hover:text-white hover:bg-zinc-800"
             onClick={() => setIsProfileOpen(true)}

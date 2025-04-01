@@ -98,20 +98,20 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-[#212121] font-sf-pro">
+    <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-background font-sf-pro">
       <div className="flex flex-col items-center w-full gap-8 mx-auto lg:flex-row max-w-1440">
         <Card className="w-full max-w-[503px] mx-auto lg:min-h-[96vh] bg-transparent border-transparent flex flex-col">
           <CardHeader className="space-y-3">
             <Logo />
-            <h2 className="text-center text-[25px] font-[500] text-white pt-[33.5px]">Welcome back to Revi.ai</h2>
+            <h2 className="text-center text-[25px] font-[500] text-muted-foreground md:pt-[33.5px]">Welcome back to Revi.ai</h2>
           </CardHeader>
 
           <CardContent className="items-center justify-center flex-grow w-full py-4 overflow-y-auto ">
-            <div className="space-y-4">
+            <div className="md:space-y-4">
               <div className="grid gap-3">
                 <Button
                   variant="outline"
-                  className="w-full text-white rounded-[15px] text-[15px] font-[400] border-white/15 hover:bg-zinc-800 py-5 h-11"
+                  className="w-full bg-card rounded-[15px] text-[15px] font-[400] border-white/15  py-5 h-11"
                   disabled={isLoading}
                   onClick={() => handleProviderLogin("google")}
                 >
@@ -121,7 +121,7 @@ export default function LoginPage() {
 
                 <Button
                   variant="outline"
-                  className="w-full text-white rounded-[15px] text-[15px] font-[400] bg-transparent border-white/15 hover:bg-zinc-800 py-5 h-11"
+                  className="w-full bg-card rounded-[15px] text-[15px] font-[400]  border-white/15  py-5 h-11"
                   disabled={isLoading}
                   onClick={() => handleProviderLogin("apple")}
                 >

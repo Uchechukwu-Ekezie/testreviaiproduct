@@ -35,7 +35,6 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
   isAuthenticated,
   logout,
   isMobile,
-  showRenameDialog,
   setShowRenameDialog,
   setSelectedSessionId,
   setNewTitle,

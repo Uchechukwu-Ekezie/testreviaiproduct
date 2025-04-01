@@ -318,7 +318,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="text-xs text-white/25 bg-zinc-900 sm:text-sm">
-                            <SelectItem value="auto-english">Auto-English</SelectItem>
+                            <SelectItem value="auto-english" className="text-xs">Auto-English</SelectItem>
                             <SelectItem value="english">English</SelectItem>
                             <SelectItem value="spanish">Spanish</SelectItem>
                             <SelectItem value="french">French</SelectItem>

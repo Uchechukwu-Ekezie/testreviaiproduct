@@ -170,7 +170,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           <form onSubmit={handleLocalSubmit}>
             <textarea
               ref={textareaRef}
-              placeholder="Ask me anything..."
+              placeholder="Ask me anything about housing..."
               value={input}
               onChange={handleChange}
               onKeyDown={(e) => {
