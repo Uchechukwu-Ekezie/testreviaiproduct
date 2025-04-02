@@ -129,7 +129,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
             </h1>
             <div
               className="md:grid flex flex-nowrap overflow-y-auto snap-x snap-mandatory  gap-4 w-full text-center mx-auto md:max-w-[600px] 
-      md:grid-cols-2 md:static fixed bottom-44 left-0 right-0 bg-background p-4  border-border "
+      md:grid-cols-2 md:static fixed bottom-[145px] left-0 right-0 bg-background p-4  border-border "
             >
               {actionCards.map((card) => (
                 <Card
@@ -146,8 +146,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                       className="hidden w-8 h-8 ml-5 md:ml-0 md:w-11 md:h-11 md:block"
                     
                     />
-                    <div>
-                      <h3 className="md:mb-1 md:font-medium text-foreground text-[14px] px-5 md:text-[15px] whitespace-nowrap overflow-hidden text-ellipsis">
+                    <div className="text-left md:text-center ml-[-18px] md:ml-0">
+                      <h3 className="md:mb-1 ml-[-18px] md:ml-0 md:font-medium text-foreground text-[14px] px-5 md:text-[15px] whitespace-nowrap overflow-hidden text-ellipsis">
                         {card.title}
                       </h3>
                       <p className="text-sm text-muted-foreground md:block">

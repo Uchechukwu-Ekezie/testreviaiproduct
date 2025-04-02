@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useRef, useState, useEffect } from "react"
-import { PaperclipIcon, ImageIcon, Send, X, Plus } from "lucide-react"
+import { PaperclipIcon, ImageIcon, Send, X, Plus } from 'lucide-react'
 import Image from "next/image"
 import { toast } from "@/components/ui/use-toast"
 import { chatAPI } from "@/lib/api"
@@ -185,7 +185,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 bg-background md:left-64">
+    <div className="fixed bottom-0 left-0 right-0 z-40 bg-background lg:left-64">
       <div className="w-full max-w-[863px] mx-auto p-4">
         <div className="border rounded-[15px] border-border p-2 bg-card">
           <form onSubmit={handleLocalSubmit}>
@@ -231,7 +231,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
             {/* Show Uploaded Attachments */}
             {attachments.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
+              <div className="flex flex-wrap gap-2 mt-2 ">
                 {attachments.map((file, index) => (
                   <div key={index} className="relative flex items-center gap-2 p-2 border rounded-md border-border">
                     <div className="flex items-center gap-2">
@@ -265,7 +265,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             <div className="flex items-center justify-between pt-2 mt-2 border-border">
               <div className="flex items-center gap-2">
                 {/* On larger screens, show buttons directly */}
-                <div className="items-center hidden gap-2 sm:flex">
+                <div className="items-center hidden gap-2 md:flex">
                   {/* Image Upload */}
                   <button
                     type="button"
@@ -289,17 +289,19 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   </button>
                 </div>
 
-                {/* On small screens, show dot icon */}
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(true)}
-                  className="flex items-center justify-center w-8 h-8 rounded-full sm:hidden hover:bg-muted"
-                >
-                  <div className="flex items-center gap-2 p-1 border-2 rounded-full border-border">
-                    <Plus className="w-5 h-5 text-muted-foreground whitespace-nowrap" />
-                  </div>
-                </button>
-                <h1 className="sm:hidden">Add Attachment</h1>
+                {/* On small screens, show plus button and text */}
+                <div className="flex items-center md:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-muted"
+                  >
+                    <div className="flex items-center gap-2 p-1 border-2 rounded-full border-border">
+                      <Plus className="w-5 h-5 text-muted-foreground whitespace-nowrap" />
+                    </div>
+                  </button>
+                  <h1 className="ml-2">Add Attachment</h1>
+                </div>
               </div>
 
               {/* Submit Button */}
@@ -320,7 +322,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             </div>
             {/* Modal for small screens */}
             {isModalOpen && (
-              <div className="fixed inset-0 z-50 flex bottom-16 left-[-80px] items-end justify-center sm:hidden">
+              <div className="fixed inset-0 z-50 flex bottom-16 left-[-80px] items-end justify-center md:hidden">
                 <div
                   ref={modalRef}
                   className="w-full p-4 max-w-[270px] bg-card rounded-xl animate-in slide-in-from-bottom border-[2px] border-border"
@@ -374,4 +376,3 @@ const ChatInput: React.FC<ChatInputProps> = ({
 }
 
 export default ChatInput
-

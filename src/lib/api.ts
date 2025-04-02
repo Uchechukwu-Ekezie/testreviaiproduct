@@ -790,6 +790,8 @@ export const chatAPI = {
   },
 
 
+
+
   updateChatSession: async (sessionId: string, data: {
     chat_title?: string;
     unique_chat_id?: string;
