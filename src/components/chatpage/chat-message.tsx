@@ -48,7 +48,7 @@ const ThinkingAnimation = () => {
 
   return (
     <div className="flex items-center">
-      <span className="font-medium">Revi AI is thinking</span>
+      <span className="font-medium">Thinking</span>
       <span className="inline-block w-8">{dots}</span>
     </div>
   );
@@ -160,7 +160,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
             </div>
           </div>
         ) : (
-          <div className="flex flex-col items-start self-start w-full pb-20 space-y-4 text-[15px] font-normal ">
+          <div className="flex flex-col items-start self-start w-full pb-20 space-y-4 text-[14px] font-normal ">
             {messages.map((message: any, index: number) => (
               <div key={index} className="w-full space-y-2">
                 <div className={`flex justify-end w-full`}>
@@ -201,11 +201,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
               <div className="flex justify-start w-full">
                 <div className="max-w-[80%] rounded-lg p-4 text-foreground">
                   <div className="flex items-center gap-2 md:gap-4">
-                    <Image
-                      src={star || "/placeholder.svg"}
-                      alt="Response Image"
-                      className="object-cover w-8 h-8 rounded-full md:w-8 md:h-8"
-                    />
+                  
                     <ThinkingAnimation />
                   </div>
                 </div>
