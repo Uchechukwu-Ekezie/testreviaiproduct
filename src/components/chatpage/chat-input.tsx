@@ -3,10 +3,12 @@
 import type React from "react"
 
 import { useRef, useState, useEffect } from "react"
-import { PaperclipIcon, ImageIcon, Send, X, Plus } from 'lucide-react'
+import { PaperclipIcon, ImageIcon, X, Plus } from 'lucide-react'
 import Image from "next/image"
 import { toast } from "@/components/ui/use-toast"
 import { chatAPI } from "@/lib/api"
+import { FaArrowUp } from "react-icons/fa";
+
 
 interface ChatInputProps {
   input: string
@@ -316,7 +318,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   }
                   className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-[#FFD700] to-[#780991] text-white"
                 >
-                  <Send className="w-5 h-5" />
+                  <FaArrowUp className="w-5 h-5" />
                 </button>
               </div>
             </div>
