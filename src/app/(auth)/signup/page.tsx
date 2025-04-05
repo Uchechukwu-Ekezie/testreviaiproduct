@@ -42,7 +42,7 @@ export default function SignUpPage() {
   const [isProviderLoading, setIsProviderLoading] = useState<"google" | "apple" | null>(null)
   const isMobile = useMediaQuery("(max-width: 1024px)")
   const router = useRouter()
-  const { signupWithProvider, signup } = useAuth()
+  const { signup } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -129,35 +129,35 @@ export default function SignUpPage() {
     }
   }
 
-  const handleProviderSignup = async (provider: "google" | "apple") => {
-    if (!termsAccepted) {
-      toast({
-        title: "Terms Required",
-        description: "Please accept the Terms of Service and Privacy Policy to continue.",
-        variant: "destructive",
-      })
-      return
-    }
+  // const handleProviderSignup = async (provider: "google" | "apple") => {
+  //   if (!termsAccepted) {
+  //     toast({
+  //       title: "Terms Required",
+  //       description: "Please accept the Terms of Service and Privacy Policy to continue.",
+  //       variant: "destructive",
+  //     })
+  //     return
+  //   }
 
-    setIsProviderLoading(provider)
+  //   setIsProviderLoading(provider)
 
-    try {
-      if (signupWithProvider) {
-        await signupWithProvider(provider)
-      } else {
-        toast({
-          title: "Provider signup unavailable",
-          description: "This login method is currently unavailable.",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error(`${provider} signup failed:`, error)
-      // Error toast is handled in the auth context
-    } finally {
-      setIsProviderLoading(null)
-    }
-  }
+  //   try {
+  //     if (signupWithProvider) {
+  //       await signupWithProvider(provider)
+  //     } else {
+  //       toast({
+  //         title: "Provider signup unavailable",
+  //         description: "This login method is currently unavailable.",
+  //         variant: "destructive",
+  //       })
+  //     }
+  //   } catch (error) {
+  //     console.error(`${provider} signup failed:`, error)
+  //     // Error toast is handled in the auth context
+  //   } finally {
+  //     setIsProviderLoading(null)
+  //   }
+  // }
 
   return (
     <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-[#212121] font-sf-pro">
@@ -170,7 +170,7 @@ export default function SignUpPage() {
 
           <CardContent className="flex-grow py-4 overflow-y-auto">
             <div className="space-y-2">
-              <div className="grid gap-3">
+              {/* <div className="grid gap-3">
                 <Button
                   variant="outline"
                   className="w-full text-white rounded-[15px] text-[15px] font-[400] border-zinc-700 hover:bg-zinc-800 py-5 h-11"
@@ -190,7 +190,7 @@ export default function SignUpPage() {
                   <Image src={apple || "/placeholder.svg"} alt="Apple Logo" width={24} height={24} />
                   Sign up with Apple
                 </Button>
-              </div>
+              </div> */}
 
               <div className="relative py-6">
                 <div className="absolute inset-0 flex items-center">

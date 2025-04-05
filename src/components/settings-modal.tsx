@@ -6,7 +6,7 @@ import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { Settings, User, Lock, Trash2, Eye, EyeOff, Share, Check, Copy } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
@@ -14,6 +14,7 @@ import { DeleteAccountModal } from "./delete-account-modal"
 import { FilteredResponseModal } from "./filtered-response-modal"
 import { useIsMobile } from "../hooks/use-mobile"
 import { authAPI } from "@/lib/api"
+import { useAuth } from "@/contexts/auth-context"
 
 interface SettingsModalProps {
   isOpen: boolean
@@ -25,8 +26,8 @@ type SettingsTab = "general" | "personalization" | "password" | "delete" | "invi
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const isMobile = useIsMobile()
   const [activeTab, setActiveTab] = useState<SettingsTab>("general")
-  const [theme, setTheme] = useState("system")
-  const [language, setLanguage] = useState("auto-english")
+  // const [theme, setTheme] = useState("system")
+  // const [language, setLanguage] = useState("auto-english")
   const [isChangingPassword, setIsChangingPassword] = useState(false)
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
@@ -43,6 +44,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [referralPoints] = useState(5)
   const [referralUsers] = useState(5)
   const [copied, setCopied] = useState(false)
+  const {  logout } = useAuth()
 
   // const handleFilteredResponseToggle = (checked: boolean) => {
   //   if (checked) {
@@ -296,7 +298,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 <>
                   {activeTab === "general" && (
                     <div className="space-y-4 sm:space-y-6">
-                      <div className="flex items-center justify-between">
+                      {/* <div className="flex items-center justify-between">
                         <span className="text-xs sm:text-sm text-zinc-400">Theme</span>
                         <Select value={theme} onValueChange={setTheme}>
                           <SelectTrigger className="h-8 text-xs w-28 sm:w-32 border-zinc-700 text-zinc-400 sm:text-sm sm:h-10">
@@ -308,10 +310,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                             <SelectItem value="dark">Dark</SelectItem>
                           </SelectContent>
                         </Select>
-                      </div>
-                      <div className="border-b-[0.1px]"></div>
+                      </div> */}
+                      {/* <div className="border-b-[0.1px]"></div> */}
 
-                      <div className="flex items-center justify-between">
+                      {/* <div className="flex items-center justify-between">
                         <span className="text-xs sm:text-sm text-zinc-400">Language</span>
                         <Select value={language} onValueChange={setLanguage}>
                           <SelectTrigger className="h-8 text-xs w-28 sm:w-32 text-zinc-400 border-zinc-700 sm:text-sm sm:h-10">
@@ -324,7 +326,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                             <SelectItem value="french">French</SelectItem>
                           </SelectContent>
                         </Select>
-                      </div>
+                      </div> */}
                       <div className="border-b-[0.1px]"></div>
 
                       <div className="space-y-4">
@@ -338,7 +340,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                         <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center sm:gap-0">
                           <span className="text-xs sm:text-sm text-zinc-400">Log out on this device</span>
-                          <Button className="p-1 sm:p-2 rounded-[10px] bg-transparent border border-zinc-600 text-white/90 text-xs sm:text-sm h-8 sm:h-auto self-end sm:self-auto">
+                          <Button
+                          onClick={logout} className="p-1 sm:p-2 rounded-[10px] bg-transparent border border-zinc-600 text-white/90 text-xs sm:text-sm h-8 sm:h-auto self-end sm:self-auto">
                             Log out
                           </Button>
                         </div>

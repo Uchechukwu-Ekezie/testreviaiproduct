@@ -228,6 +228,88 @@ export const authAPI = {
     }
   },
 
+
+  loginWithGoogle: async (credentialResponse: {
+    credential?: string;  // id_token
+    access_token?: string;
+    code?: string;
+  }) => {
+    try {
+      console.log("API: Attempting Google login with credential response:", credentialResponse);
+
+      // Clear any existing tokens before login attempt
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('refreshToken');
+      delete api.defaults.headers.common["Authorization"];
+
+      // Prepare payload according to your API spec
+      const payload = {
+        id_token: credentialResponse.credential,
+        access_token: credentialResponse.access_token,
+        code: credentialResponse.code
+      };
+
+      const response = await api.post("/auth/social/google/login", payload);
+      console.log("API: Google login successful, response:", response.data);
+
+      // Handle response format (consistent with your regular login)
+      const accessToken = response.data.access_token || response.data.access;
+      const refreshToken = response.data.refresh_token || response.data.refresh;
+      const userData = response.data.user || response.data;
+
+      if (!accessToken) {
+        throw new Error("No access token received from server");
+      }
+
+      // Store tokens
+      localStorage.setItem('authToken', accessToken);
+      api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
+      
+      if (refreshToken) {
+        localStorage.setItem('refreshToken', refreshToken);
+      }
+
+      return {
+        access: accessToken,
+        refresh: refreshToken,
+        user: userData
+      };
+    } catch (error: any) {
+      console.error("API: Google login failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        detail: error.response?.data?.detail
+      });
+
+      // Clear any partial state on error
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('refreshToken');
+      delete api.defaults.headers.common["Authorization"];
+
+      // Handle specific error cases
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        const errorDetail = error.response?.data?.detail?.toLowerCase() || '';
+        
+        if (errorDetail.includes("invalid token") || errorDetail.includes("invalid credential")) {
+          error.detail = "Google authentication failed. Please try signing in again.";
+        } else if (errorDetail.includes("account not found")) {
+          error.detail = "No account found with this Google login. Please sign up first.";
+        } else {
+          error.detail = "Authentication failed. Please try again.";
+        }
+      } else if (error.response?.data?.detail) {
+        error.detail = error.response.data.detail;
+      } else {
+        error.detail = "An error occurred during Google authentication. Please try again.";
+      }
+
+      throw error;
+    }
+  },
+
+
   signup: async (userData: {
     username: string
     email: string

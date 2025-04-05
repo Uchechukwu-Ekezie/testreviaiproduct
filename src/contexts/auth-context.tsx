@@ -4,7 +4,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from "
 import { useRouter } from "next/navigation"
 import { authAPI, userAPI, clearAuthToken, getAuthToken, setAuthToken, verifyToken } from "@/lib/api"
 import { toast } from "@/components/ui/use-toast"
-
+import { GoogleCredentialResponse } from '@react-oauth/google'
 
 // ✅ Define user type
 export interface User {
@@ -42,11 +42,11 @@ interface AuthContextType {
     first_name: string
     last_name: string
     password: string
-  }) => Promise<boolean> // Return success status
+  }) => Promise<boolean>
   logout: () => void
   requestPasswordReset: (email: string) => Promise<void>
   updateProfile: (userData: Partial<User>) => Promise<boolean>
-  signupWithProvider?: (provider: "google" | "apple") => Promise<void>
+  loginWithGoogle: (credentialResponse: GoogleCredentialResponse) => Promise<boolean>
 }
 
 // ✅ Create auth context with default values
@@ -59,6 +59,7 @@ const AuthContext = createContext<AuthContextType>({
   logout: () => { },
   requestPasswordReset: async () => { },
   updateProfile: async () => false,
+  loginWithGoogle: async () => false,
 })
 
 // ✅ Auth provider props
@@ -112,7 +113,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             email: userData.email,
             first_name: userData.first_name || "",
             last_name: userData.last_name || "",
-            type: userData.type || "user" as "user" | "admin",
+            type: userData.type || "user",
             subscription_type: userData.subscription_type,
             subscription_start_date: userData.subscription_start_date,
             subscription_end_date: userData.subscription_end_date,
@@ -180,7 +181,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           avatar: response.user.avatar || "/placeholder.svg",
           date_joined: response.user.date_joined,
           last_login: response.user.last_login
-        };
+        }
       } else {
         // Otherwise fetch user profile
         const userData = await userAPI.getProfile()
@@ -198,7 +199,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           avatar: userData.avatar || "/placeholder.svg",
           date_joined: userData.date_joined,
           last_login: userData.last_login
-        };
+        }
       }
 
       // Set user state after we have all the data
@@ -207,7 +208,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       // Navigate to dashboard
       router.push("/")
-      return true
     } catch (error: any) {
       // Log the full error for debugging
       console.error("Auth context: Login error details:", {
@@ -231,7 +231,93 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return success
   }
 
-  // 🔹 Signup function - FIXED to handle the specific API response format
+  const loginWithGoogle = async (credentialResponse: GoogleCredentialResponse): Promise<boolean> => {
+    setIsLoading(true)
+    let success = false
+
+    try {
+      console.log("Auth context: Attempting Google login...")
+
+      // Clear any existing tokens before attempting login
+      clearAuthToken()
+
+      const response = await authAPI.loginWithGoogle(credentialResponse)
+      console.log("Auth context: Google login response:", response)
+
+      if (!response || !response.access) {
+        console.error("Auth context: Invalid Google login response structure:", response)
+        throw new Error("Invalid Google login response structure")
+      }
+
+      // Set the token
+      const token = response.access
+      setAuthToken(token)
+
+      // Then fetch user profile
+      let userObj: User;
+      if (response.user) {
+        // If user data is included in login response, use it
+        userObj = {
+          id: response.user.id || response.user.pk,
+          username: response.user.username || response.user.email.split("@")[0],
+          email: response.user.email,
+          first_name: response.user.first_name || "",
+          last_name: response.user.last_name || "",
+          type: response.user.type || "user",
+          subscription_type: response.user.subscription_type,
+          subscription_start_date: response.user.subscription_start_date,
+          subscription_end_date: response.user.subscription_end_date,
+          is_active: response.user.is_active,
+          avatar: response.user.avatar || "/placeholder.svg",
+          date_joined: response.user.date_joined,
+          last_login: response.user.last_login
+        }
+      } else {
+        // Otherwise fetch user profile
+        const userData = await userAPI.getProfile()
+        userObj = {
+          id: userData.id || userData.pk,
+          username: userData.username || userData.email.split("@")[0],
+          email: userData.email,
+          first_name: userData.first_name || "",
+          last_name: userData.last_name || "",
+          type: userData.type || "user",
+          subscription_type: userData.subscription_type,
+          subscription_start_date: userData.subscription_start_date,
+          subscription_end_date: userData.subscription_end_date,
+          is_active: userData.is_active,
+          avatar: userData.avatar || "/placeholder.svg",
+          date_joined: userData.date_joined,
+          last_login: userData.last_login
+        }
+      }
+
+      // Set user state after we have all the data
+      setUser(userObj)
+      success = true
+
+      // Navigate to dashboard
+      router.push("/")
+    } catch (error: any) {
+      console.error("Auth context: Google login error details:", {
+        error,
+        response: error.response,
+        data: error.response?.data || error.detail,
+        status: error.response?.status,
+        message: error.message
+      })
+
+      clearAuthToken()
+      setUser(null)
+      throw error
+    } finally {
+      setIsLoading(false)
+    }
+
+    return success
+  }
+
+  // 🔹 Signup function
   const signup = async (userData: {
     username: string
     email: string
@@ -283,7 +369,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       // Navigate to verify page
       router.push("/verify")
-      return true
     } catch (error: any) {
       // Log the full error for debugging
       console.error("Auth context: Signup error details:", {
@@ -304,20 +389,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const requestPasswordReset = async (email: string) => {
     try {
-      const response = await authAPI.requestPasswordReset(email);
-      console.log("Password reset response:", response);
-      return response;
+      const response = await authAPI.requestPasswordReset(email)
+      console.log("Password reset response:", response)
+      return response
     } catch (error: any) {
-      console.error("Password reset request failed:", error);
+      console.error("Password reset request failed:", error)
 
       // Log the exact server response
       if (error.response) {
-        console.error("Error Response Data:", error.response.data);
+        console.error("Error Response Data:", error.response.data)
       }
 
-      throw error;
+      throw error
     }
-  };
+  }
 
   const updateProfile = async (userData: Partial<User>): Promise<boolean> => {
     setIsLoading(true)
@@ -331,16 +416,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
         username: userData.username,
         first_name: userData.first_name,
         last_name: userData.last_name
-      };
+      }
 
       // Remove undefined fields
       Object.keys(allowedFields).forEach(key => {
         if (allowedFields[key as keyof Partial<User>] === undefined) {
-          delete allowedFields[key as keyof Partial<User>];
+          delete allowedFields[key as keyof Partial<User>]
         }
-      });
+      })
 
-      console.log("Auth context: Updating profile with fields:", allowedFields);
+      console.log("Auth context: Updating profile with fields:", allowedFields)
 
       const response = await userAPI.updateProfile(allowedFields)
       console.log("Auth context: Update profile response:", response)
@@ -352,9 +437,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       // Update only the fields that were returned in the response
-      // This ensures we don't lose existing data
       setUser(prevUser => {
-        if (!prevUser) return null;
+        if (!prevUser) return null
         return {
           ...prevUser,
           ...response,
@@ -364,16 +448,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
           subscription_start_date: response.subscription_start_date || prevUser.subscription_start_date,
           subscription_end_date: response.subscription_end_date || prevUser.subscription_end_date,
           is_active: response.is_active !== undefined ? response.is_active : prevUser.is_active,
-        };
-      });
+        }
+      })
 
       // Mark as successful
       success = true
       console.log("Auth context: Update profile successful")
-
-      return success
-
-      //eslint-disable-next-line
     } catch (error: any) {
       // Log the full error for debugging
       console.error("Auth context: Update profile error details:", {
@@ -388,6 +468,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } finally {
       setIsLoading(false)
     }
+
+    return success
   }
 
   // 🔹 Logout function
@@ -401,7 +483,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const isAuthenticated = !!user
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, isLoading, login, signup, logout, requestPasswordReset, updateProfile }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      isAuthenticated, 
+      isLoading, 
+      login, 
+      signup, 
+      logout, 
+      requestPasswordReset, 
+      updateProfile, 
+      loginWithGoogle 
+    }}>
       {children}
     </AuthContext.Provider>
   )
@@ -415,4 +507,3 @@ export function useAuth() {
   }
   return context
 }
-

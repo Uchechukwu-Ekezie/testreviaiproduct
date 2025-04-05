@@ -88,33 +88,40 @@ export function UpgradePlanModal({ isOpen, onClose }: UpgradePlanModalProps) {
   return (
     <>
       <Dialog open={isOpen && !showPayment} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-[650px] bg-[#1A1A1A] border-zinc-800 p-0 overflow-hidden">
-          <div className="p-6">
-            <DialogHeader className="mb-6">
-              <DialogTitle className="text-xl text-center text-white">Subscription Plan</DialogTitle>
-              <p className="text-sm text-center text-zinc-400">Select your Plan</p>
+        <DialogContent className="sm:max-w-[650px] md:max-w-[700px] bg-[#1A1A1A] border-zinc-800 p-0 overflow-hidden max-h-[90vh] overflow-y-auto">
+          <div className="p-3 sm:p-4 md:p-6">
+            <DialogHeader className="mb-4 sm:mb-6">
+              <DialogTitle className="text-lg text-center text-white sm:text-xl">Subscription Plan</DialogTitle>
+              <p className="text-xs text-center sm:text-sm text-zinc-400">Select your Plan</p>
               <p className="mt-1 text-xs text-center text-zinc-500">
                 Unlock more insights with the right plan for you.
               </p>
             </DialogHeader>
 
-            {/* First 3 Plans */}
-            <div className="grid grid-cols-1 gap-4 mb-4 sm:grid-cols-3">
-              {plans.slice(0, 3).map((plan) => (
+            {/* Plans - Responsive Grid */}
+            <div className="grid grid-cols-1 gap-3 mb-3 xs:grid-cols-2 sm:grid-cols-3 sm:gap-4 sm:mb-4">
+              {plans.slice(0, 5).map((plan) => (
                 <div
                   key={plan.id}
-                  className={`group relative p-4 rounded-lg border border-zinc-800 bg-[#262626] flex flex-col items-center transition-all
+                  className={`group relative p-3 sm:p-4 rounded-lg border border-zinc-800 bg-[#262626] flex flex-col items-center transition-all
                     ${plan.id === selectedPlanId ? "ring-2 ring-blue-500 border-blue-500" : ""}
                     hover:ring-2 hover:ring-yellow-500 hover:border-yellow-500`}
                 >
-                  <h3 className="mb-2 text-sm font-medium text-zinc-400">{plan.name}</h3>
-                  <div className="mb-1 text-3xl font-bold text-white">{plan.tokens}</div>
-                  <div className="mb-4 text-xs text-zinc-500">Tokens</div>
-                  <div className="mb-6 text-xl font-semibold text-white">{formatPrice(plan.price)}</div>
+                  {plan.popular && (
+                    <div className="absolute -top-2 -right-2 bg-yellow-500 text-black text-[10px] px-2 py-0.5 rounded-full font-medium">
+                      Popular
+                    </div>
+                  )}
+                  <h3 className="mb-2 text-xs font-medium text-center sm:text-sm text-zinc-400">{plan.name}</h3>
+                  <div className="mb-1 text-2xl font-bold text-white sm:text-3xl">{plan.tokens}</div>
+                  <div className="mb-3 sm:mb-4 text-[10px] sm:text-xs text-zinc-500">Tokens</div>
+                  <div className="mb-4 text-base font-semibold text-white sm:mb-6 sm:text-xl">
+                    {formatPrice(plan.price)}
+                  </div>
 
                   <Button
                     onClick={() => handleSelectPlan(plan)}
-                    className="w-full text-white transition-all bg-zinc-800 group-hover:bg-gradient-to-r group-hover:from-yellow-500 group-hover:to-pink-500"
+                    className="w-full h-8 text-sm text-white transition-all sm:h-10 bg-zinc-800 group-hover:bg-gradient-to-r group-hover:from-yellow-500 group-hover:to-pink-500"
                   >
                     {plan.isFree ? "Get Now" : "Buy Now"}
                   </Button>
@@ -123,22 +130,24 @@ export function UpgradePlanModal({ isOpen, onClose }: UpgradePlanModalProps) {
             </div>
 
             {/* Last 2 Plans */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {plans.slice(3).map((plan) => (
+            <div className="grid grid-cols-1 gap-3 xs:grid-cols-2 sm:gap-4">
+              {plans.slice(5).map((plan) => (
                 <div
                   key={plan.id}
-                  className={`group relative p-4 rounded-lg border border-zinc-800 bg-[#262626] flex flex-col items-center transition-all
+                  className={`group relative p-3 sm:p-4 rounded-lg border border-zinc-800 bg-[#262626] flex flex-col items-center transition-all
                     ${plan.id === selectedPlanId ? "ring-2 ring-blue-500 border-blue-500" : ""}
                     hover:ring-2 hover:ring-yellow-500 hover:border-yellow-500`}
                 >
-                  <h3 className="mb-2 text-sm font-medium text-zinc-400">{plan.name}</h3>
-                  <div className="mb-1 text-3xl font-bold text-white">{plan.tokens}</div>
-                  <div className="mb-4 text-xs text-zinc-500">Tokens</div>
-                  <div className="mb-6 text-xl font-semibold text-white">{formatPrice(plan.price)}</div>
+                  <h3 className="mb-2 text-xs font-medium text-center sm:text-sm text-zinc-400">{plan.name}</h3>
+                  <div className="mb-1 text-2xl font-bold text-white sm:text-3xl">{plan.tokens}</div>
+                  <div className="mb-3 sm:mb-4 text-[10px] sm:text-xs text-zinc-500">Tokens</div>
+                  <div className="mb-4 text-base font-semibold text-white sm:mb-6 sm:text-xl">
+                    {formatPrice(plan.price)}
+                  </div>
 
                   <Button
                     onClick={() => handleSelectPlan(plan)}
-                    className="w-full text-white transition-all bg-zinc-800 group-hover:bg-gradient-to-r group-hover:from-yellow-500 group-hover:to-pink-500"
+                    className="w-full h-8 text-sm text-white transition-all sm:h-10 bg-zinc-800 group-hover:bg-gradient-to-r group-hover:from-yellow-500 group-hover:to-pink-500"
                   >
                     Buy Now
                   </Button>
@@ -156,7 +165,7 @@ export function UpgradePlanModal({ isOpen, onClose }: UpgradePlanModalProps) {
           onClose={handlePaymentClose}
           planDetails={{
             name: selectedPlan.name,
-            price: selectedPlan.price
+            price: selectedPlan.price,
           }}
         />
       )}

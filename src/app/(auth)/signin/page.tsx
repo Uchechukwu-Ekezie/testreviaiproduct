@@ -22,6 +22,8 @@ import { Eye, EyeOff } from "lucide-react"
 import sms from "../../../../public/Image/sms.png"
 import pass from "../../../../public/Image/password-check.png"
 import axios from "axios"
+import { useGoogleLogin, type TokenResponse } from "@react-oauth/google"
+
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -30,7 +32,7 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const isMobile = useMediaQuery("(max-width: 1024px)")
-  const { login } = useAuth()
+  const { login, loginWithGoogle } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -89,11 +91,44 @@ export default function LoginPage() {
     }
   }
 
-  const handleProviderLogin = async (provider: "google" | "apple") => {
+  const handleGoogleLogin = useGoogleLogin({
+    onSuccess: async (tokenResponse: TokenResponse) => {
+      setIsLoading(true)
+      try {
+        // Convert TokenResponse to expected GoogleCredentialResponse format
+        await loginWithGoogle({
+          credential: tokenResponse.access_token,
+          // These fields might be undefined depending on your auth flow
+        
+        })
+        toast({
+          title: "Login successful",
+          description: "Welcome back with Google!",
+        })
+      } catch (error: any) {
+        toast({
+          title: "Google login failed",
+          description: error.message || "Failed to login with Google",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    onError: () => {
+      toast({
+        title: "Google login failed",
+        description: "An error occurred during Google authentication",
+        variant: "destructive",
+      })
+    }
+  })
+
+  const handleAppleLogin = () => {
     toast({
-      title: "Not implemented",
-      description: `${provider} login is not available yet.`,
-      variant: "destructive",
+      title: "Coming soon",
+      description: "Apple login will be available soon",
+      variant: "default",
     })
   }
 
@@ -113,7 +148,7 @@ export default function LoginPage() {
                   variant="outline"
                   className="w-full bg-card rounded-[15px] text-[15px] font-[400] border-white/15  py-5 h-11"
                   disabled={isLoading}
-                  onClick={() => handleProviderLogin("google")}
+                  onClick={() => handleGoogleLogin()}
                 >
                   <Image src={google || "/placeholder.svg"} alt="Google Logo" width={24} height={24} />
                   Sign in with Google
@@ -123,7 +158,7 @@ export default function LoginPage() {
                   variant="outline"
                   className="w-full bg-card rounded-[15px] text-[15px] font-[400]  border-white/15  py-5 h-11"
                   disabled={isLoading}
-                  onClick={() => handleProviderLogin("apple")}
+                  onClick={handleAppleLogin}
                 >
                   <Image src={apple || "/placeholder.svg"} alt="Apple Logo" width={24} height={24} />
                   Sign in with Apple

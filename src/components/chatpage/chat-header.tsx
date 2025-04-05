@@ -28,7 +28,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({ setSidebarOpen, isAuthenticated
 
       {/* Right side elements */}
       <div className="flex items-center gap-4">
-        <ThemeToggle />
+        {/* <ThemeToggle /> */}
         {isAuthenticated ? (
           <ProfileDropdown />
         ) : (

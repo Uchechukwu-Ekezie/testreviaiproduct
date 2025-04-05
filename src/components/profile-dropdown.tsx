@@ -47,21 +47,21 @@ export function ProfileDropdown() {
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-56 bg-card" align="end">
           <DropdownMenuItem
-            className="flex items-center gap-2 cursor-pointer text-zinc-400 hover:text-white hover:bg-zinc-800"
+            className="flex items-center gap-2 cursor-pointer text-muted-foreground hover:text-white hover:bg-zinc-800"
             onClick={() => setIsProfileOpen(true)}
           >
             <User className="w-4 h-4" />
             Profile
           </DropdownMenuItem>
           <DropdownMenuItem
-            className="flex items-center gap-2 cursor-pointer text-zinc-400 hover:text-white hover:bg-zinc-800"
+            className="flex items-center gap-2 cursor-pointer text-muted-foreground hover:text-white hover:bg-zinc-800"
             onClick={() => setIsUpgradeOpen(true)}
           >
             <Crown className="w-4 h-4" />
             Upgrade Plan
           </DropdownMenuItem>
           <DropdownMenuItem
-            className="flex items-center gap-2 cursor-pointer text-zinc-400 hover:text-white hover:bg-zinc-800"
+            className="flex items-center gap-2 cursor-pointer text-muted-foreground hover:text-white hover:bg-zinc-800"
             onClick={() => setIsSettingsOpen(true)}
           >
             <Settings className="w-4 h-4" />
@@ -69,7 +69,7 @@ export function ProfileDropdown() {
           </DropdownMenuItem>
           <DropdownMenuSeparator className="bg-zinc-800" />
           <DropdownMenuItem
-            className="flex items-center gap-2 cursor-pointer text-zinc-400 hover:text-white hover:bg-zinc-800"
+            className="flex items-center gap-2 cursor-pointer text-muted-foreground hover:text-white hover:bg-zinc-800"
             onClick={logout}
           >
             <LogOut className="w-4 h-4" />
