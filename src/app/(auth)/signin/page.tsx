@@ -102,7 +102,6 @@ export default function LoginPage() {
         await loginWithGoogle({
         access_token: tokenResponse.access_token,
         
- 
         })
         toast({
           title: "Login successful",
