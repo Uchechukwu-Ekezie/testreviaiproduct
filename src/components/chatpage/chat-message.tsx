@@ -160,7 +160,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
             </div>
           </div>
         ) : (
-          <div className="flex flex-col items-start self-start max-w-[860px] mx-auto pb-20 space-y-4 text-[14px] font-normal ">
+          <div className="flex flex-col items-start self-start w-full max-w-[880px] mx-auto pb-20 space-y-4 text-[14px] font-normal ">
             {messages.map((message: any, index: number) => (
               <div key={index} className="w-full space-y-2">
                 <div className={`flex justify-end w-full`}>

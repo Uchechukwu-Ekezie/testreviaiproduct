@@ -90,6 +90,9 @@ export default function LoginPage() {
       setIsLoading(false)
     }
   }
+  
+
+  // Removed unused type GoogleCredentialResponse
 
   const handleGoogleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse: TokenResponse) => {
@@ -97,9 +100,9 @@ export default function LoginPage() {
       try {
         // Convert TokenResponse to expected GoogleCredentialResponse format
         await loginWithGoogle({
-          credential: tokenResponse.access_token,
-          // These fields might be undefined depending on your auth flow
+        access_token: tokenResponse.access_token,
         
+ 
         })
         toast({
           title: "Login successful",
