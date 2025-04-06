@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { authAPI, userAPI, clearAuthToken, getAuthToken, setAuthToken, verifyToken } from "@/lib/api"
 import { toast } from "@/components/ui/use-toast"
 import { GoogleCredentialResponse } from '@react-oauth/google'
+import { GoogleOAuthPayload } from "@/types/auth"
 
 // ✅ Define user type
 export interface User {
@@ -46,7 +47,7 @@ interface AuthContextType {
   logout: () => void
   requestPasswordReset: (email: string) => Promise<void>
   updateProfile: (userData: Partial<User>) => Promise<boolean>
-  loginWithGoogle: (credentialResponse: GoogleCredentialResponse) => Promise<boolean>
+  loginWithGoogle: (credentialResponse: GoogleOAuthPayload) => Promise<boolean>
 }
 
 // ✅ Create auth context with default values
@@ -231,7 +232,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return success
   }
 
-  const loginWithGoogle = async (credentialResponse: GoogleCredentialResponse): Promise<boolean> => {
+  const loginWithGoogle = async (credentialResponse: GoogleOAuthPayload): Promise<boolean> => {
     setIsLoading(true)
     let success = false
 
