@@ -8,18 +8,15 @@ import { toast } from "@/components/ui/use-toast"
 import { chatAPI } from "@/lib/api"
 
 // Import images
-import one from "../../public/Image/one.png"
-import two from "../../public/Image/two.png"
-import three from "../../public/Image/three.png"
-import four from "../../public/Image/four.png"
+import one from "../../public/Image/search-normal.svg"
+import two from "../../public/Image/smart-home.svg"
+import three from "../../public/Image/verify.svg"
+import four from "../../public/Image/more-circle.svg"
 import ChatSidebar from "@/components/chatpage/chat-sidebar"
 import ChatHeader from "@/components/chatpage/chat-header"
 import ChatMessages from "@/components/chatpage/chat-message"
 import ChatInput from "@/components/chatpage/chat-input"
 import RenameDialog from "@/components/chatpage/rename-dialog"
-
-// Import components
-
 
 // Add interface for Message type
 interface Message {
@@ -30,10 +27,10 @@ interface Message {
 }
 
 interface ChatSession {
-  id: string;
-  chat_title: string;
-  user: string;
-  created_at?: string;
+  id: string
+  chat_title: string
+  user: string
+  created_at?: string
 }
 
 export default function ChatPage() {
@@ -220,13 +217,13 @@ export default function ChatPage() {
     try {
       // Create a temporary message ID that we'll use to track this message
       const tempMessageId = "temp-" + Date.now()
-      
+
       // Immediately add the user's message to the UI
       const tempMessage: Message = {
         id: tempMessageId,
         prompt: input,
         response: "",
-        session: activeSession
+        session: activeSession,
       }
       setMessages((prev) => [...prev, tempMessage])
 
@@ -244,22 +241,20 @@ export default function ChatPage() {
         console.log("Creating new chat session with data:", sessionData)
         newSessionData = await chatAPI.createChatSession(sessionData)
         console.log("New session created:", newSessionData)
-        
+
         if (!newSessionData) {
           throw new Error("Failed to create new chat session")
         }
-        
+
         sessionId = newSessionData.id
-        
+
         // Update sessions list and set active session
         setSessions((prev: ChatSession[]) => [newSessionData!, ...prev])
         setActiveSession(sessionId)
-        
+
         // Update the temporary message with the new session ID
         tempMessage.session = sessionId
-        setMessages((prev) => prev.map(msg => 
-          msg.id === tempMessageId ? { ...msg, session: sessionId } : msg
-        ))
+        setMessages((prev) => prev.map((msg) => (msg.id === tempMessageId ? { ...msg, session: sessionId } : msg)))
       }
 
       // Now post the chat message
@@ -268,20 +263,21 @@ export default function ChatPage() {
       setLatestMessageId(data.id)
 
       // Update the messages with the response
-      setMessages((prev) => prev.map(msg => 
-        msg.id === tempMessageId ? { ...data, session: sessionId } : msg
-      ))
+      setMessages((prev) => prev.map((msg) => (msg.id === tempMessageId ? { ...data, session: sessionId } : msg)))
 
       // If this was a new session, update the sessions list
       if (newSessionData) {
         setSessions((prev) => {
-          const existingSession = prev.find(s => s.id === sessionId)
+          const existingSession = prev.find((s) => s.id === sessionId)
           if (!existingSession) {
-            return [{
-              ...newSessionData!,
-              chat_title: newSessionData!.chat_title,
-              first_message: input
-            }, ...prev]
+            return [
+              {
+                ...newSessionData!,
+                chat_title: newSessionData!.chat_title,
+                first_message: input,
+              },
+              ...prev,
+            ]
           }
           return prev
         })
@@ -347,8 +343,34 @@ export default function ChatPage() {
     [input, activeSession, user?.id],
   )
 
-  const handleCardClick = (card: (typeof actionCards)[0]) => {
-    setInput(card.message)
+  // Direct card submission handler
+  const handleCardSubmit = async (card: (typeof actionCards)[0]) => {
+    if (isLoading) return
+
+    setIsLoading(true)
+
+    try {
+      await postChat(card.message, activeSession || undefined)
+    } catch (error: any) {
+      console.error("Error submitting card message:", error)
+
+      let errorMessage = "Failed to get a response."
+      if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleRename = async (sessionId: string) => {
@@ -416,14 +438,20 @@ export default function ChatPage() {
         <ChatMessages
           messages={messages}
           isLoading={isLoading}
+          setIsLoading={setIsLoading}
           latestMessageId={latestMessageId}
+          setLatestMessageId={setLatestMessageId}
           messagesEndRef={messagesEndRef as React.RefObject<HTMLDivElement>}
           activeSession={activeSession}
+          setActiveSession={setActiveSession}
           sessions={sessions}
+          setSessions={setSessions}
           actionCards={actionCards}
-          handleCardClick={handleCardClick}
+          handleCardClick={handleCardSubmit}
           isAuthenticated={isAuthenticated}
           user={user}
+          setMessages={setMessages}
+          refreshSessions={refreshSessions}
         />
 
         {/* Input Component */}

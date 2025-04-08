@@ -2,9 +2,9 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
-import { authAPI, userAPI, clearAuthToken, getAuthToken, setAuthToken, verifyToken } from "@/lib/api"
+import api, { authAPI, userAPI, clearAuthToken, getAuthToken, setAuthToken, verifyToken } from "@/lib/api"
 import { toast } from "@/components/ui/use-toast"
-import { GoogleCredentialResponse } from '@react-oauth/google'
+
 import { GoogleOAuthPayload } from "@/types/auth"
 
 // ✅ Define user type
@@ -150,7 +150,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log("Auth context: Attempting login...")
 
       // Clear any existing tokens before attempting login
-      clearAuthToken()
+      
 
       const response = await authAPI.login(email, password)
       console.log("Auth context: Login response:", response)
@@ -231,6 +231,40 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     return success
   }
+
+  const refreshAccessToken = async(): Promise<string | null> => {
+    const refreshToken = localStorage.getItem('refreshToken');
+
+    if (!refreshToken) {
+      console.log("No refresh token available.");
+      return null;
+    }
+  
+    try {
+      const response = await api.post('/auth/token/refresh/', { refresh: refreshToken }, {
+        withCredentials: true,
+      });
+  
+      const newAccessToken = response.data.access_token || response.data.access;
+  
+      if (newAccessToken) {
+        // Save the new access token in localStorage
+        localStorage.setItem('authToken', newAccessToken);
+        api.defaults.headers.common["Authorization"] = `Bearer ${newAccessToken}`;
+        console.log("Access token refreshed:", newAccessToken);
+        return newAccessToken;
+      }
+  
+      return null;
+    } catch (error) {
+      console.error("Failed to refresh access token", error);
+      // In case of failure, clear stored tokens
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('refreshToken');
+      return null;
+    }
+  };
+
 
   const loginWithGoogle = async (credentialResponse: GoogleOAuthPayload): Promise<boolean> => {
     setIsLoading(true)
@@ -488,6 +522,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       user, 
       isAuthenticated, 
       isLoading, 
+      
       login, 
       signup, 
       logout, 

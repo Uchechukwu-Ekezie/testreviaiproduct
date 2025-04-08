@@ -308,9 +308,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
               {/* Submit Button */}
               <div className="flex items-center gap-2">
-                <div className="px-3 py-2 text-sm bg-border rounded-[10px] text-muted-foreground whitespace-nowrap">
+                {/* <div className="px-3 py-2 text-sm bg-border rounded-[10px] text-muted-foreground whitespace-nowrap">
                   15 tokens left
-                </div>
+                </div> */}
                 <button
                   type="submit"
                   disabled={

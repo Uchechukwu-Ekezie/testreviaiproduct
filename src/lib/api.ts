@@ -1,5 +1,15 @@
 "use client";
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosError, AxiosResponse } from 'axios';
+import { jwtDecode } from 'jwt-decode';
+
+
+interface DecodedToken {
+  user_id: string;
+  exp: number;
+  iat: number;
+  jti: string;
+  token_type: string;
+}
 
 // Define base API URL (replace with your actual backend URL)
 const BASE_URL = "https://0gk1uxsrcg.execute-api.eu-north-1.amazonaws.com/prod"
@@ -98,13 +108,17 @@ api.interceptors.response.use(
 
 
 // ✅ Function to set auth token in headers
-export const setAuthToken = (token: string) => {
+export const setAuthToken = (token: string, remember = true) => {
   if (token) {
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`
     localStorage.setItem("authToken", token)
+    if (remember) {
+      sessionStorage.setItem("authToken", token)
+    }
   } else {
     delete api.defaults.headers.common["Authorization"]
     localStorage.removeItem("authToken")
+    sessionStorage.removeItem("authToken")
   }
 }
 
@@ -143,11 +157,35 @@ export const verifyToken = async (): Promise<boolean> => {
     const token = getAuthToken()
     if (!token) return false
 
+    // Check if the token is expired
+    const decodedToken: DecodedToken = jwtDecode(token)
+    const currentTime = Date.now() / 1000 // Convert to seconds
+    if (decodedToken.exp < currentTime) {
+      console.error("Token is expired.")
+      clearAuthToken() // Clear expired token
+      return false
+    }
+
+
     // Set the token in the headers
     setAuthToken(token)
 
+        // Decode the token to extract the user ID (you can use a JWT decoding library like jwt-decode)
+       
+        console.log(decodedToken)
+        
+        // Make sure you import and use a JWT decoding library like 'jwt-decode'
+        const userId = decodedToken?.user_id; // Assuming the token contains the 'id' of the user
+    
+        if (!userId) {
+          console.error("User ID not found in token.");
+          return false;
+        }
+
+
+
     // Try to fetch user profile - this will fail if token is invalid
-    const response = await api.get("/auth/user")
+    const response = await api.get(`/auth/users/${userId}`)
     return response.status === 200
   } catch (error) {
     console.error("Token verification error:", error)
@@ -170,7 +208,10 @@ export const authAPI = {
       const response = await api.post("/auth/login/", {
         email: email.trim(),
         password: password.trim()
-      });
+      },
+    {
+      withCredentials: true,
+    });
 
       console.log("API: Login successful, response:", response.data)
       
@@ -897,4 +938,6 @@ export const chatAPI = {
 }
 
 export default api
+
+
 
