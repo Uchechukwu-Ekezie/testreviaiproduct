@@ -118,13 +118,13 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     if (card.title === "Verify a Landlord") {
       const tempUserMessage = {
         id: `temp-${Date.now()}`,
-        prompt: card.message,
+        // prompt: card.message,
       }
 
       // Create a custom response with a link to Google
       const tempResponseMessage = {
         id: `temp-response-${Date.now()}`,
-        // prompt: card.message,
+        prompt: card.message,
         response:
           "You can verify your landlord through our dedicated verification page. This feature is available in our main site as it's still being integrated with our main platform.\n\n[Click here to verify your landlord](https://www.reviai.tech/experience)",
       }
@@ -259,7 +259,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                   onClick={() => handleCardSubmit(card)}
                 >
                   <div className="flex items-center justify-center w-64 gap-3 lg:flex-col">
-                    <div className="p-2 border-2 rounded-[10px] border-border">
+                    <div className="p-2 border-2 rounded-[10px] border-border hidden md:block">
                       <Image
                         src={card.image || "/placeholder.svg"}
                         alt={card.title}
