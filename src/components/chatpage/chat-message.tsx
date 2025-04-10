@@ -7,7 +7,10 @@ import { AnimatedText } from "@/components/animated-text"
 import star from "../../../public/Image/Star 1.png"
 import { chatAPI } from "@/lib/api"
 import { toast } from "@/components/ui/use-toast"
+import LandlordVerificationPopup from "../landlord-popup"
 import LandlordVerificationLink from "../landlord-verify"
+
+// import NeighborhoodExplorer from "../neighborhood-explorer"
 
 interface Message {
   id: string
@@ -83,6 +86,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 }) => {
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const [cardLoading, setCardLoading] = useState<string | null>(null)
+  const [showLandlordVerification, setShowLandlordVerification] = useState(false)
+  // const [showNeighborhoodExplorer, setShowNeighborhoodExplorer] = useState(false)
 
   // Function to scroll to bottom
   const scrollToBottom = useCallback(() => {
@@ -114,23 +119,20 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     // Set loading state for this card
     setCardLoading(card.title)
 
-    // Special case for "Verify a Landlord"
-    if (card.title === "Verify a Landlord") {
-      const tempUserMessage = {
-        id: `temp-${Date.now()}`,
-        // prompt: card.message,
-      }
+    // Special case for "Tell your story" card
+    if (card.title === "Tell your story") {
+    
 
-      // Create a custom response with a link to Google
+      // Create a custom response with a link to the verification page
       const tempResponseMessage = {
         id: `temp-response-${Date.now()}`,
         prompt: card.message,
         response:
-          "You can verify your landlord through our dedicated verification page. This feature is available in our main site as it's still being integrated with our main platform.\n\n[Click here to verify your landlord](https://www.reviai.tech/experience)",
+          "You can share your experience with your landlord through our dedicated experience page. This feature is available in our main site as it's still being integrated with our main platform.\n\n[Click here to share your experience](https://www.reviai.tech/experience)",
       }
 
       // Add both messages to the chat
-      setMessages((prev) => [...prev, tempUserMessage, tempResponseMessage])
+      setMessages((prev) => [...prev, tempResponseMessage])
 
       // Scroll to bottom after a short delay
       setTimeout(() => {
@@ -144,6 +146,32 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
       return
     }
+
+    // Special case for "Verify a Landlord"
+    if (card.title === "Verify a Landlord") {
+      // Show the landlord verification popup
+      setShowLandlordVerification(true)
+
+      // Reset card loading state after a delay
+      setTimeout(() => {
+        setCardLoading(null)
+      }, 500)
+
+      return
+    }
+
+    // Special case for "Explore Neighborhoods"
+    // if (card.title === "Explore Neighborhoods" || card.title === "Explore neighbourhood") {
+    //   // Show the neighborhood explorer popup
+    //   setShowNeighborhoodExplorer(true)
+
+    //   // Reset card loading state after a delay
+    //   setTimeout(() => {
+    //     setCardLoading(null)
+    //   }, 500)
+
+    //   return
+    // }
 
     // If external handler exists, call it first (for backward compatibility)
     if (handleCardClick) {
@@ -218,123 +246,164 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     }
   }
 
-  return (
-    <div
-      ref={chatContainerRef}
-      className="flex-1 overflow-y-auto mt-14"
-      style={{
-        paddingBottom: "calc(70px + 1rem)",
-      }}
-    >
-      <div className="flex flex-col w-full max-w-5xl p-4 mx-auto">
-        {/* Show active session title when messages exist */}
-        {activeSession && messages.length > 0 && (
-          <div className="w-full pb-2 mb-4 border-b border-border">
-            <h2 className="font-medium text-md text-foreground">
-              {sessions.find((s: any) => s.id === activeSession)?.chat_title || "Chat Session"}
-            </h2>
-            <p className="text-xs text-muted-foreground">Continue your conversation in this session</p>
-          </div>
-        )}
+  // Function to get card width class based on index
 
-        {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center min-h-[calc(100vh-180px)]">
-            <h1 className="mb-8 text-xl text-center text-foreground">
-              {isAuthenticated
-                ? `Hi ${
-                    user?.first_name ? user?.first_name + " " + user?.last_name : "there"
-                  }! How can I assist you today?`
-                : "Hi! How can I assist you today?"}
-            </h1>
-            <div
-              className="md:grid flex flex-nowrap overflow-y-auto snap-x snap-mandatory gap-4 w-full text-center mx-auto md:max-w-[600px] 
-              md:grid-cols-2 md:static fixed bottom-[145px] left-0 right-0 bg-background p-4 border-border"
-            >
-              {actionCards.map((card) => (
-                <Card
-                  key={card.title}
-                  className={`p-2 transition-colors cursor-pointer border-[1px] border-border md:py-8 bg-card hover:bg-muted ${
-                    cardLoading === card.title || isLoading ? "opacity-70 pointer-events-none" : ""
-                  }`}
-                  onClick={() => handleCardSubmit(card)}
-                >
-                  <div className="flex items-center justify-center w-64 gap-3 lg:flex-col">
-                    <div className="p-2 border-2 rounded-[10px] border-border hidden md:block">
-                      <Image
-                        src={card.image || "/placeholder.svg"}
-                        alt={card.title}
-                        width={24}
-                        height={24}
-                        className="hidden w-8 h-8 ml-5 md:ml-0 md:w-[24px] md:h-[24px] md:block"
-                      />
-                    </div>
-                    <div className="text-left md:text-center ml-[-18px] md:ml-0">
-                      <h3 className="md:mb-1 ml-[-18px] md:ml-0 md:font-medium text-foreground text-[14px] px-5 md:text-[15px] whitespace-nowrap overflow-hidden text-ellipsis">
-                        {card.title}
-                      </h3>
-                      <p className="text-sm text-muted-foreground md:block">{card.description}</p>
-                    </div>
-                  </div>
-                </Card>
-              ))}
+
+  return (
+    <>
+      <div
+        ref={chatContainerRef}
+        className="flex-1 overflow-y-auto mt-14"
+        style={{
+          paddingBottom: "calc(70px + 1rem)",
+        }}
+      >
+        <div className="flex flex-col w-full max-w-5xl p-4 mx-auto">
+          {/* Show active session title when messages exist */}
+          {activeSession && messages.length > 0 && (
+            <div className="w-full pb-2 mb-4 border-b border-border">
+              <h2 className="font-medium text-md text-foreground">
+                {sessions.find((s: any) => s.id === activeSession)?.chat_title || "Chat Session"}
+              </h2>
+              <p className="text-xs text-muted-foreground">Continue your conversation in this session</p>
             </div>
-          </div>
-        ) : (
-          <div className="flex flex-col items-start self-start w-full max-w-[880px] mx-auto pb-20 space-y-4 text-[14px] font-normal text-muted-foreground">
-            {messages.map((message: any, index: number) => (
-              <div key={index} className="w-full space-y-2">
-                <div className={`flex justify-end w-full`}>
-                  <div className={`max-w-[80%] rounded-lg p-4 bg-card`}>
-                    <p className="whitespace-pre-wrap">{message?.prompt}</p>
-                  </div>
-                </div>
-                {message?.response && (
-                  <div className={`flex justify-start w-full`}>
-                    <div className="flex items-start gap-2 md:gap-4 md:max-w-[80%] rounded-lg p-4">
-                      <Image
-                        src={star || "/placeholder.svg"}
-                        alt="Response Image"
-                        className="object-cover w-8 h-8 rounded-full md:w-8 md:h-8"
-                      />
-                      <div className="flex-1 min-w-0">
-                        {message.id === latestMessageId ? (
-                          <AnimatedText
-                            text={message?.response}
-                            speed={50}
-                            batchSize={3}
-                            onTextUpdate={handleTextUpdate}
-                          />
-                        ) : message.response.includes("[Click here to verify your landlord]") ? (
-                          <div className="whitespace-pre-wrap">
-                            {message.response.split("[Click here to verify your landlord]")[0]}
-                            <LandlordVerificationLink url="https://www.reviai.tech/experience">
-                              Click here to verify your landlord
-                            </LandlordVerificationLink>
-                            {message.response.split("(")[1]?.includes(")") ? message.response.split(")")[1] || "" : ""}
-                          </div>
-                        ) : (
-                          <p className="whitespace-pre-wrap">{message?.response}</p>
-                        )}
+          )}
+
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center min-h-[calc(100vh-180px)]">
+              <h1 className="mb-8 text-xl text-center text-foreground">
+                {isAuthenticated
+                  ? `Hi ${
+                      user?.first_name ? user?.first_name + " " + user?.last_name : "there"
+                    }! How can I assist you today?`
+                  : "Hi! How can I assist you today?"}
+              </h1>
+
+              {/* Modified card layout */}
+              <div className="grid grid-cols-2 gap-3 w-full text-center mx-auto max-w-[600px]">
+                {actionCards.slice(0, 2).map((card, index) => (
+                  <Card
+                    key={card.title}
+                    className={`md:p-1 py-[0.5px] transition-colors cursor-pointer border-[1px] border-border md:py-8 bg-card hover:bg-muted rounded-full md:rounded-[10px] ${
+                      cardLoading === card.title || isLoading ? "opacity-70 pointer-events-none" : ""
+                    }`}
+                    onClick={() => handleCardSubmit(card)}
+                  >
+                    <div className="flex items-center justify-center gap-3 max-w-64 rounded-3xl lg:flex-col">
+                      <div className="p-2 md:border-2 border-border md:block rounded-[10px]">
+                        <Image
+                          src={card.image || "/placeholder.svg"}
+                          alt={card.title}
+                          width={24}
+                          height={24}
+                          className="w-5 h-5 ml-[-4px] md:ml-0 md:w-[24px] md:h-[24px] md:block"
+                        />
+                      </div>
+                      <div className="text-left md:text-center ml-[-18px] md:ml-0">
+                        <h3 className="md:mb-1 ml-[-18px] md:ml-0 md:font-medium text-foreground text-[14px] px-5 md:text-[15px] text-wrap overflow-hidden text-ellipsis">
+                          {card.title}
+                        </h3>
+                        <p className="hidden text-sm text-muted-foreground md:block">{card.description}</p>
                       </div>
                     </div>
-                  </div>
-                )}
+                  </Card>
+                ))}
               </div>
-            ))}
-            {isLoading && (
-              <div className="flex justify-start w-full">
-                <div className="max-w-[80%] rounded-lg p-4 text-foreground">
-                  <div className="flex items-center gap-2 md:gap-4">
-                    <ThinkingAnimation />
+
+              {/* Last two cards with specific widths */}
+              <div className="flex flex-col justify-center w-full gap-4 mt-4 md:flex-row md:w-[600px] ">
+                {actionCards.slice(2).map((card, index) => (
+                  <Card
+                    key={card.title}
+                    className={`md:p-1 py-[0.5px] transition-colors cursor-pointer rounded-full md:rounded-[10px] border-[1px] border-border md:py-8 bg-card hover:bg-muted mx-auto ${
+                      cardLoading === card.title || isLoading ? "opacity-70 pointer-events-none" : ""
+                    } ${index === 0 ? "md:w-full w-[155px] " : "md:w-full w-[210px]"}`}
+                    onClick={() => handleCardSubmit(card)}
+                  >
+                    <div className="flex items-center justify-center gap-3 lg:flex-col">
+                      <div className="p-2 md:border-2 border-border md:block rounded-[10px]">
+                        <Image
+                          src={card.image || "/placeholder.svg"}
+                          alt={card.title}
+                          width={24}
+                          height={24}
+                          className="w-5 h-5 ml- md:ml-0 md:w-[24px] md:h-[24px] md:block"
+                        />
+                      </div>
+                      <div className="text-left md:text-center ml-[-18px] md:ml-0">
+                        <h3 className="md:mb-1 ml-[-18px] md:ml-0 md:font-medium text-foreground text-[14px] px-5 md:text-[15px] text-wrap overflow-hidden text-ellipsis">
+                          {card.title}
+                        </h3>
+                        <p className="hidden text-sm text-muted-foreground md:block">{card.description}</p>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-start self-start w-full max-w-[880px] mx-auto pb-20 space-y-4 text-[15px] font-normal text-muted-foreground">
+              {messages.map((message: any, index: number) => (
+                <div key={index} className="w-full space-y-2">
+                  <div className={`flex justify-end w-full`}>
+                    <div className={`max-w-[80%] rounded-lg p-4 bg-card`}>
+                      <p className="whitespace-pre-wrap">{message?.prompt}</p>
+                    </div>
+                  </div>
+                  {message?.response && (
+                    <div className={`flex justify-start w-full`}>
+                      <div className="flex items-start gap-2 md:gap-4 md:max-w-[80%] rounded-lg p-4">
+                        <Image
+                          src={star || "/placeholder.svg"}
+                          alt="Response Image"
+                          className="object-cover w-8 h-8 rounded-full md:w-8 md:h-8"
+                        />
+                        <div className="flex-1 min-w-0">
+                          {message.id === latestMessageId ? (
+                            <AnimatedText
+                              text={message?.response}
+                              speed={50}
+                              batchSize={3}
+                              onTextUpdate={handleTextUpdate}
+                            />
+                          ) : message.response.includes("[Click here to share your experience]") ? (
+                            <div className="whitespace-pre-wrap">
+                              {message.response.split("[Click here to share your experience]")[0]}
+                              <LandlordVerificationLink url="https://www.reviai.tech/experience">
+                              Click here to share your experience
+                            </LandlordVerificationLink>
+                              {message.response.split("(")[1]?.includes(")")
+                                ? message.response.split(")")[1] || ""
+                                : ""}
+                            </div>
+                          ) : (
+                            <p className="whitespace-pre-wrap">{message?.response}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {isLoading && (
+                <div className="flex justify-start w-full">
+                  <div className="max-w-[80%] rounded-lg p-4 text-foreground">
+                    <div className="flex items-center gap-2 md:gap-4">
+                      <ThinkingAnimation />
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-        )}
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* Popups */}
+      <LandlordVerificationPopup isOpen={showLandlordVerification} onClose={() => setShowLandlordVerification(false)} />
+      {/* <NeighborhoodExplorer isOpen={showNeighborhoodExplorer} onClose={() => setShowNeighborhoodExplorer(false)} /> */}
+    </>
   )
 }
 

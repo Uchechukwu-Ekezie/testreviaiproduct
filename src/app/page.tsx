@@ -62,10 +62,10 @@ export default function ChatPage() {
       message: "Can I verify my landlord?",
     },
     {
-      title: "Get Property Insights",
-      description: "View pricing trends and analytics",
+      title: "Tell your story",
+      description: "Share your experience with us",
       image: two,
-      message: "I need property insights.",
+      message: "I want to tell my story.",
     },
     {
       title: "Explore Neighborhoods",
