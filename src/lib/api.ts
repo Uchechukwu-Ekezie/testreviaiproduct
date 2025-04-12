@@ -12,7 +12,7 @@ interface DecodedToken {
 }
 
 // Define base API URL (replace with your actual backend URL)
-const BASE_URL = "https://0gk1uxsrcg.execute-api.eu-north-1.amazonaws.com/prod"
+const BASE_URL = "https://revi-backend.onrender.com"
 
 // Create an Axios instance
 const api: AxiosInstance = axios.create({

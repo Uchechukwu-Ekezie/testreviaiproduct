@@ -192,16 +192,16 @@ export default function SignUpPage() {
                 </Button>
               </div> */}
 
-              <div className="relative py-6">
+              {/* <div className="relative py-6">
                 <div className="absolute inset-0 flex items-center">
                   <span className="w-full border-t border-zinc-700" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
                   <span className="px-2 bg-zinc-900 text-zinc-400">Or</span>
                 </div>
-              </div>
+              </div> */}
 
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4 pt-10">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="first_name" className="text-zinc-400 text-[16px]">

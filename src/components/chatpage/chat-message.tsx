@@ -10,8 +10,6 @@ import { toast } from "@/components/ui/use-toast"
 import LandlordVerificationPopup from "../landlord-popup"
 import LandlordVerificationLink from "../landlord-verify"
 
-// import NeighborhoodExplorer from "../neighborhood-explorer"
-
 interface Message {
   id: string
   prompt?: string
@@ -87,7 +85,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const [cardLoading, setCardLoading] = useState<string | null>(null)
   const [showLandlordVerification, setShowLandlordVerification] = useState(false)
-  // const [showNeighborhoodExplorer, setShowNeighborhoodExplorer] = useState(false)
 
   // Function to scroll to bottom
   const scrollToBottom = useCallback(() => {
@@ -121,9 +118,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
     // Special case for "Tell your story" card
     if (card.title === "Tell your story") {
-    
-
-      // Create a custom response with a link to the verification page
       const tempResponseMessage = {
         id: `temp-response-${Date.now()}`,
         prompt: card.message,
@@ -131,7 +125,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
           "You can share your experience with your landlord through our dedicated experience page. This feature is available in our main site as it's still being integrated with our main platform.\n\n[Click here to share your experience](https://www.reviai.tech/experience)",
       }
 
-      // Add both messages to the chat
       setMessages((prev) => [...prev, tempResponseMessage])
 
       // Scroll to bottom after a short delay
@@ -159,19 +152,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
       return
     }
-
-    // Special case for "Explore Neighborhoods"
-    // if (card.title === "Explore Neighborhoods" || card.title === "Explore neighbourhood") {
-    //   // Show the neighborhood explorer popup
-    //   setShowNeighborhoodExplorer(true)
-
-    //   // Reset card loading state after a delay
-    //   setTimeout(() => {
-    //     setCardLoading(null)
-    //   }, 500)
-
-    //   return
-    // }
 
     // If external handler exists, call it first (for backward compatibility)
     if (handleCardClick) {
@@ -246,9 +226,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     }
   }
 
-  // Function to get card width class based on index
-
-
   return (
     <>
       <div
@@ -279,7 +256,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                   : "Hi! How can I assist you today?"}
               </h1>
 
-              {/* Modified card layout */}
+              {/* First two cards */}
               <div className="grid grid-cols-2 gap-3 w-full text-center mx-auto max-w-[600px]">
                 {actionCards.slice(0, 2).map((card, index) => (
                   <Card
@@ -289,18 +266,18 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                     }`}
                     onClick={() => handleCardSubmit(card)}
                   >
-                    <div className="flex items-center justify-center gap-3 max-w-64 rounded-3xl lg:flex-col">
+                    <div className="flex items-center justify-center gap-3 lg:flex-col">
                       <div className="p-2 md:border-2 border-border md:block rounded-[10px]">
                         <Image
                           src={card.image || "/placeholder.svg"}
                           alt={card.title}
                           width={24}
                           height={24}
-                          className="w-5 h-5 ml-[-4px] md:ml-0 md:w-[24px] md:h-[24px] md:block"
+                          className="w-5 h-5 md:ml-0 md:w-[24px] md:h-[24px] md:block"
                         />
                       </div>
-                      <div className="text-left md:text-center ml-[-18px] md:ml-0">
-                        <h3 className="md:mb-1 ml-[-18px] md:ml-0 md:font-medium text-foreground text-[14px] px-5 md:text-[15px] text-wrap overflow-hidden text-ellipsis">
+                      <div className="text-center">
+                        <h3 className="md:mb-1 md:font-medium text-foreground text-[14px] md:text-[15px] text-wrap overflow-hidden text-ellipsis">
                           {card.title}
                         </h3>
                         <p className="hidden text-sm text-muted-foreground md:block">{card.description}</p>
@@ -311,13 +288,13 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
               </div>
 
               {/* Last two cards with specific widths */}
-              <div className="flex flex-col justify-center w-full gap-4 mt-4 md:flex-row md:w-[600px] ">
+              <div className="flex flex-col justify-center w-full gap-4 mt-4 md:flex-row md:w-[600px]">
                 {actionCards.slice(2).map((card, index) => (
                   <Card
                     key={card.title}
                     className={`md:p-1 py-[0.5px] transition-colors cursor-pointer rounded-full md:rounded-[10px] border-[1px] border-border md:py-8 bg-card hover:bg-muted mx-auto ${
                       cardLoading === card.title || isLoading ? "opacity-70 pointer-events-none" : ""
-                    } ${index === 0 ? "md:w-full w-[155px] " : "md:w-full w-[210px]"}`}
+                    } ${index === 0 ? "md:w-full w-[155px]" : "md:w-full w-[210px]"}`}
                     onClick={() => handleCardSubmit(card)}
                   >
                     <div className="flex items-center justify-center gap-3 lg:flex-col">
@@ -327,11 +304,11 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                           alt={card.title}
                           width={24}
                           height={24}
-                          className="w-5 h-5 ml- md:ml-0 md:w-[24px] md:h-[24px] md:block"
+                          className="w-5 h-5 md:ml-0 md:w-[24px] md:h-[24px] md:block"
                         />
                       </div>
-                      <div className="text-left md:text-center ml-[-18px] md:ml-0">
-                        <h3 className="md:mb-1 ml-[-18px] md:ml-0 md:font-medium text-foreground text-[14px] px-5 md:text-[15px] text-wrap overflow-hidden text-ellipsis">
+                      <div className="text-center">
+                        <h3 className="md:mb-1 md:font-medium text-foreground text-[14px] md:text-[15px] text-wrap overflow-hidden text-ellipsis">
                           {card.title}
                         </h3>
                         <p className="hidden text-sm text-muted-foreground md:block">{card.description}</p>
@@ -370,8 +347,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                             <div className="whitespace-pre-wrap">
                               {message.response.split("[Click here to share your experience]")[0]}
                               <LandlordVerificationLink url="https://www.reviai.tech/experience">
-                              Click here to share your experience
-                            </LandlordVerificationLink>
+                                Click here to share your experience
+                              </LandlordVerificationLink>
                               {message.response.split("(")[1]?.includes(")")
                                 ? message.response.split(")")[1] || ""
                                 : ""}
@@ -402,7 +379,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
       {/* Popups */}
       <LandlordVerificationPopup isOpen={showLandlordVerification} onClose={() => setShowLandlordVerification(false)} />
-      {/* <NeighborhoodExplorer isOpen={showNeighborhoodExplorer} onClose={() => setShowNeighborhoodExplorer(false)} /> */}
     </>
   )
 }

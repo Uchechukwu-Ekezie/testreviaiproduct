@@ -7,7 +7,7 @@ import { PaperclipIcon, ImageIcon, X, Plus } from 'lucide-react'
 import Image from "next/image"
 import { toast } from "@/components/ui/use-toast"
 import { chatAPI } from "@/lib/api"
-import { FaArrowUp } from "react-icons/fa";
+import arrow from "../../../public/Image/arrow-up.svg"
 
 
 interface ChatInputProps {
@@ -318,7 +318,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   }
                   className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-[#FFD700] to-[#780991] text-white"
                 >
-                  <FaArrowUp className="w-5 h-5" />
+                  <Image src={arrow} alt="" className="w-5 h-5" />
+                  {/* <FaArrowUp className="w-5 h-5 text-foreground font-[300]" /> */}
                 </button>
               </div>
             </div>
