@@ -56,7 +56,7 @@ export default function ChatPage() {
       message: "I want to find a property.",
     },
     {
-      title: "Verify a Landlord",
+      title: "Report your Landlord",
       description: "Check credentials and reviews",
       image: three,
       message: "Can I verify my landlord?",

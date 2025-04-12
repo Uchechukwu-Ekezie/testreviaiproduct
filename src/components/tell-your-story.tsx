@@ -9,7 +9,7 @@ interface TellYourStoryPopupProps {
   onClose: () => void
 }
 
-const ReportYourLandlord: React.FC<TellYourStoryPopupProps> = ({ isOpen, onClose }) => {
+const TellYourStoryPopup: React.FC<TellYourStoryPopupProps> = ({ isOpen, onClose }) => {
   const [email, setEmail] = useState("")
   const [address, setAddress] = useState("")
   const [experience, setExperience] = useState("")
@@ -40,7 +40,7 @@ const ReportYourLandlord: React.FC<TellYourStoryPopupProps> = ({ isOpen, onClose
             <X className="w-5 h-5" />
           </button>
 
-          <h2 className="text-xl text-center pt-6 font-semibold text-white mb-2">Report your Landlord</h2>
+          <h2 className="text-xl text-center pt-6 font-semibold text-white mb-2">Tell your story</h2>
           <p className="text-sm text-gray-400 mb-4">
             Have you recently experienced an unpleasant situation with an agent or landlord? Please share, we would love
             to help!
@@ -131,4 +131,4 @@ const ReportYourLandlord: React.FC<TellYourStoryPopupProps> = ({ isOpen, onClose
   )
 }
 
-export default ReportYourLandlord
+export default TellYourStoryPopup

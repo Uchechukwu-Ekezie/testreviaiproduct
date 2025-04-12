@@ -7,8 +7,10 @@ import { AnimatedText } from "@/components/animated-text"
 import star from "../../../public/Image/Star 1.png"
 import { chatAPI } from "@/lib/api"
 import { toast } from "@/components/ui/use-toast"
-import LandlordVerificationPopup from "../landlord-popup"
-import LandlordVerificationLink from "../landlord-verify"
+
+import TellYourStoryPopup from "../tell-your-story"
+import ReportYourLandlord from "../landlord-popup"
+
 
 interface Message {
   id: string
@@ -85,6 +87,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const [cardLoading, setCardLoading] = useState<string | null>(null)
   const [showLandlordVerification, setShowLandlordVerification] = useState(false)
+  const [showTellYourStory, setShowTellYourStory] = useState(false)
 
   // Function to scroll to bottom
   const scrollToBottom = useCallback(() => {
@@ -118,19 +121,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
     // Special case for "Tell your story" card
     if (card.title === "Tell your story") {
-      const tempResponseMessage = {
-        id: `temp-response-${Date.now()}`,
-        prompt: card.message,
-        response:
-          "You can share your experience with your landlord through our dedicated experience page. This feature is available in our main site as it's still being integrated with our main platform.\n\n[Click here to share your experience](https://www.reviai.tech/experience)",
-      }
-
-      setMessages((prev) => [...prev, tempResponseMessage])
-
-      // Scroll to bottom after a short delay
-      setTimeout(() => {
-        scrollToBottom()
-      }, 100)
+      // Show the Tell Your Story popup instead of adding a message
+      setShowTellYourStory(true)
 
       // Reset card loading state after a delay
       setTimeout(() => {
@@ -141,7 +133,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     }
 
     // Special case for "Verify a Landlord"
-    if (card.title === "Verify a Landlord") {
+    if (card.title === "Report your Landlord") {
       // Show the landlord verification popup
       setShowLandlordVerification(true)
 
@@ -343,17 +335,22 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                               batchSize={3}
                               onTextUpdate={handleTextUpdate}
                             />
-                          ) : message.response.includes("[Click here to share your experience]") ? (
-                            <div className="whitespace-pre-wrap">
-                              {message.response.split("[Click here to share your experience]")[0]}
-                              <LandlordVerificationLink url="https://www.reviai.tech/experience">
-                                Click here to share your experience
-                              </LandlordVerificationLink>
-                              {message.response.split("(")[1]?.includes(")")
-                                ? message.response.split(")")[1] || ""
-                                : ""}
-                            </div>
-                          ) : (
+                          )
+                          // ) : message.response.includes("[Click here to share your experience]") ? (
+                          //   <div className="whitespace-pre-wrap">
+                          //     {message.response.split("[Click here to share your experience]")[0]}
+                          //     <button
+                          //       onClick={() => setShowTellYourStory(true)}
+                          //       className="inline-flex items-center gap-1 text-blue-500 hover:text-blue-700 hover:underline"
+                          //     >
+                          //       Click here to share your experience
+                          //     </button>
+                          //     {message.response.split("(")[1]?.includes(")")
+                          //       ? message.response.split(")")[1] || ""
+                          //       : ""}
+                          //   </div>
+                          // ) 
+                          : (
                             <p className="whitespace-pre-wrap">{message?.response}</p>
                           )}
                         </div>
@@ -378,7 +375,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
       </div>
 
       {/* Popups */}
-      <LandlordVerificationPopup isOpen={showLandlordVerification} onClose={() => setShowLandlordVerification(false)} />
+      <ReportYourLandlord isOpen={showLandlordVerification} onClose={() => setShowLandlordVerification(false)} />
+      <TellYourStoryPopup isOpen={showTellYourStory} onClose={() => setShowTellYourStory(false)} />
     </>
   )
 }
