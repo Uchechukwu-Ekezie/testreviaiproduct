@@ -108,13 +108,12 @@ const ReportYourLandlord: React.FC<TellYourStoryPopupProps> = ({ isOpen, onClose
 
             <div>
               <label className="block text-sm text-gray-400 mb-1">Upload photos</label>
-              <button
-                type="button"
-                className="w-full flex items-center justify-center gap-2 bg-background border border-border rounded-md py-2 px-3 text-gray-400 hover:text-white"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add photos</span>
-              </button>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="w-full bg-background border border-border rounded-md py-2 px-3 text-gray-400 hover:text-white"
+              />
             </div>
 
             <button

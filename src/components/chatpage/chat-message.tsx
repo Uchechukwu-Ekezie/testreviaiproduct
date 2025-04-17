@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react"
 import Image from "next/image"
 import { Card } from "@/components/ui/card"
 import { AnimatedText } from "@/components/animated-text"
+import { Button } from "@/components/ui/button"
+import { RefreshCw } from "lucide-react"
 import star from "../../../public/Image/Star 1.png"
 import { chatAPI } from "@/lib/api"
 import { toast } from "@/components/ui/use-toast"
@@ -11,11 +13,14 @@ import { toast } from "@/components/ui/use-toast"
 import TellYourStoryPopup from "../tell-your-story"
 import ReportYourLandlord from "../landlord-popup"
 
-
 interface Message {
   id: string
   prompt?: string
   response?: string
+  session?: string | null
+  error?: boolean
+  retrying?: boolean
+  isNewSession?: boolean
 }
 
 interface ActionCard {
@@ -88,6 +93,37 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
   const [cardLoading, setCardLoading] = useState<string | null>(null)
   const [showLandlordVerification, setShowLandlordVerification] = useState(false)
   const [showTellYourStory, setShowTellYourStory] = useState(false)
+  const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null)
+
+  // Remove the preventMessageFetch state as it's not needed and might cause loops
+  // const [preventMessageFetch, setPreventMessageFetch] = useState(false)
+
+  // Debug log for messages state
+  // useEffect(() => {
+  //   if (messages.length > 0) {
+  //     console.log(
+  //       "Current messages state:",
+  //       messages.map((m) => ({
+  //         id: m.id,
+  //         hasResponse: !!m.response,
+  //         hasError: !!m.error,
+  //         isNewSession: !!m.isNewSession,
+  //         session: m.session,
+  //       })),
+  //     )
+  //   }
+  // }, [messages])
+
+  // Add this effect to properly manage the message fetching prevention
+  // useEffect(() => {
+  //   // If we have an active session and a pending message (no response yet)
+  //   if (activeSession && messages.length > 0 && messages.some((msg) => !msg.response && !msg.error)) {
+  //     console.log("Setting preventMessageFetch to true for session with pending message")
+  //     setPreventMessageFetch(true)
+  //   } else {
+  //     setPreventMessageFetch(false)
+  //   }
+  // }, [activeSession, messages])
 
   // Function to scroll to bottom
   const scrollToBottom = useCallback(() => {
@@ -111,6 +147,52 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
       scrollToBottom()
     }, 100)
   }, [scrollToBottom])
+
+  // Function to retry a failed message
+  const retryMessage = async (message: Message) => {
+    if (!message.prompt || !activeSession || retryingMessageId) return
+
+    setRetryingMessageId(message.id)
+
+    try {
+      // Mark the message as retrying
+      setMessages((prev) => prev.map((msg) => (msg.id === message.id ? { ...msg, retrying: true, error: false } : msg)))
+
+      // Retry sending the message
+      const data = await chatAPI.postNewChat(message.prompt, activeSession)
+
+      // Update the message with the response
+      setLatestMessageId(data.id)
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === message.id
+            ? { ...data, prompt: message.prompt, session: activeSession, retrying: false, error: false }
+            : msg,
+        ),
+      )
+
+      // Scroll to bottom after receiving response
+      setTimeout(scrollToBottom, 100)
+
+      toast({
+        title: "Success",
+        description: "Message retry successful",
+      })
+    } catch (error: any) {
+      console.error("Error retrying message:", error)
+
+      // Mark the message as failed
+      setMessages((prev) => prev.map((msg) => (msg.id === message.id ? { ...msg, retrying: false, error: true } : msg)))
+
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to retry message",
+        variant: "destructive",
+      })
+    } finally {
+      setRetryingMessageId(null)
+    }
+  }
 
   // Direct submission when card is clicked
   const handleCardSubmit = async (card: ActionCard) => {
@@ -147,10 +229,26 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
     // If external handler exists, call it first (for backward compatibility)
     if (handleCardClick) {
-      handleCardClick(card)
-      setTimeout(() => {
-        setCardLoading(null)
-      }, 500)
+      try {
+        // DO NOT add a message here - let the parent component handle it
+        // The parent component will add the message through its own logic
+
+        // Call the handler
+        await handleCardClick(card)
+      } catch (error: any) {
+        console.error("Error in handleCardClick:", error)
+
+        // Show error toast
+        toast({
+          title: "Error",
+          description: "The server encountered an error. Please try again later.",
+          variant: "destructive",
+        })
+      } finally {
+        setTimeout(() => {
+          setCardLoading(null)
+        }, 500)
+      }
       return
     }
 
@@ -158,58 +256,118 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     setIsLoading(true)
     const messageText = card.message
 
-    // Create a temporary message to show immediately
-    const tempId = `temp-${Date.now()}`
-    const userMessage = { id: tempId, prompt: messageText, response: "" }
-    setMessages((prev) => [...prev, userMessage])
+    // Check if we already have this message to prevent duplicates
+    const isDuplicate = messages.some(
+      (msg) => msg.prompt === messageText && (!msg.response || msg.response === "") && msg.session === activeSession,
+    )
+
+    if (!isDuplicate) {
+      // Create a temporary message to show immediately
+      const tempId = `temp-${Date.now()}`
+      const userMessage = { id: tempId, prompt: messageText, response: "" }
+
+      // Add the message to the UI immediately
+      setMessages((prev) => [...prev, userMessage])
+    }
 
     try {
       let data
-      if (activeSession) {
-        // Use existing session
-        data = await chatAPI.postNewChat(messageText, activeSession)
-      } else {
+      let currentSessionId = activeSession
+
+      if (!currentSessionId) {
         // Create new session
         const sessionData = {
           chat_title: messageText.substring(0, 30),
           user: user?.id || "guest",
         }
 
+        // Mark this message as a new session message to prevent message fetching
+        setMessages((prev) =>
+          prev.map((msg) => (msg.prompt === messageText && !msg.response ? { ...msg, isNewSession: true } : msg)),
+        )
+
+        // Create session first
         const sessionResponse = await chatAPI.createChatSession(sessionData)
-        setActiveSession(sessionResponse.id)
+        currentSessionId = sessionResponse.id
 
-        data = await chatAPI.postNewChat(messageText, sessionResponse.id)
+        // Set active session immediately and keep it in a local variable
+        setActiveSession(currentSessionId)
 
-        // Update sessions list
+        // Update sessions list with the new session
         setSessions((prev) => {
-          if (!prev.some((s) => s.id === sessionResponse.id)) {
-            return [...prev, sessionResponse]
+          if (!prev.some((s) => s.id === currentSessionId)) {
+            return [sessionResponse, ...prev]
           }
           return prev
         })
 
+        // Update the temporary message with the new session ID and isNewSession flag
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.prompt === messageText && !msg.response
+              ? { ...msg, session: currentSessionId, isNewSession: true }
+              : msg,
+          ),
+        )
+
+        // Now post the message using the new session ID
+        data = await chatAPI.postNewChat(messageText, currentSessionId || undefined)
+
         // Refresh sessions after a short delay
         setTimeout(() => {
           refreshSessions()
+          // Ensure active session is still set correctly
+          setActiveSession(currentSessionId)
         }, 500)
+      } else {
+        // Use existing session
+        data = await chatAPI.postNewChat(messageText, currentSessionId)
       }
 
       // Update the message with the response
       setLatestMessageId(data.id)
-      setMessages((prev) => prev.map((msg) => (msg.id === tempId ? data : msg)))
+
+      // Update messages, ensuring we don't duplicate
+      setMessages((prev) => {
+        // Find any temporary message with this prompt
+        const tempIndex = prev.findIndex((msg) => msg.prompt === messageText && !msg.response && !msg.error)
+
+        if (tempIndex >= 0) {
+          // Replace the temporary message with the real one
+          const newMessages = [...prev]
+          newMessages[tempIndex] = data
+          return newMessages
+        } else {
+          // Check if we already have this message
+          const existingIndex = prev.findIndex((msg) => msg.id === data.id)
+          if (existingIndex >= 0) {
+            // Update the existing message
+            const newMessages = [...prev]
+            newMessages[existingIndex] = data
+            return newMessages
+          } else {
+            // Add as a new message
+            return [...prev, data]
+          }
+        }
+      })
 
       // Scroll to bottom after receiving response
       setTimeout(scrollToBottom, 100)
     } catch (error: any) {
       console.error("Error submitting card message:", error)
 
-      // Remove the temporary message on error
-      setMessages((prev) => prev.filter((msg) => msg.id !== tempId))
+      // Update any temporary message to show it failed
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.prompt === messageText && !msg.response ? { ...msg, error: true, session: activeSession } : msg,
+        ),
+      )
 
       // Show error toast
       toast({
         title: "Error",
-        description: error.response?.data?.message || "Failed to send message",
+        description: "The server encountered an error. Please try again later.",
         variant: "destructive",
       })
     } finally {
@@ -319,7 +477,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                       <p className="whitespace-pre-wrap">{message?.prompt}</p>
                     </div>
                   </div>
-                  {message?.response && (
+
+                  {message?.response ? (
                     <div className={`flex justify-start w-full`}>
                       <div className="flex items-start gap-2 md:gap-4 md:max-w-[80%] rounded-lg p-4">
                         <Image
@@ -335,28 +494,31 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                               batchSize={3}
                               onTextUpdate={handleTextUpdate}
                             />
-                          )
-                          // ) : message.response.includes("[Click here to share your experience]") ? (
-                          //   <div className="whitespace-pre-wrap">
-                          //     {message.response.split("[Click here to share your experience]")[0]}
-                          //     <button
-                          //       onClick={() => setShowTellYourStory(true)}
-                          //       className="inline-flex items-center gap-1 text-blue-500 hover:text-blue-700 hover:underline"
-                          //     >
-                          //       Click here to share your experience
-                          //     </button>
-                          //     {message.response.split("(")[1]?.includes(")")
-                          //       ? message.response.split(")")[1] || ""
-                          //       : ""}
-                          //   </div>
-                          // ) 
-                          : (
+                          ) : (
                             <p className="whitespace-pre-wrap">{message?.response}</p>
                           )}
                         </div>
                       </div>
                     </div>
-                  )}
+                  ) : message.error ? (
+                    <div className={`flex justify-start w-full`}>
+                      <div className="flex items-start gap-2 md:gap-4 md:max-w-[80%] rounded-lg p-4 bg-red-50 border border-red-200">
+                        <div className="flex-1 min-w-0">
+                          <p className="mb-2 text-red-600">The server encountered an error processing this message.</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => retryMessage(message)}
+                            disabled={!!retryingMessageId}
+                            className="flex items-center gap-1"
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                            {message.id === retryingMessageId ? "Retrying..." : "Retry"}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ))}
               {isLoading && (

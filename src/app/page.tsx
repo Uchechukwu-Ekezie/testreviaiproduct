@@ -23,7 +23,10 @@ interface Message {
   id: string
   prompt?: string
   response?: string
-  session?: string
+  session?: string | null | undefined
+  error?: boolean
+  retrying?: boolean
+  isNewSession?: boolean
 }
 
 interface ChatSession {
@@ -47,6 +50,8 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { user, isAuthenticated, logout } = useAuth()
   const isMobile = useMediaQuery("(max-width: 768px)")
+  // Add a ref to track if we're currently creating a new session
+  const isCreatingNewSession = useRef(false)
 
   const actionCards = [
     {
@@ -130,18 +135,30 @@ export default function ChatPage() {
     }
   }
 
-  const getChats = async (activeSession: string) => {
+  // Replace the getChats function with this improved version that prevents duplicate messages
+  const getChats = async (sessionId: string) => {
+    // Skip fetching if we're creating a new session
+    if (isCreatingNewSession.current) {
+      console.log("Skipping message fetch while creating new session")
+      return []
+    }
+
+    // Skip fetching if we have a pending message for this session
+    const hasPendingMessage = messages.some((msg) => msg.session === sessionId && !msg.response && !msg.error)
+
+    if (hasPendingMessage) {
+      console.log("Skipping message fetch for session with pending message:", sessionId)
+      return []
+    }
+
     try {
-      console.log("Fetching chats for session:", activeSession)
-      const data = await chatAPI.getChatsBySession(activeSession)
+      console.log("Fetching chats for session:", sessionId)
+      const data = await chatAPI.getChatsBySession(sessionId)
 
       if (!data || !data.results) {
-        console.warn("No results returned for session:", activeSession)
-        setMessages([])
+        console.warn("No results returned for session:", sessionId)
         return []
       }
-
-      console.log(`Loaded ${data.results.length} messages for session:`, activeSession)
 
       // Sort messages by created_at to ensure chronological order (oldest first)
       const sortedMessages = [...data.results].sort((a, b) => {
@@ -151,7 +168,23 @@ export default function ChatPage() {
         return 0
       })
 
-      setMessages(sortedMessages || [])
+      // Check for duplicate messages by ID before updating state
+      const existingMessageIds = new Set(messages.map((msg) => msg.id))
+      const uniqueNewMessages = sortedMessages.filter((msg) => !existingMessageIds.has(msg.id))
+
+      // If we have pending messages, merge them with the fetched messages
+      if (hasPendingMessage) {
+        const pendingMessages = messages.filter((msg) => !msg.response && !msg.error)
+        const nonPendingFetchedMessages = sortedMessages.filter(
+          (msg) => !pendingMessages.some((pending) => pending.id === msg.id),
+        )
+        setMessages([...nonPendingFetchedMessages, ...pendingMessages])
+      } else {
+        // Only replace messages if we don't have any yet or if we have new unique messages
+        if (messages.length === 0 || uniqueNewMessages.length > 0) {
+          setMessages(sortedMessages)
+        }
+      }
 
       // Ensure the messages display is scrolled to the bottom after loading
       setTimeout(() => {
@@ -160,16 +193,7 @@ export default function ChatPage() {
 
       return sortedMessages
     } catch (error: any) {
-      console.error("Error fetching chats for session:", activeSession, error)
-
-      // Add more detailed error logging
-      const errorDetails = {
-        message: error.message,
-        status: error.response?.status,
-        data: error.response?.data,
-      }
-      console.error("Error details:", errorDetails)
-
+      console.error("Error fetching chats for session:", sessionId, error)
       toast({
         title: "Error",
         description: "Failed to fetch chat messages",
@@ -188,10 +212,17 @@ export default function ChatPage() {
 
   // Fetch chats when active session changes
   useEffect(() => {
-    if (activeSession) {
-      getChats(activeSession)
+    if (activeSession && !isCreatingNewSession.current) {
+      // Check if we have any messages for this session already
+      const hasMessagesForSession = messages.some((msg) => msg.session === activeSession)
+
+      // Only fetch messages if we don't already have messages for this session
+      // or if we have messages but none are pending
+      if (!hasMessagesForSession) {
+        getChats(activeSession)
+      }
     }
-  }, [activeSession])
+  }, [activeSession]) // Only depend on activeSession to prevent loops
 
   // Add a function to refresh sessions
   const refreshSessions = async () => {
@@ -213,6 +244,7 @@ export default function ChatPage() {
     }
   }, [messages])
 
+  // Update the postChat function to prevent duplicate messages
   const postChat = async (input: string, activeSession?: string) => {
     try {
       // Create a temporary message ID that we'll use to track this message
@@ -225,13 +257,25 @@ export default function ChatPage() {
         response: "",
         session: activeSession,
       }
-      setMessages((prev) => [...prev, tempMessage])
+
+      // Check if we already have this message to prevent duplicates
+      const isDuplicate = messages.some(
+        (msg) => msg.prompt === input && (!msg.response || msg.response === "") && msg.session === activeSession,
+      )
+
+      if (!isDuplicate) {
+        // Add the message to the UI immediately
+        setMessages((prev) => [...prev, tempMessage])
+      }
 
       let sessionId = activeSession
       let newSessionData: ChatSession | null = null
 
       // If no active session, create one first
       if (!sessionId) {
+        // Set the flag to indicate we're creating a new session
+        isCreatingNewSession.current = true
+
         const userId = user?.id || "guest"
         const sessionData = {
           chat_title: input.substring(0, 30),
@@ -239,60 +283,114 @@ export default function ChatPage() {
         }
 
         console.log("Creating new chat session with data:", sessionData)
-        newSessionData = await chatAPI.createChatSession(sessionData)
-        console.log("New session created:", newSessionData)
+        try {
+          // Mark this as a new session message to prevent message fetching
+          setMessages((prev) => prev.map((msg) => (msg.id === tempMessageId ? { ...msg, isNewSession: true } : msg)))
 
-        if (!newSessionData) {
-          throw new Error("Failed to create new chat session")
+          newSessionData = await chatAPI.createChatSession(sessionData)
+          console.log("New session created:", newSessionData)
+
+          if (!newSessionData) {
+            throw new Error("Failed to create new chat session")
+          }
+
+          sessionId = newSessionData.id
+
+          // Update sessions list and set active session immediately
+          setSessions((prev: ChatSession[]) => {
+            // Check if session already exists to prevent duplicates
+            if (prev.some((s) => s.id === newSessionData!.id)) {
+              return prev
+            }
+            return [newSessionData!, ...prev]
+          })
+
+          setActiveSession(sessionId)
+
+          // Update the temporary message with the new session ID and isNewSession flag
+          setMessages((prev) =>
+            prev.map((msg) => (msg.id === tempMessageId ? { ...msg, session: sessionId, isNewSession: true } : msg)),
+          )
+        } catch (error) {
+          console.error("Error creating session:", error)
+          // Mark the message as failed
+          setMessages((prev) => prev.map((msg) => (msg.id === tempMessageId ? { ...msg, error: true } : msg)))
+          throw error
         }
-
-        sessionId = newSessionData.id
-
-        // Update sessions list and set active session
-        setSessions((prev: ChatSession[]) => [newSessionData!, ...prev])
-        setActiveSession(sessionId)
-
-        // Update the temporary message with the new session ID
-        tempMessage.session = sessionId
-        setMessages((prev) => prev.map((msg) => (msg.id === tempMessageId ? { ...msg, session: sessionId } : msg)))
       }
 
       // Now post the chat message
       console.log("Posting chat message...")
-      const data = await chatAPI.postNewChat(input, sessionId!)
-      setLatestMessageId(data.id)
+      try {
+        const data = await chatAPI.postNewChat(input, sessionId!)
+        setLatestMessageId(data.id)
 
-      // Update the messages with the response
-      setMessages((prev) => prev.map((msg) => (msg.id === tempMessageId ? { ...data, session: sessionId } : msg)))
+        // Update the messages with the response, ensuring we don't duplicate
+        setMessages((prev) => {
+          // Find the temporary message
+          const tempIndex = prev.findIndex((msg) => msg.id === tempMessageId)
 
-      // If this was a new session, update the sessions list
-      if (newSessionData) {
-        setSessions((prev) => {
-          const existingSession = prev.find((s) => s.id === sessionId)
-          if (!existingSession) {
-            return [
-              {
-                ...newSessionData!,
-                chat_title: newSessionData!.chat_title,
-                first_message: input,
-              },
-              ...prev,
-            ]
+          if (tempIndex >= 0) {
+            // Replace the temporary message with the real one
+            const newMessages = [...prev]
+            newMessages[tempIndex] = { ...data, session: sessionId }
+            return newMessages
+          } else {
+            // If we can't find the temp message, check if we already have this message
+            const existingIndex = prev.findIndex((msg) => msg.id === data.id)
+            if (existingIndex >= 0) {
+              // Update the existing message
+              const newMessages = [...prev]
+              newMessages[existingIndex] = { ...data, session: sessionId }
+              return newMessages
+            } else {
+              // Add as a new message
+              return [...prev, { ...data, session: sessionId }]
+            }
           }
-          return prev
         })
-      }
 
-      setTimeout(scrollToBottom, 100)
-      return data
+        // If this was a new session, update the sessions list
+        if (newSessionData) {
+          setSessions((prev) => {
+            const existingSession = prev.find((s) => s.id === sessionId)
+            if (!existingSession) {
+              return [
+                {
+                  ...newSessionData!,
+                  chat_title: newSessionData!.chat_title,
+                  first_message: input,
+                },
+                ...prev,
+              ]
+            }
+            return prev
+          })
+
+          // Make sure the active session is still set correctly after all operations
+          setTimeout(() => {
+            setActiveSession(sessionId)
+            // Reset the creating new session flag
+            isCreatingNewSession.current = false
+          }, 100)
+        }
+
+        setTimeout(scrollToBottom, 100)
+        return data
+      } catch (error) {
+        console.error("Error posting chat:", error)
+        // Mark the message as failed but keep it in the UI
+        setMessages((prev) => prev.map((msg) => (msg.id === tempMessageId ? { ...msg, error: true } : msg)))
+
+        // Reset the creating new session flag
+        isCreatingNewSession.current = false
+
+        throw error
+      }
     } catch (error: any) {
       console.error("Error in postChat:", error)
-      const errorDetails = {
-        message: error.message,
-        status: error.response?.status,
-        data: error.response?.data,
-      }
-      console.error("Error details:", errorDetails)
+      // Reset the creating new session flag
+      isCreatingNewSession.current = false
       throw error
     }
   }
@@ -311,15 +409,7 @@ export default function ChatPage() {
       } catch (error: any) {
         console.error("Error submitting chat:", error)
 
-        let errorMessage = "Failed to get a response."
-        if (error.response?.data?.detail) {
-          errorMessage = error.response.data.detail
-        } else if (error.response?.data?.message) {
-          errorMessage = error.response.data.message
-        } else if (error.message) {
-          errorMessage = error.message
-        }
-
+        let errorMessage = "The server encountered an error. Please try again later."
         if (error.response?.status === 401) {
           errorMessage = "Authentication required. Please log in to continue."
         } else if (error.response?.status === 403) {
@@ -335,7 +425,6 @@ export default function ChatPage() {
           description: errorMessage,
           variant: "destructive",
         })
-        setInput(currentMessage)
       } finally {
         setIsLoading(false)
       }
@@ -354,13 +443,15 @@ export default function ChatPage() {
     } catch (error: any) {
       console.error("Error submitting card message:", error)
 
-      let errorMessage = "Failed to get a response."
-      if (error.response?.data?.detail) {
-        errorMessage = error.response.data.detail
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message
-      } else if (error.message) {
-        errorMessage = error.message
+      let errorMessage = "The server encountered an error. Please try again later."
+      if (error.response?.status === 401) {
+        errorMessage = "Authentication required. Please log in to continue."
+      } else if (error.response?.status === 403) {
+        errorMessage = "You don't have permission to perform this action."
+      } else if (error.response?.status === 404) {
+        errorMessage = "Resource not found. The session may have been deleted."
+      } else if (error.response?.status === 500) {
+        errorMessage = "Server error. Please try again later."
       }
 
       toast({
@@ -477,4 +568,3 @@ export default function ChatPage() {
     </div>
   )
 }
-
