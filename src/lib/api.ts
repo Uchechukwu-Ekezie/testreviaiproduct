@@ -937,6 +937,33 @@ export const chatAPI = {
   }
 }
 
+export const UserReviews = {
+  // post reviews
+
+  postReview: async (data: {
+    address: string;
+    review_text: string;
+    user: string;
+    chat_session: string;
+  }) => {
+    try {
+      console.log("API: Posting review with data:", data);
+      const response = await api.post(`/reviews/`, data);
+      console.log("API: Review posted successfully, response:", response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error("API: Post review failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw error;
+    }
+  },
+
+}
+
 export default api
 
 
