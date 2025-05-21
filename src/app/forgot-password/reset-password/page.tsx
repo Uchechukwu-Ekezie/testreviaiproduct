@@ -94,8 +94,8 @@ function ResetPasswordContent() {
       <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-[#212121] font-sf-pro">
         <Card className="w-full max-w-[503px] mx-auto p-6">
           <CardContent className="text-center">
-            <h2 className="text-xl text-white mb-4">Invalid Reset Link</h2>
-            <p className="text-zinc-400 mb-6">
+            <h2 className="mb-4 text-xl text-white">Invalid Reset Link</h2>
+            <p className="mb-6 text-zinc-400">
               This password reset link is invalid or has expired. Please request a new password reset.
             </p>
             <Button
@@ -130,7 +130,7 @@ function ResetPasswordContent() {
                     New Password
                   </label>
                   <div className="relative">
-                    <Input
+                    <input
                       id="newPassword"
                       type={showPasswords.newPassword ? "text" : "password"}
                       value={passwords.newPassword}
@@ -141,7 +141,8 @@ function ResetPasswordContent() {
                         }))
                       }
                       placeholder="Enter your password"
-                      className="border border-white/15 h-11 rounded-[15px] text-white !text-[17px] placeholder:text-[17px] placeholder:text-zinc-500 pl-10 pr-10"
+                      className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-white pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
+
                       required
                       disabled={isLoading}
                     />
@@ -173,7 +174,7 @@ function ResetPasswordContent() {
                     Confirm Password
                   </label>
                   <div className="relative">
-                    <Input
+                    <input
                       id="confirmPassword"
                       type={showPasswords.confirmPassword ? "text" : "password"}
                       value={passwords.confirmPassword}
@@ -184,7 +185,8 @@ function ResetPasswordContent() {
                         }))
                       }
                       placeholder="Enter your password"
-                      className="border border-white/15 h-11 rounded-[15px] text-white !text-[18px] placeholder:text-[17px] placeholder:text-zinc-500 pl-10 pr-10"
+                      className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-white pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
+
                       required
                       disabled={isLoading}
                     />

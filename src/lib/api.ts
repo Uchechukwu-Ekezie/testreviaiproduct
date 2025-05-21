@@ -1,18 +1,19 @@
 "use client";
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosError, AxiosResponse } from 'axios';
 import { jwtDecode } from 'jwt-decode';
+import type { DecodedToken, ChatMessageResponse } from '../types/api';
 
-
-interface DecodedToken {
-  user_id: string;
-  exp: number;
-  iat: number;
-  jti: string;
-  token_type: string;
-}
+// Define possible reaction types for chat messages
+type ReactionType = 'like' | 'dislike' | 'neutral' | string;
 
 // Define base API URL (replace with your actual backend URL)
-const BASE_URL = "https://revi-backend.onrender.com"
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
+
+// ✅ Enhanced token storage structure
+interface TokenData {
+  token: string;
+  timestamp: number;
+}
 
 // Create an Axios instance
 const api: AxiosInstance = axios.create({
@@ -42,6 +43,111 @@ const processQueue = (error: AxiosError | null, token: string | null = null): vo
   failedQueue = [];
 };
 
+// ✅ Function to check if token is older than 5 days
+const isTokenOlderThan5Days = (): boolean => {
+  try {
+    // Get token data from localStorage
+    const tokenDataString = localStorage.getItem("tokenData");
+    if (!tokenDataString) return false;
+    
+    const tokenData = JSON.parse(tokenDataString) as TokenData;
+    const tokenTimestamp = tokenData.timestamp;
+    const currentTime = Date.now();
+    
+    // Calculate difference in milliseconds
+    const fiveDaysInMs = 10 * 24 * 60 * 60 * 1000; // 10 days in milliseconds
+    const diff = currentTime - tokenTimestamp;
+    
+    console.log(`Token age check: ${diff / (1000 * 60 * 60 * 24)} days old`);
+    return diff > fiveDaysInMs;
+  } catch (error) {
+    console.error("Error checking token age:", error);
+    return false;
+  }
+};
+
+// ✅ Refresh access token function (used by both interceptors)
+const refreshAccessToken = async(): Promise<string | null> => {
+  const refreshToken = localStorage.getItem('refreshToken');
+
+  if (!refreshToken) {
+    console.log("No refresh token available.");
+    return null;
+  }
+
+  try {
+    console.log("Attempting to refresh access token...");
+    const response = await axios.post<{ access: string; refresh?: string }>(`${BASE_URL}/auth/token/refresh`, {
+      refresh: refreshToken,
+    });
+
+    const newAccessToken = response.data.refresh || response.data.access;
+
+    if (newAccessToken) {
+      // Save the new token with timestamp
+      localStorage.setItem('authToken', newAccessToken);
+      
+      // Save token with creation timestamp
+      const tokenData: TokenData = {
+        token: newAccessToken,
+        timestamp: Date.now()
+      };
+      
+      localStorage.setItem("tokenData", JSON.stringify(tokenData));
+      api.defaults.headers.common["Authorization"] = `Bearer ${newAccessToken}`;
+      
+      console.log("Access token refreshed successfully");
+      return newAccessToken;
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Failed to refresh access token", error);
+    // In case of failure, clear stored tokens
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('tokenData');
+    return null;
+  }
+};
+
+// ✅ New Request interceptor to check token age BEFORE sending requests
+api.interceptors.request.use(
+  async (config) => {
+    // Skip check for auth endpoints and when already refreshing
+    const isAuthEndpoint = config.url?.includes('/auth/token') || 
+                          config.url?.includes('/auth/register') ||
+                          config.url?.includes('/auth/login');
+    
+    if (!isAuthEndpoint && !isRefreshing) {
+      // Check if token is older than 5 days
+      if (isTokenOlderThan5Days()) {
+        console.log("Token is older than 5 days, proactively refreshing before request");
+        
+        // Set flag to prevent concurrent refreshes
+        isRefreshing = true;
+        
+        try {
+          const newToken = await refreshAccessToken();
+          if (newToken) {
+            config.headers["Authorization"] = `Bearer ${newToken}`;
+          }
+        } catch (error) {
+          console.error("Failed to proactively refresh token:", error);
+          // Continue with request even if refresh failed
+        } finally {
+          isRefreshing = false;
+        }
+      }
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// ✅ Response interceptor for handling 401 errors
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
   async (error: AxiosError) => {
@@ -66,36 +172,16 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const refreshToken = typeof window !== 'undefined' && window.localStorage.getItem('refreshToken');
-
-        if (!refreshToken) {
-          // Clear tokens and reject if no refresh token
-          localStorage.removeItem('authToken');
-          localStorage.removeItem('refreshToken');
-          delete api.defaults.headers.common["Authorization"];
+        const newAccessToken = await refreshAccessToken();
+        
+        if (!newAccessToken) {
           return Promise.reject(error);
-        }
-
-        const response = await axios.post<{ access: string }>(`${BASE_URL}/auth/token/refresh/`, {
-          refresh: refreshToken,
-        });
-
-        const { access: newAccessToken } = response.data;
-
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('authToken', newAccessToken);
-          api.defaults.headers.common["Authorization"] = `Bearer ${newAccessToken}`;
         }
 
         processQueue(null, newAccessToken);
         return api(originalRequest);
-      } catch (refreshError: any) {
-        // If refresh fails, clear all tokens and reject
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('refreshToken');
-        delete api.defaults.headers.common["Authorization"];
-        
-        processQueue(refreshError, null);
+      } catch (refreshError) {
+        processQueue(refreshError as AxiosError, null);
         return Promise.reject(error);
       } finally {
         isRefreshing = false;
@@ -106,32 +192,46 @@ api.interceptors.response.use(
   }
 );
 
-
-// ✅ Function to set auth token in headers
+// ✅ Modified function to set auth token in headers with timestamp
 export const setAuthToken = (token: string, remember = true) => {
   if (token) {
-    api.defaults.headers.common["Authorization"] = `Bearer ${token}`
-    localStorage.setItem("authToken", token)
+    // Set token in axios headers
+    api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    
+    // Store plain token for backward compatibility
+    localStorage.setItem("authToken", token);
+    
+    // Store token with creation timestamp
+    const tokenData: TokenData = {
+      token,
+      timestamp: Date.now()
+    };
+    
+    localStorage.setItem("tokenData", JSON.stringify(tokenData));
+    
     if (remember) {
-      sessionStorage.setItem("authToken", token)
+      sessionStorage.setItem("authToken", token);
     }
   } else {
-    delete api.defaults.headers.common["Authorization"]
-    localStorage.removeItem("authToken")
-    sessionStorage.removeItem("authToken")
+    delete api.defaults.headers.common["Authorization"];
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("tokenData");
+    sessionStorage.removeItem("authToken");
   }
-}
+};
 
 // ✅ Function to get auth token
 export const getAuthToken = () => {
-  return localStorage.getItem("authToken")
-}
+  return localStorage.getItem("authToken");
+};
 
 // ✅ Function to clear auth token
 export const clearAuthToken = () => {
-  localStorage.removeItem("authToken")
-  delete api.defaults.headers.common["Authorization"]
-}
+  localStorage.removeItem("authToken");
+  localStorage.removeItem("tokenData");
+  localStorage.removeItem("refreshToken");
+  delete api.defaults.headers.common["Authorization"];
+};
 
 // ✅ Export resetPassword function for direct import
 export const resetPassword = async (data: {
@@ -166,23 +266,19 @@ export const verifyToken = async (): Promise<boolean> => {
       return false
     }
 
-
     // Set the token in the headers
     setAuthToken(token)
 
-        // Decode the token to extract the user ID (you can use a JWT decoding library like jwt-decode)
-       
-        console.log(decodedToken)
-        
-        // Make sure you import and use a JWT decoding library like 'jwt-decode'
-        const userId = decodedToken?.user_id; // Assuming the token contains the 'id' of the user
+    // Decode the token to extract the user ID
+    console.log(decodedToken)
     
-        if (!userId) {
-          console.error("User ID not found in token.");
-          return false;
-        }
+    // Make sure you import and use a JWT decoding library like 'jwt-decode'
+    const userId = decodedToken?.user_id; // Assuming the token contains the 'id' of the user
 
-
+    if (!userId) {
+      console.error("User ID not found in token.");
+      return false;
+    }
 
     // Try to fetch user profile - this will fail if token is invalid
     const response = await api.get(`/auth/users/${userId}`)
@@ -203,6 +299,7 @@ export const authAPI = {
       // Clear any existing tokens before login attempt
       localStorage.removeItem('authToken');
       localStorage.removeItem('refreshToken');
+      localStorage.removeItem('tokenData');
       delete api.defaults.headers.common["Authorization"];
 
       const response = await api.post("/auth/login/", {
@@ -225,8 +322,7 @@ export const authAPI = {
       }
 
       // Store tokens
-      localStorage.setItem('authToken', accessToken);
-      api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
+      setAuthToken(accessToken);
       
       if (refreshToken) {
         localStorage.setItem('refreshToken', refreshToken);
@@ -269,7 +365,6 @@ export const authAPI = {
     }
   },
 
-
   loginWithGoogle: async (credentialResponse: {
     credential?: string;  // id_token
     access_token?: string;
@@ -281,6 +376,7 @@ export const authAPI = {
       // Clear any existing tokens before login attempt
       localStorage.removeItem('authToken');
       localStorage.removeItem('refreshToken');
+      localStorage.removeItem('tokenData');
       delete api.defaults.headers.common["Authorization"];
 
       // Prepare payload according to your API spec
@@ -303,8 +399,7 @@ export const authAPI = {
       }
 
       // Store tokens
-      localStorage.setItem('authToken', accessToken);
-      api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
+      setAuthToken(accessToken);
       
       if (refreshToken) {
         localStorage.setItem('refreshToken', refreshToken);
@@ -327,6 +422,7 @@ export const authAPI = {
       // Clear any partial state on error
       localStorage.removeItem('authToken');
       localStorage.removeItem('refreshToken');
+      localStorage.removeItem('tokenData');
       delete api.defaults.headers.common["Authorization"];
 
       // Handle specific error cases
@@ -349,7 +445,6 @@ export const authAPI = {
       throw error;
     }
   },
-
 
   signup: async (userData: {
     username: string
@@ -436,6 +531,7 @@ export const authAPI = {
     const response = await api.post("/auth/logout")
     return response.data
   },
+  
   requestPasswordReset: async (email: string) => {
     try {
       // Ensure email is properly formatted in the request
@@ -471,8 +567,6 @@ export const authAPI = {
       throw error;
     }
   },
-
-  
 
   passwordResetConfirm: async (data: {
     new_password1: string
@@ -523,6 +617,7 @@ export const authAPI = {
       throw error;
     }
   },
+  
   passwordChange: async (new_password1: string, new_password2: string) => {
     try {
       console.log("API: Attempting to change password");
@@ -547,6 +642,7 @@ export const authAPI = {
       throw error;
     }
   },
+  
   deleteUser: async () => {
     try {
       console.log("API: Attempting to delete user account...");
@@ -571,7 +667,7 @@ export const authAPI = {
       throw error;
     }
   },
-}
+};
 
 // ✅ User API calls
 export const userAPI = {
@@ -654,6 +750,7 @@ export const userAPI = {
     first_name?: string
     last_name?: string
     username?: string
+    avatar?: string
   }) => {
     try {
       console.log("API: Attempting profile update with data:", userData)
@@ -694,6 +791,30 @@ export const userAPI = {
       throw error
     }
   },
+  // upload avatar image with patch /auth/user/update-avatar/ save as string
+
+  uploadAvatar: async (avatarUrl: string) => {
+    try {
+      console.log("API: Attempting to upload avatar with URL:", avatarUrl)
+      const response = await api.patch("/auth/user/update-avatar/", { avatar_url: avatarUrl })
+      console.log("API: Avatar upload successful, response status:", response.status)
+      return response.data.avatar_url
+    } catch (error: any) {
+      console.error("API: Avatar upload failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      })
+
+      // Include the detailed response in the error
+      if (error.response?.data) {
+        error.detail = error.response.data
+      }
+
+      throw error
+    }
+  },
 
   resendVerificationOtp: async (email: string) => {
     console.log("Attempting to resend verification OTP for email:", email)
@@ -708,7 +829,8 @@ export const userAPI = {
       throw error
     }
   },
-}
+};
+
 // Debugging API
 export const debugAPI = {
   checkEndpoint: async () => {
@@ -728,11 +850,11 @@ export const debugAPI = {
       }
     }
   }
-}
+};
 
 // Chat API calls
 export const chatAPI = {
-// create chat session
+  // create chat session
   createChatSession: async (data: { 
     chat_title: string; 
     unique_chat_id?: string; 
@@ -853,7 +975,7 @@ export const chatAPI = {
     }
   },
 
-  postNewChat: async (message: string, sessionId?: string) => {
+  postNewChat: async (message: string, sessionId?: string, config?: AxiosRequestConfig): Promise<ChatMessageResponse> => {
     try {
       console.log("API: Posting new chat message to session:", sessionId, "with message:", message);
       
@@ -867,29 +989,37 @@ export const chatAPI = {
       // Construct request data
       const data = {
         prompt: message.trim(),
-        ...(sessionId && { session: sessionId })  // Use session instead of session_id
+        ...(sessionId && { session: sessionId }) 
+        
       };
 
       console.log("API: Sending chat request with data:", data);
       
-      const response = await api.post(`/chats/ai-chat/`, data, {
+      const requestConfig = {
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
-        }
-      });
+        },
+        ...config  // Merge any additional config options
+      };
+      
+      const response = await api.post(`/chats/ai-chat/`, data, requestConfig);
       
       console.log("API: Chat response received:", response.data);
 
       // Create a complete message object with both prompt and response
-      const messageObj = {
+      const messageObj: ChatMessageResponse = {
         id: response.data.id,
         prompt: message.trim(),  // Include the original prompt
         response: response.data.response || response.data.message || "",  // Handle different response formats
         session: sessionId || response.data.session,  // Use the original session ID if provided
+        context: response.data.context || [],  // Include context if available
+        classification: response.data.classification || "",  // Include classification if available
         created_at: response.data.created_at || new Date().toISOString(),
         updated_at: response.data.updated_at || new Date().toISOString()
       };
+
+      console.log("API: New chat message posted successfully:", messageObj);
 
       return messageObj;
     } catch (error: any) {
@@ -912,9 +1042,91 @@ export const chatAPI = {
     }
   },
 
+  //chat ai edit the endpoint is /chat/ai-chat/{id}/ and it is put it accept prommpt and sessionid are compulsory
 
+  editChat: async (chatId: string, prompt: string, session: string): Promise<ChatMessageResponse> => {
+    try {
+      // Validate required parameters
+      if (!chatId) throw new Error("Message ID is required");
+      if (!session) throw new Error("Session ID is required");
+      if (!prompt.trim()) throw new Error("Message cannot be empty");
 
+      const token = getAuthToken();
+      if (!token) throw new Error("Authentication token missing");
 
+      console.log("Editing chat", { chatId, session, prompt });
+
+      const response = await api.put(
+        `/chats/ai-chat/${chatId}/`, 
+        { 
+          prompt: prompt.trim(),
+          session: session
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          }
+        }
+      );
+
+      console.log("Chat edit success", response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error("Edit failed", {
+        chatId,
+        error: error.response?.data || error.message,
+        session
+      });
+      throw error;
+    }
+  },
+
+  // delete chat by id
+  deleteChat: async (chatId: string): Promise<any> => {
+    try {
+      console.log("API: Deleting chat with ID:", chatId);
+      
+      const response = await api.delete(`/chats/${chatId}/delete/`);
+      
+      console.log("API: Chat deleted successfully");
+      return response.data;
+      
+    } catch (error: any) {
+      console.error("API: Delete chat failed:", {
+        status: error.response?.status,
+        error: error.response?.data?.error,
+        message: error.response?.data?.message || error.message
+      });
+      
+      throw new Error(error.response?.data?.error || "Failed to delete chat");
+    }
+  },
+
+  // update reaction from user
+  updateReaction: async (chatId: string, reaction: ReactionType, sessionId: string): Promise<any> => {
+    try {
+      console.log("API: Updating reaction for chat ID:", chatId, "session:", sessionId, "reaction:", reaction);
+      
+      const response = await api.put(`/chats/ai-chat/${chatId}/`, { 
+        reaction,
+        session: sessionId, // Now including the required session field
+      });
+      
+      console.log("API: Reaction updated successfully");
+      return response.data;
+      
+    } catch (error: any) {
+      console.error("API: Update reaction failed:", {
+        status: error.response?.status,
+        error: error.response?.data?.error,
+        message: error.response?.data?.message || error.message
+      });
+      
+      throw new Error(error.response?.data?.error || "Failed to update reaction");
+    }
+  },
+  
   updateChatSession: async (sessionId: string, data: {
     chat_title?: string;
     unique_chat_id?: string;
@@ -934,12 +1146,104 @@ export const chatAPI = {
       });
       throw error;
     }
-  }
-}
+  },
+};
+
+export const searchAPI = {
+  // Client-side search implementation
+  searchChatSessions: (query: string, sessions: any[]) => {
+    if (!Array.isArray(sessions)) {
+      console.error('searchChatSessions: sessions is not an array', sessions);
+      return []; // Return empty array if sessions is not an array
+    }
+
+    if (!query.trim()) return sessions;
+    
+    const searchTerm = query.toLowerCase();
+    return sessions.filter(session => {
+      // Make sure session exists and has chat_title
+      if (!session) return false;
+      const title = session.chat_title || 'Untitled Chat';
+      return title.toLowerCase().includes(searchTerm);
+    });
+  },
+
+  postSearchHistory: async (data: {
+    user: string;
+    query: string;
+    chat_session: string;
+  }) => {
+    try {
+      console.log("API: Posting search history with data:", data);
+      const response = await api.post(`/search-histories/`, data);
+      console.log("API: Search history posted successfully, response:", response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error("API: Post search history failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw error;
+    }
+  },
+
+  getSearchHistories: async () => {
+    try {
+      console.log("API: Fetching all search histories");
+      const response = await api.get(`/search-histories/`);
+      console.log("API: Search histories fetched successfully, count:", response.data.length);
+      return response.data;
+    } catch (error: any) {
+      console.error("API: Fetch search histories failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw error;
+    }
+  },
+
+  getSearchHistoryById: async (searchHistoryId: string) => {
+    try {
+      console.log("API: Fetching search history by ID:", searchHistoryId);
+      const response = await api.get(`/search-histories/${searchHistoryId}/`);
+      console.log("API: Search history fetched successfully, response:", response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error("API: Fetch search history by ID failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw error;
+    }
+  },
+
+  deleteSearchHistory: async (searchHistoryId: string) => {
+    try {
+      console.log("API: Deleting search history:", searchHistoryId);
+      const response = await api.delete(`/search-histories/${searchHistoryId}/`);
+      console.log("API: Search history deleted successfully, response:", response.data);
+      return response.data;
+    }
+    catch (error: any) {
+      console.error("API: Delete search history failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw error;
+    }
+  },
+};
 
 export const UserReviews = {
   // post reviews
-
   postReview: async (data: {
     address: string;
     review_text: string;
@@ -961,10 +1265,6 @@ export const UserReviews = {
       throw error;
     }
   },
+};
 
-}
-
-export default api
-
-
-
+export default api;

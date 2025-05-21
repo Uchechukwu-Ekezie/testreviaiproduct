@@ -1,34 +1,45 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { Button } from "@/components/ui/button"
-import { Menu } from "lucide-react"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { ProfileDropdown } from "@/components/profile-dropdown"
-import { useRouter } from "next/navigation"
+import type React from "react";
+import { Button } from "@/components/ui/button";
+import {  PanelLeftOpen, Plus } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ProfileDropdown } from "@/components/profile-dropdown";
+import { useRouter } from "next/navigation";
 
 interface ChatHeaderProps {
-  setSidebarOpen: (open: boolean) => void
-  isAuthenticated: boolean
+  setSidebarOpen: (open: boolean) => void;
+  isAuthenticated: boolean;
+  sidebarCollapsed: boolean;
+  isLgScreen: boolean;
+  sidebarOpen: boolean;
+  startNewChat?: () => void;
+  isMediumScreen: boolean; // Add this prop
 }
 
-const ChatHeader: React.FC<ChatHeaderProps> = ({ setSidebarOpen, isAuthenticated }) => {
-  const router = useRouter()
+const ChatHeader: React.FC<ChatHeaderProps> = ({
+  setSidebarOpen,
+  isAuthenticated,
+  sidebarCollapsed,
+  isLgScreen,
+  sidebarOpen,
+  startNewChat,
+   // Destructure the new prop
+}) => {
+  const router = useRouter();
+
+  const setCollapsed = (collapsed: boolean) => {
+    if (!collapsed) {
+      setSidebarOpen(true);
+    } else {
+      console.warn("Collapse functionality requires additional implementation");
+    }
+  };
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between gap-4 px-4 border-b h-14 border-border bg-background lg:left-64">
-      <div className="flex items-center">
-        <Button variant="ghost" size="icon" className="mr-2 lg:hidden" onClick={() => setSidebarOpen(true)}>
-          <Menu className="w-5 h-5 text-muted-foreground" />
-        </Button>
-
-        {/* Logo or app name can go here */}
-        <span className="font-medium text-foreground ">Revi AI</span>
-      </div>
-
-      {/* Right side elements */}
-      <div className="flex items-center gap-4">
-        {/* <ThemeToggle /> */}
+    <>
+      {/* Fixed Right Actions */}
+      <div className="fixed z-50 right-10 top-3">
         {isAuthenticated ? (
           <ProfileDropdown />
         ) : (
@@ -41,9 +52,67 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({ setSidebarOpen, isAuthenticated
           </Button>
         )}
       </div>
-    </div>
-  )
-}
 
-export default ChatHeader
+      {/* Main Header */}
+      <header
+        className={cn(
+          "fixed top-0 z-40 h-14  bg-background",
+          "transition-all duration-300",
+          "w-full",
+          sidebarCollapsed && !isLgScreen ? "md:pl-16" : "md:pl-64",
+          isLgScreen && !sidebarOpen ? "lg:pl-4" : "lg:pl-64"
+        )}
+      >
+        <div className="relative flex items-center h-full gap-3 px-4">
+          {/* Left side controls */}
+          <div className="flex items-center gap-2">
+            {/* Menu Button - Show on medium and large screens when sidebar is closed */}
+            { !sidebarOpen && (
+              <button
+                onClick={() => {
+                  setSidebarOpen(true);
+                  setCollapsed(false);
+                }}
+                aria-label="Open sidebar"
+              >
+                <PanelLeftOpen className="w-8 h-8 text-muted-foreground" />
+              </button>
+            )}
 
+            {/* New Chat Button - only visible when sidebar is closed */}
+            {!sidebarOpen && (
+              <div className="flex items-center justify-center w-8 h-8 border-2 rounded-full">
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (startNewChat) startNewChat();
+                  }}
+                  className="flex items-center justify-center w-full h-full"
+                >
+                  <Plus className="w-6 h-6 font-bold" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Title */}
+          <span
+            className={cn(
+              "font-medium text-foreground ml-2",
+              "absolute left-[120px] hidden md:block -translate-x-1/2 top-1/2 -translate-y-1/2",
+              "md:static md:transform-none",
+              {
+                "md:left-4": sidebarCollapsed && !isLgScreen,
+                "lg:left-4": isLgScreen && !sidebarOpen,
+              }
+            )}
+          >
+            Revi AI
+          </span>
+        </div>
+      </header>
+    </>
+  );
+};
+
+export default ChatHeader;

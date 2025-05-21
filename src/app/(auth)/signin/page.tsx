@@ -1,138 +1,141 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
-import Image from "next/image"
-import Link from "next/link"
-import { useMediaQuery } from "@/hooks/use-mobile"
-import google from "../../../../public/Image/Google - Original.png"
-import apple from "../../../../public/Image/Apple - Negative.png"
-import Testimonial from "@/components/testimonial"
-import PPTU from "@/components/pptu"
-import { useAuth } from "@/contexts/auth-context"
-import { toast } from "@/components/ui/use-toast"
-import Logo from "@/components/logo"
-import { Eye, EyeOff } from "lucide-react"
-import sms from "../../../../public/Image/sms.png"
-import pass from "../../../../public/Image/password-check.png"
-import axios from "axios"
-import { useGoogleLogin, type TokenResponse } from "@react-oauth/google"
-
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+// import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+} from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import Image from "next/image";
+import Link from "next/link";
+import { useMediaQuery } from "@/hooks/use-mobile";
+// import google from "../../../../public/Image/Google - Original.png";
+// import apple from "../../../../public/Image/Apple - Negative.png";
+import Testimonial from "@/components/testimonial";
+import PPTU from "@/components/pptu";
+import { useAuth } from "@/contexts/auth-context";
+import { toast } from "@/components/ui/use-toast";
+import Logo from "@/components/logo";
+import { Eye, EyeOff } from "lucide-react";
+import sms from "../../../../public/Image/sms.png";
+import pass from "../../../../public/Image/password-check.png";
+import axios from "axios";
+// import { useGoogleLogin, type TokenResponse } from "@react-oauth/google";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [rememberMe, setRememberMe] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
-  const isMobile = useMediaQuery("(max-width: 1024px)")
-  const { login, loginWithGoogle } = useAuth()
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const isMobile = useMediaQuery("(max-width: 1024px)");
+  const { login} = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+    e.preventDefault();
+    setIsLoading(true);
 
     try {
       // Validate input first
-      if (!email || !email.includes('@')) {
-        throw new Error("Please enter a valid email address")
+      if (!email || !email.includes("@")) {
+        throw new Error("Please enter a valid email address");
       }
-      
+
       if (!password || password.length < 6) {
-        throw new Error("Password must be at least 6 characters")
+        throw new Error("Password must be at least 6 characters");
       }
-      
-      await login(email, password)
+
+      await login(email, password);
 
       // Show success toast after login completes
       toast({
         title: "Login successful",
         description: "Welcome back to Revi.ai!",
-      })
+      });
       // Router push is handled inside the login function
     } catch (error) {
-      console.error("Login failed:", error)
-      
+      console.error("Login failed:", error);
+
       if (axios.isAxiosError(error)) {
-        console.error("Response error data:", error.response?.data)
+        console.error("Response error data:", error.response?.data);
 
-      // Extract error message from API response if available
-      let errorMessage = "Invalid credentials"
+        // Extract error message from API response if available
+        let errorMessage = "Invalid credentials";
 
-      if (error.response?.data) {
-        errorMessage =
-          error.response.data.detail ||
-          error.response.data.message ||
-          error.response.data.error ||
-          "Invalid credentials"
-          
-        // Handle specific status codes
-        if (error.response.status === 401) {
-          errorMessage = "Invalid email or password. Please try again."
+        if (error.response?.data) {
+          errorMessage =
+            error.response.data.detail ||
+            error.response.data.message ||
+            error.response.data.error ||
+            "Invalid credentials";
+
+          // Handle specific status codes
+          if (error.response.status === 401) {
+            errorMessage = "Invalid email or password. Please try again.";
+          }
+        } else if (error instanceof Error) {
+          errorMessage = error.message;
         }
-      } else if (error instanceof Error) {
-        errorMessage = error.message
-      }
 
-      toast({
-        title: "Login failed",
-        description: errorMessage,
-        variant: "destructive",
-      })
-    }
+        toast({
+          title: "Login failed",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
-  
+  };
 
   // Removed unused type GoogleCredentialResponse
 
-  const handleGoogleLogin = useGoogleLogin({
-    onSuccess: async (tokenResponse: TokenResponse) => {
-      setIsLoading(true)
-      try {
-        // Convert TokenResponse to expected GoogleCredentialResponse format
-        await loginWithGoogle({
-        access_token: tokenResponse.access_token,
-        
-        })
-        toast({
-          title: "Login successful",
-          description: "Welcome back with Google!",
-        })
-      } catch (error: any) {
-        toast({
-          title: "Google login failed",
-          description: error.message || "Failed to login with Google",
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoading(false)
-      }
-    },
-    onError: () => {
-      toast({
-        title: "Google login failed",
-        description: "An error occurred during Google authentication",
-        variant: "destructive",
-      })
-    }
-  })
+  // const handleGoogleLogin = useGoogleLogin({
+  //   onSuccess: async (tokenResponse: TokenResponse) => {
+  //     setIsLoading(true)
+  //     try {
+  //       // Convert TokenResponse to expected GoogleCredentialResponse format
+  //       await loginWithGoogle({
+  //       access_token: tokenResponse.access_token,
 
-  const handleAppleLogin = () => {
-    toast({
-      title: "Coming soon",
-      description: "Apple login will be available soon",
-      variant: "default",
-    })
-  }
+  //       })
+  //       toast({
+  //         title: "Login successful",
+  //         description: "Welcome back with Google!",
+  //       })
+  //     } catch (error: any) {
+  //       toast({
+  //         title: "Google login failed",
+  //         description: error.message || "Failed to login with Google",
+  //         variant: "destructive",
+  //       })
+  //     } finally {
+  //       setIsLoading(false)
+  //     }
+  //   },
+  //   onError: () => {
+  //     toast({
+  //       title: "Google login failed",
+  //       description: "An error occurred during Google authentication",
+  //       variant: "destructive",
+  //     })
+  //   }
+  // })
+
+  // const handleAppleLogin = () => {
+  //   toast({
+  //     title: "Coming soon",
+  //     description: "Apple login will be available soon",
+  //     variant: "default",
+  //   })
+  // }
 
   return (
     <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-background font-sf-pro">
@@ -140,12 +143,14 @@ export default function LoginPage() {
         <Card className="w-full max-w-[503px] mx-auto lg:min-h-[96vh] bg-transparent border-transparent flex flex-col">
           <CardHeader className="space-y-3">
             <Logo />
-            <h2 className="text-center text-[25px] font-[500] text-muted-foreground md:pt-[33.5px]">Welcome back to Revi.ai</h2>
+            <h2 className="text-center text-[25px] font-[500] text-muted-foreground md:pt-[33.5px]">
+              Welcome back to Revi.ai
+            </h2>
           </CardHeader>
 
           <CardContent className="items-center justify-center flex-grow w-full py-4 overflow-y-auto ">
             <div className="md:space-y-4">
-              <div className="grid gap-3">
+              {/* <div className="grid gap-3">
                 <Button
                   variant="outline"
                   className="w-full bg-card rounded-[15px] text-[15px] font-[400] border-white/15  py-5 h-11"
@@ -165,7 +170,7 @@ export default function LoginPage() {
                   <Image src={apple || "/placeholder.svg"} alt="Apple Logo" width={24} height={24} />
                   Sign in with Apple
                 </Button>
-              </div>
+              </div> */}
 
               <div className="relative py-4">
                 <div className="absolute inset-0 flex items-center">
@@ -184,13 +189,13 @@ export default function LoginPage() {
 
                   {/* Relative wrapper to position the icon inside the input */}
                   <div className="relative">
-                    <Input
+                    <input
                       id="email"
                       type="email"
                       placeholder="Enter your email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="border border-white/15 h-11 rounded-[15px] text-white !text-[16px] font-normal placeholder:text-[17px] placeholder:text-zinc-500 pl-10"
+                      className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-white pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
                       disabled={isLoading}
                       required
                     />
@@ -211,13 +216,13 @@ export default function LoginPage() {
                   {/* Relative wrapper to position the icons inside the input */}
                   <div className="relative">
                     {/* Input field */}
-                    <Input
+                    <input
                       id="password"
                       type={showPassword ? "text" : "password"}
                       placeholder="Enter your password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="border border-white/15 h-11 rounded-[15px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-zinc-500 pl-10 pr-10"
+                      className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-white pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
                       disabled={isLoading}
                       required
                     />
@@ -235,7 +240,11 @@ export default function LoginPage() {
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute transform -translate-y-1/2 right-3 top-1/2 text-zinc-400"
                     >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      {showPassword ? (
+                        <EyeOff className="w-5 h-5" />
+                      ) : (
+                        <Eye className="w-5 h-5" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -246,13 +255,18 @@ export default function LoginPage() {
                       id="remember"
                       className="text-white border-white/15"
                       checked={rememberMe}
-                      onCheckedChange={(checked) => setRememberMe(checked === true)}
+                      onCheckedChange={(checked) =>
+                        setRememberMe(checked === true)
+                      }
                     />
                     <Label htmlFor="remember" className="text-sm text-zinc-400">
                       Remember me
                     </Label>
                   </div>
-                  <Link href="/forgot-password" className="text-sm text-zinc-400 hover:text-white">
+                  <Link
+                    href="/forgot-password"
+                    className="text-sm text-zinc-400 hover:text-white"
+                  >
                     Forgot Password?
                   </Link>
                 </div>
@@ -266,17 +280,16 @@ export default function LoginPage() {
                 </Button>
               </form>
               <CardFooter className="flex flex-col text-center">
-              <p className="mt-5 text-sm text-zinc-400">
-                Don&apos;t have an account?{" "}
-                <Link href="/signup" className="text-white hover:underline">
-                  Sign Up
-                </Link>
-              </p>
-            </CardFooter>
+                <p className="mt-5 text-sm text-zinc-400">
+                  Don&apos;t have an account?{" "}
+                  <Link href="/signup" className="text-white hover:underline">
+                    Sign Up
+                  </Link>
+                </p>
+              </CardFooter>
             </div>
-       
           </CardContent>
-          
+
           <div className="mt-auto">
             <PPTU />
           </div>
@@ -289,6 +302,5 @@ export default function LoginPage() {
         )}
       </div>
     </div>
-  )
+  );
 }
-

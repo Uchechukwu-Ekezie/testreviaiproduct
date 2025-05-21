@@ -1,5 +1,4 @@
 @tailwind base;
-
 @custom-variant dark (&:is(.dark *));
 @tailwind components;
 @tailwind utilities;
@@ -105,4 +104,52 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #171717; /* Match your sidebar bg */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #444; /* Scrollbar handle */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555; /* Scrollbar handle on hover */
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Add this to your globals.css file */
+/* Chrome, Safari, Edge, Opera */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px transparent inset !important;
+  -webkit-text-fill-color: white !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Firefox */
+input:-moz-autofill,
+input:-moz-autofill:focus {
+  box-shadow: 0 0 0 30px #121212 inset !important;
+  -moz-text-fill-color: white !important;
 }

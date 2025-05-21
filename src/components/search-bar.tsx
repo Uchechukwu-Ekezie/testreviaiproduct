@@ -23,7 +23,7 @@ export function SearchBar({
   saveToHistory = true
 }: SearchBarProps) {
   const [query, setQuery] = useState(defaultValue)
-  const { saveSearch } = useSearchHistory()
+  const { addSearch } = useSearchHistory()
   const { isAuthenticated } = useAuth()
 
   const handleSearch = (e: React.FormEvent) => {
@@ -36,7 +36,7 @@ export function SearchBar({
     
     // Save to history if enabled and user is authenticated
     if (saveToHistory && isAuthenticated) {
-      saveSearch(query.trim())
+      addSearch(query.trim())
     }
   }
 
@@ -46,13 +46,13 @@ export function SearchBar({
 
   return (
     <form onSubmit={handleSearch} className={`relative ${className}`}>
-      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 h-4 w-4" />
+      <Search className="absolute w-4 h-4 transform -translate-y-1/2 left-3 top-1/2 text-zinc-400" />
       
       <Input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={placeholder}
-        className="pl-10 pr-10 bg-zinc-800 border-zinc-700 text-white"
+        className="pl-10 pr-10 text-white bg-zinc-800 border-zinc-700"
       />
       
       {query && (
@@ -61,9 +61,9 @@ export function SearchBar({
           variant="ghost"
           size="icon"
           onClick={handleClear}
-          className="absolute right-10 top-1/2 transform -translate-y-1/2 h-6 w-6 text-zinc-400"
+          className="absolute w-6 h-6 transform -translate-y-1/2 right-10 top-1/2 text-zinc-400"
         >
-          <X className="h-4 w-4" />
+          <X className="w-4 h-4" />
         </Button>
       )}
       
@@ -71,9 +71,9 @@ export function SearchBar({
         type="submit"
         variant="ghost"
         size="icon"
-        className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 text-zinc-400"
+        className="absolute w-6 h-6 transform -translate-y-1/2 right-2 top-1/2 text-zinc-400"
       >
-        <Search className="h-4 w-4" />
+        <Search className="w-4 h-4" />
       </Button>
     </form>
   )

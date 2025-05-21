@@ -49,12 +49,13 @@ export default function VerifyHumanPage() {
                   <p className="font-mono text-[40px] tracking-wider text-zinc-400">{displayCode}</p>
                 </div>
 
-                <Input
+                <input
                   type="text"
                   value={verificationCode}
                   onChange={(e) => setVerificationCode(e.target.value)}
                   placeholder="Enter verification code"
-                  className="bg-[#262626] border border-white/15 h-11 rounded-[15px] text-white !text-[17px] placeholder:text-[17px] placeholder:text-zinc-500"
+                  className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-white pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
+
                   required
                 />
               </div>

@@ -1,9 +1,11 @@
+
 "use client"
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
 import { chatAPI } from "@/lib/api"
 import { toast } from "@/components/ui/use-toast"
 import { useAuth } from "./auth-context"
+import { Context } from "@/types/chatMessage"
 
 // Define interfaces for chat data
 interface ChatSession {
@@ -19,9 +21,36 @@ interface ChatMessage {
   id: string
   prompt: string
   response?: string
+  classification?: string
+  context?: Context[]
+  properties?: Property[]
   session: string
   created_at?: string
   updated_at?: string
+  isLoading?: boolean
+  error?: string
+}
+
+interface Property {
+  id: string
+  title: string
+  address: string
+  price: string
+  imageUrl: string
+  bedrooms?: number
+  bathrooms?: number
+  size?: string
+  listedBy?: string
+  yearBuilt?: string
+  lotSize?: string
+  squareFootage?: string
+  state?: string
+  city?: string
+  zipCode?: string
+  phone?: string
+  created_by?: string
+  location?: string
+  cordinates?: string
 }
 
 // Define types for our context
@@ -35,8 +64,10 @@ interface ChatContextType {
   getChatSessions: () => Promise<void>
   getChatsBySession: (sessionId: string) => Promise<ChatMessage[]>
   postChat: (message: string, sessionId?: string) => Promise<ChatMessage>
+  editChat: (id: string, message: string, sessionId?: string) => Promise<ChatMessage>
   deleteSession: (sessionId: string) => Promise<void>
   setActiveSession: (sessionId: string | null) => void
+  deleteChat: (id: string) => Promise<void>
 }
 
 // Create the context
@@ -62,7 +93,6 @@ export function ChatProvider({ children }: ChatProviderProps) {
     setError(null)
 
     try {
-      // Use the chatAPI.getChatSessions function we added
       const response = await chatAPI.getChatSessions()
       setSessions(response)
     } catch (error) {
@@ -114,169 +144,211 @@ export function ChatProvider({ children }: ChatProviderProps) {
 
         let userId = user?.id
 
-        // If not authenticated, use a default/guest ID or handle accordingly
         if (!userId && !isAuthenticated) {
-          userId = "guest" // Use a guest ID or handle as needed
+          userId = "guest"
           console.log("Warning: User not authenticated. Using guest ID.")
         }
 
-        // Create session data object
         const sessionData = {
           chat_title: title,
-          user: userId || "guest", // Ensure it's always a string
+          user: userId || "guest",
         }
 
-        // Create the chat session
         const response = await chatAPI.createChatSession(sessionData)
-
-        // Update sessions list
         setSessions((prev) => [response, ...prev])
-
-        // Set as active session
         setActiveSession(response.id)
 
         return response
       } catch (error) {
         console.error("Failed to create chat session:", error)
-
         const errorMessage = error instanceof Error ? error.message : "Failed to create chat session"
-
         setError(errorMessage)
-
         toast({
           title: "Error",
           description: errorMessage,
           variant: "destructive",
         })
-
         throw error
       } finally {
         setIsLoading(false)
       }
     },
-    [user, isAuthenticated],
+    [user, isAuthenticated]
   )
 
   // Post a chat message
-  const postChat = useCallback(
-    async (message: string, sessionId?: string) => {
+ // Update the postChat function in your ChatProvider:
+const postChat = useCallback(
+  async (message: string, sessionId?: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      if (!message.trim()) {
+        throw new Error("Message cannot be empty");
+      }
+
+      if (!isAuthenticated) {
+        throw new Error("Please log in to send messages");
+      }
+
+      const targetSessionId = sessionId || activeSession;
+
+      if (!targetSessionId) {
+        // Create new session flow
+        const newSession = await createChatSession(message.substring(0, 30));
+        const newSessionId = newSession.id;
+
+        setActiveSession(newSessionId);
+        setSessions((prev) => [newSession, ...prev]);
+
+        const tempMessage: ChatMessage = {
+          id: `temp-${Date.now()}`,
+          prompt: message.trim(),
+          session: newSessionId,
+          isLoading: true,
+        };
+
+        setMessages([tempMessage]);
+
+        // Make the API call
+        const response = await chatAPI.postNewChat(message, newSessionId);
+        
+        // Update the messages with the response
+        setMessages([{
+          ...response,
+          isLoading: false,
+        }]);
+
+        setActiveSession(newSessionId);
+        return response;
+      } else {
+        // Existing session flow
+        const tempMessage: ChatMessage = {
+          id: `temp-${Date.now()}`,
+          prompt: message.trim(),
+          session: targetSessionId,
+          isLoading: true,
+        };
+
+        setMessages((prev) => [...prev, tempMessage]);
+
+        // Make the API call
+        const response = await chatAPI.postNewChat(message, targetSessionId);
+        
+        // Update the messages with the response
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === tempMessage.id ? { ...response, isLoading: false } : msg
+          )
+        );
+
+        return response;
+      }
+    } catch (error: any) {
+      console.error("Failed to post chat message:", error);
+      const errorMessage = error.response?.data?.detail || error.message || "Failed to post chat message";
+      setError(errorMessage);
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+      
+      // Update the message with error state
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === `temp-${Date.now()}` 
+            ? { ...msg, isLoading: false, error: errorMessage }
+            : msg
+        )
+      );
+      
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  },
+  [activeSession, createChatSession, isAuthenticated]
+);
+
+  // Edit a chat message
+  const editChat = useCallback(
+    async (messageId: string, newPrompt: string, sessionId?: string) => {
       setIsLoading(true)
       setError(null)
 
       try {
-        if (!message.trim()) {
+        if (!newPrompt.trim()) {
           throw new Error("Message cannot be empty")
         }
 
-        // Check authentication
         if (!isAuthenticated) {
-          throw new Error("Please log in to send messages")
+          throw new Error("Please log in to edit messages")
         }
 
         const targetSessionId = sessionId || activeSession
-
         if (!targetSessionId) {
-          // Create a new session if none exists
-          console.log("No active session, creating new one...")
-
-          // First create the session
-          const newSession = await createChatSession(message.substring(0, 30))
-          console.log("New session created:", newSession)
-
-          const newSessionId = newSession.id
-
-          // Set active session immediately
-          setActiveSession(newSessionId)
-
-          // Update sessions list
-          setSessions((prev) => [newSession, ...prev])
-
-          // Create a temporary message to show while waiting for response
-          const tempMessage = {
-            id: `temp-${Date.now()}`,
-            prompt: message.trim(),
-            session: newSessionId,
-          }
-
-          // Add the temporary message to show it immediately
-          setMessages([tempMessage])
-
-          // Now post the message
-          console.log("Posting message to new session...")
-          const response = await chatAPI.postNewChat(message, newSessionId)
-          console.log("Message posted successfully:", response)
-
-          // Update messages with the real response
-          const newMessage = {
-            ...response,
-            prompt: message.trim(),
-            session: newSessionId,
-          }
-
-          // Replace the temporary message with the real one
-          setMessages([newMessage])
-
-          // Make sure the active session is still set correctly after all operations
-          setTimeout(() => {
-            setActiveSession(newSessionId)
-          }, 100)
-
-          return newMessage
-        } else {
-          // Post to existing session
-          console.log("Posting message to existing session:", targetSessionId)
-          const response = await chatAPI.postNewChat(message, targetSessionId)
-          console.log("Message posted successfully:", response)
-
-          // Update messages - ensure we have both prompt and response
-          const newMessage = {
-            ...response,
-            prompt: message.trim(), // Ensure we keep the original prompt
-            session: targetSessionId,
-          }
-          setMessages((prev) => [...prev, newMessage])
-
-          // Ensure the session is still in our list and active
-          if (!sessions.some((s) => s.id === targetSessionId)) {
-            // If session not in list, fetch it and add it
-            try {
-              const sessionData = await chatAPI.getChatSession(targetSessionId)
-              setSessions((prev) => [sessionData, ...prev])
-            } catch (err) {
-              console.error("Failed to fetch session data:", err)
-            }
-          }
-
-          // Ensure this session is set as active
-          setActiveSession(targetSessionId)
-
-          return newMessage
+          throw new Error("No active session to edit message in")
         }
+
+        const existingMessage = messages.find((m) => m.id === messageId)
+        if (!existingMessage) {
+          throw new Error("Message not found")
+        }
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId ? { ...m, prompt: newPrompt.trim(), isLoading: true } : m
+          )
+        )
+
+        const apiResponse = await chatAPI.editChat(messageId, newPrompt.trim(), targetSessionId)
+
+        const updatedMessage: ChatMessage = {
+          id: messageId,
+          prompt: newPrompt.trim(),
+          response: apiResponse?.response || existingMessage.response || "",
+          session: targetSessionId,
+          created_at: existingMessage.created_at,
+          updated_at: existingMessage.updated_at || new Date().toISOString(),
+          context: apiResponse.context || existingMessage.context || [],
+          classification: apiResponse.classification || existingMessage.classification || "",
+          isLoading: false,
+        }
+
+        setMessages((prev) =>
+          prev.map((m) => (m.id === messageId ? updatedMessage : m))
+        )
+
+        toast({
+          title: "Success",
+          description: "Message updated successfully",
+        })
+
+        return updatedMessage
+
+   
       } catch (error: any) {
-        console.error("Failed to post chat message:", error)
-
-        let errorMessage = "Failed to post chat message"
-
-        if (error instanceof Error) {
-          errorMessage = error.message
-        } else if (error.response?.data) {
-          errorMessage = error.response.data.detail || error.response.data
-        }
-
+        console.error("Failed to edit chat message:", error)
+        const errorMessage = error.response?.data?.message || error.message || "Failed to edit message"
         setError(errorMessage)
-
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId ? { ...m, isLoading: false, error: errorMessage } : m
+          )
+        )
         toast({
           title: "Error",
           description: errorMessage,
           variant: "destructive",
         })
-
         throw error
       } finally {
         setIsLoading(false)
       }
     },
-    [activeSession, createChatSession, isAuthenticated, sessions],
+    [isAuthenticated, activeSession, messages]
   )
 
   // Delete a chat session
@@ -287,11 +359,8 @@ export function ChatProvider({ children }: ChatProviderProps) {
 
       try {
         await chatAPI.deleteChatSession(sessionId)
-
-        // Update sessions list
         setSessions((prev) => prev.filter((session) => session.id !== sessionId))
 
-        // Clear active session if it was deleted
         if (activeSession === sessionId) {
           setActiveSession(null)
           setMessages([])
@@ -303,11 +372,8 @@ export function ChatProvider({ children }: ChatProviderProps) {
         })
       } catch (error) {
         console.error("Failed to delete chat session:", error)
-
         const errorMessage = error instanceof Error ? error.message : "Failed to delete chat session"
-
         setError(errorMessage)
-
         toast({
           title: "Error",
           description: errorMessage,
@@ -317,8 +383,39 @@ export function ChatProvider({ children }: ChatProviderProps) {
         setIsLoading(false)
       }
     },
-    [activeSession],
+    [activeSession]
   )
+
+  // Delete a chat by ID
+  const deleteChat = useCallback(
+    async (chatId: string) => {
+      setIsLoading(true)
+      setError(null)
+
+      try {
+        await chatAPI.deleteChat(chatId)
+        setMessages((prev) => prev.filter((msg) => msg.id !== chatId))
+
+        toast({
+          title: "Success",
+          description: "Chat deleted successfully",
+        })
+      } catch (error) {
+        console.error("Failed to delete chat:", error)
+        const errorMessage = error instanceof Error ? error.message : "Failed to delete chat"
+        setError(errorMessage)
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    []
+  )
+
 
   // Load sessions on initial mount
   useEffect(() => {
@@ -338,6 +435,8 @@ export function ChatProvider({ children }: ChatProviderProps) {
     getChatSessions,
     getChatsBySession,
     postChat,
+    editChat,
+    deleteChat,
     deleteSession,
     setActiveSession,
   }

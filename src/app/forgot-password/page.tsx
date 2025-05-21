@@ -182,13 +182,13 @@ export default function ForgotPasswordPage() {
           </Label>
 
           <div className="relative">
-            <Input
+            <input
               id="email"
               type="email"
               placeholder="Enter your email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="border border-white/15 h-11 rounded-[15px] text-white font-normal placeholder:text-[17px] !text-[16px] placeholder:text-zinc-500 pl-10"
+              className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-white pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
               disabled={isLoading}
               required
             />
@@ -233,13 +233,14 @@ export default function ForgotPasswordPage() {
 
       <form onSubmit={handleVerificationSubmit} className="space-y-4">
         <div className="space-y-2">
-          <Input
+          <input
             id="verificationCode"
             type="text"
             value={verificationCode}
             onChange={(e) => setVerificationCode(e.target.value)}
             placeholder="Enter verification code"
-            className="bg-[#262626] text-zinc-400 border-zinc-800 placeholder:text-[17px] !text-[16px] h-11 rounded-[15px] text-center"
+            className="border text-center border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-white pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
+            autoComplete="one-time-code"
             disabled={isLoading}
             maxLength={6}
             required

@@ -1,32 +1,37 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+} from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
-import Image from "next/image"
+import Image from "next/image";
 
-import { useMediaQuery } from "@/hooks/use-mobile"
-import { useRouter } from "next/navigation"
+import { useMediaQuery } from "@/hooks/use-mobile";
+import { useRouter } from "next/navigation";
 
-import google from "../../../../public/Image/Google - Original.png"
-import apple from "../../../../public/Image/Apple - Negative.png"
-import Testimonial from "@/components/testimonial"
-import { useAuth } from "@/contexts/auth-context"
-import { toast } from "@/components/ui/use-toast"
-import PPTU from "@/components/pptu"
-import Logo from "@/components/logo"
-import { Eye, EyeOff } from "lucide-react"
-import sms from "../../../../public/Image/sms.png"
-import pass from "../../../../public/Image/password-check.png"
-import user from "../../../../public/Image/password-check.png"
+// import google from "../../../../public/Image/Google - Original.png";
+// import apple from "../../../../public/Image/Apple - Negative.png";
+import Testimonial from "@/components/testimonial";
+import { useAuth } from "@/contexts/auth-context";
+import { toast } from "@/components/ui/use-toast";
+import PPTU from "@/components/pptu";
+import Logo from "@/components/logo";
+import { Eye, EyeOff } from "lucide-react";
+import sms from "../../../../public/Image/sms.png";
+import pass from "../../../../public/Image/password-check.png";
+import user from "../../../../public/Image/password-check.png";
 
-import axios from "axios"
+import axios from "axios";
 
 export default function SignUpPage() {
   const [formData, setFormData] = useState({
@@ -35,35 +40,38 @@ export default function SignUpPage() {
     first_name: "",
     last_name: "",
     password: "",
-  })
-  const [isLoading, setIsLoading] = useState(false)
-  const [termsAccepted, setTermsAccepted] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
-  const [isProviderLoading, setIsProviderLoading] = useState<"google" | "apple" | null>(null)
-  const isMobile = useMediaQuery("(max-width: 1024px)")
-  const router = useRouter()
-  const { signup } = useAuth()
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  // const [isProviderLoading, setIsProviderLoading] = useState<
+  //   "google" | "apple" | null
+  // >(null);
+  const isMobile = useMediaQuery("(max-width: 1024px)");
+  const router = useRouter();
+  const { signup } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
 
     if (!termsAccepted) {
       toast({
         title: "Terms Required",
-        description: "Please accept the Terms of Service and Privacy Policy to continue.",
+        description:
+          "Please accept the Terms of Service and Privacy Policy to continue.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     // Basic validation
-    if (!formData.email || !formData.email.includes('@')) {
+    if (!formData.email || !formData.email.includes("@")) {
       toast({
         title: "Invalid Email",
         description: "Please enter a valid email address.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     if (!formData.password || formData.password.length < 6) {
@@ -71,8 +79,8 @@ export default function SignUpPage() {
         title: "Invalid Password",
         description: "Password must be at least 6 characters long.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     if (!formData.username) {
@@ -80,54 +88,58 @@ export default function SignUpPage() {
         title: "Username Required",
         description: "Please enter a username.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
-    setIsLoading(true)
+    setIsLoading(true);
 
     try {
-      await signup(formData)
-    
+      await signup(formData);
     } catch (error) {
-      console.error(error, "Signup form submission")
+      console.error(error, "Signup form submission");
 
       if (axios.isAxiosError(error)) {
-        console.error("Response error data:", error.response?.data)
+        console.error("Response error data:", error.response?.data);
 
         // Show the exact error response data (simplified)
-        let errorDisplay = ''
-        
+        let errorDisplay = "";
+
         if (error.response?.data) {
           // For API validation errors (typically in object form with field names as keys)
-          if (typeof error.response.data === 'object') {
-            const errorData = error.response.data
-            errorDisplay = JSON.stringify(errorData)
+          if (typeof error.response.data === "object") {
+            const errorData = error.response.data;
+            errorDisplay = JSON.stringify(errorData);
           } else {
             // If it's a string, use it directly
-            errorDisplay = String(error.response.data)
+            errorDisplay = String(error.response.data);
           }
         } else {
-          errorDisplay = `Error ${error.response?.status || ''}: ${error.message}`
+          errorDisplay = `Error ${error.response?.status || ""}: ${
+            error.message
+          }`;
         }
 
         toast({
           title: "Signup failed",
           description: errorDisplay,
           variant: "destructive",
-        })
+        });
       } else {
         // Handle non-axios errors
         toast({
           title: "Signup failed",
-          description: error instanceof Error ? error.message : "An unknown error occurred",
+          description:
+            error instanceof Error
+              ? error.message
+              : "An unknown error occurred",
           variant: "destructive",
-        })
+        });
       }
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   // const handleProviderSignup = async (provider: "google" | "apple") => {
   //   if (!termsAccepted) {
@@ -165,7 +177,9 @@ export default function SignUpPage() {
         <Card className="w-full max-w-[503px] mx-auto lg:min-h-[96vh] bg-transparent border-transparent flex flex-col">
           <CardHeader className="space-y-3">
             <Logo />
-            <h2 className="text-center text-[25px] font-[500] text-white pt-[33.5px]">Sign Up to Revi.ai</h2>
+            <h2 className="text-center text-[25px] font-[500] text-white pt-[33.5px]">
+              Sign Up to Revi.ai
+            </h2>
           </CardHeader>
 
           <CardContent className="flex-grow py-4 overflow-y-auto">
@@ -201,19 +215,27 @@ export default function SignUpPage() {
                 </div>
               </div> */}
 
-              <form onSubmit={handleSubmit} className="space-y-4 pt-10">
+              <form onSubmit={handleSubmit} className="pt-10 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="first_name" className="text-zinc-400 text-[16px]">
+                    <Label
+                      htmlFor="first_name"
+                      className="text-zinc-400 text-[16px]"
+                    >
                       First Name
                     </Label>
                     <div className="relative">
-                      <Input
+                      <input
                         id="first_name"
                         placeholder="First name"
                         value={formData.first_name}
-                        onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                        className="border border-white/15 h-11 rounded-[15px] text-white !text-[16px] font-normal placeholder:text-[17px] placeholder:text-zinc-500 pl-10"
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            first_name: e.target.value,
+                          })
+                        }
+                        className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[15px] placeholder:text-[17px] placeholder:text-white pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
                         disabled={isLoading}
                         required
                       />
@@ -225,16 +247,24 @@ export default function SignUpPage() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="last_name" className="text-zinc-400 text-[16px]">
+                    <Label
+                      htmlFor="last_name"
+                      className="text-zinc-400 text-[16px]"
+                    >
                       Last Name
                     </Label>
                     <div className="relative">
-                      <Input
+                      <input
                         id="last_name"
                         placeholder="Last name"
                         value={formData.last_name}
-                        onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                        className="border border-white/15 h-11 rounded-[15px] text-white !text-[16px] font-normal placeholder:text-[17px] placeholder:text-zinc-500 pl-10"
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            last_name: e.target.value,
+                          })
+                        }
+                        className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[15px] placeholder:text-[17px] placeholder:text-white pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
                         disabled={isLoading}
                         required
                       />
@@ -248,16 +278,21 @@ export default function SignUpPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="username" className="text-zinc-400 text-[16px]">
+                  <Label
+                    htmlFor="username"
+                    className="text-zinc-400 text-[16px]"
+                  >
                     Username
                   </Label>
                   <div className="relative">
-                    <Input
+                    <input
                       id="username"
                       placeholder="Choose a username"
                       value={formData.username}
-                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                      className="border border-white/15 h-11 rounded-[15px] text-white !text-[16px] font-normal placeholder:text-[17px] placeholder:text-zinc-500 pl-10"
+                      onChange={(e) =>
+                        setFormData({ ...formData, username: e.target.value })
+                      }
+                      className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[15px] placeholder:text-[17px] placeholder:text-white pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
                       disabled={isLoading}
                       required
                     />
@@ -274,13 +309,15 @@ export default function SignUpPage() {
                     Email
                   </Label>
                   <div className="relative">
-                    <Input
+                    <input
                       id="email"
                       type="email"
                       placeholder="Enter your email"
                       value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="border border-white/15 h-11 rounded-[15px] text-white !text-[16px] font-normal placeholder:text-[17px] placeholder:text-zinc-500 pl-10"
+                      onChange={(e) =>
+                        setFormData({ ...formData, email: e.target.value })
+                      }
+                      className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[15px] placeholder:text-[17px] placeholder:text-white pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
                       disabled={isLoading}
                       required
                     />
@@ -298,13 +335,15 @@ export default function SignUpPage() {
                   </Label>
 
                   <div className="relative">
-                    <Input
+                    <input
                       id="password"
                       type={showPassword ? "text" : "password"}
                       placeholder="Enter your password"
                       value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      className="border border-white/15 h-11 rounded-[15px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-zinc-500 pl-10 pr-10"
+                      onChange={(e) =>
+                        setFormData({ ...formData, password: e.target.value })
+                      }
+                      className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[15px] placeholder:text-[17px] placeholder:text-white pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
                       disabled={isLoading}
                       required
                     />
@@ -320,7 +359,11 @@ export default function SignUpPage() {
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute transform -translate-y-1/2 right-3 top-1/2 text-zinc-400"
                     >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      {showPassword ? (
+                        <EyeOff className="w-5 h-5" />
+                      ) : (
+                        <Eye className="w-5 h-5" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -330,7 +373,9 @@ export default function SignUpPage() {
                     id="terms"
                     className="text-white border-white/15"
                     checked={termsAccepted}
-                    onCheckedChange={(checked) => setTermsAccepted(checked === true)}
+                    onCheckedChange={(checked) =>
+                      setTermsAccepted(checked === true)
+                    }
                   />
                   <Label htmlFor="terms" className="text-sm text-zinc-400">
                     I agree to the Terms of Service and Privacy Policy
@@ -360,7 +405,7 @@ export default function SignUpPage() {
               </p>
             </CardFooter>
           </CardContent>
-          
+
           <div className="mt-auto">
             <PPTU />
           </div>
@@ -373,6 +418,5 @@ export default function SignUpPage() {
         )}
       </div>
     </div>
-  )
+  );
 }
-

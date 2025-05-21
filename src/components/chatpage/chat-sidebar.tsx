@@ -1,11 +1,16 @@
 "use client"
 
-import React, { useEffect, useRef } from "react"
+import React, { useEffect, useRef, useState } from "react"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { Search, Settings, Plus, LogOut, X, Trash, MoreVertical, Pencil } from "lucide-react"
+import { Search, Plus, LogOut, X, Trash2, Pencil, PanelLeftClose, ChevronDown, ArrowDown } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { toast } from "@/components/ui/use-toast"
-import { chatAPI } from "@/lib/api"
+import { chatAPI, searchAPI } from "@/lib/api"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useAuth } from "@/contexts/auth-context"
+import { cn } from "@/lib/utils"
+import logo from "../../../public/Image/logo reviai.png"
 
 interface ChatSidebarProps {
   sidebarOpen: boolean
@@ -13,18 +18,66 @@ interface ChatSidebarProps {
   sessions: any[]
   setSessions: React.Dispatch<React.SetStateAction<any[]>>
   activeSession: string | null
-  setActiveSession: React.Dispatch<React.SetStateAction<string | null>>
+  setActiveSession: (sessionId: string | null) => void
   setMessages: React.Dispatch<React.SetStateAction<any[]>>
   isAuthenticated: boolean
   logout: () => void
   isMobile: boolean
-  showRenameDialog: boolean
   setShowRenameDialog: React.Dispatch<React.SetStateAction<boolean>>
   setSelectedSessionId: React.Dispatch<React.SetStateAction<string | null>>
   setNewTitle: React.Dispatch<React.SetStateAction<string>>
+  isLgScreen: boolean
+  isMediumScreen: boolean
+  isLoadingSessions: boolean
 }
 
-const ChatSidebar: React.FC<ChatSidebarProps> = ({
+const groupSessionsByDate = (sessions: any[]) => {
+  if (!sessions || !Array.isArray(sessions)) return {};
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  
+  const last7Days = new Date(today);
+  last7Days.setDate(last7Days.getDate() - 7);
+  
+  const last30Days = new Date(today);
+  last30Days.setDate(last30Days.getDate() - 30);
+  
+  const grouped: Record<string, any[]> = {
+    'Today': [],
+    'Yesterday': [],
+    'Previous 7 Days': [],
+    'Previous 30 Days': [],
+    'Older': []
+  };
+  
+  sessions.forEach(session => {
+    if (!session.created_at) return;
+    
+    const sessionDate = new Date(session.created_at);
+    if (sessionDate >= today) {
+      grouped['Today'].push(session);
+    } else if (sessionDate >= yesterday) {
+      grouped['Yesterday'].push(session);
+    } else if (sessionDate >= last7Days) {
+      grouped['Previous 7 Days'].push(session);
+    } else if (sessionDate >= last30Days) {
+      grouped['Previous 30 Days'].push(session);
+    } else {
+      grouped['Older'].push(session);
+    }
+  });
+  
+  // Remove empty groups
+  return Object.fromEntries(
+    Object.entries(grouped).filter(([_, items]) => items.length > 0)
+  );
+};
+
+const ChatSidebar: React.FC<ChatSidebarProps> = React.memo(({
   sidebarOpen,
   setSidebarOpen,
   sessions,
@@ -38,77 +91,68 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
   setShowRenameDialog,
   setSelectedSessionId,
   setNewTitle,
+  isLgScreen,
+  isMediumScreen,
+  isLoadingSessions,
 }) => {
-  const [isDeleting, setIsDeleting] = React.useState<string | null>(null)
-  const sidebarRef = useRef<HTMLDivElement | null>(null)
-  
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
-        setSidebarOpen(false) // Close the sidebar
-      }
-    }
+  const [collapsed, setCollapsed] = useState(false)
+  const [isDeleting, setIsDeleting] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [showSearchResults, setShowSearchResults] = useState(false)
+  const [isSearching, setIsSearching] = useState(false)
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+  const sidebarRef = useRef<HTMLDivElement>(null)
 
-    if (sidebarOpen) {
-      document.addEventListener("mousedown", handleClickOutside)
-    }
+  const { user } = useAuth()
 
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-    }
-  }, [sidebarOpen, setSidebarOpen])
+  const groupedSessions = groupSessionsByDate(sessions)
+  const groupedSearchResults = groupSessionsByDate(searchResults)
 
-  const startNewChat = () => {
-    // Clear messages
-    setMessages([])
-
-    // Clear active session
-    setActiveSession(null)
-
-    // On mobile, close the sidebar
-    if (isMobile) {
-      setSidebarOpen(false)
-    }
+  const toggleGroupExpansion = (groupName: string) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupName]: !prev[groupName]
+    }))
   }
 
-  const selectSession = (id: string) => {
-    // Set this session as active
-    setActiveSession(id)
-
-    // Close sidebar on mobile
+  const handleSessionClick = React.useCallback((sessionId: string) => {
+    setActiveSession(sessionId);
+    const newUrl = `/chats/${sessionId}`;
+    window.history.pushState({}, '', newUrl);
     if (isMobile) {
-      setSidebarOpen(false)
+      setSidebarOpen(false);
     }
-  }
+  }, [setActiveSession, setSidebarOpen, isMobile]);
 
-  const deleteChatSession = async (sessionId: string, e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent selecting the session when clicking delete
+  const handleNewChat = React.useCallback(() => {
+    setMessages([]);
+    setActiveSession(null);
+    window.history.pushState({}, '', '/');
+    if (isMobile) setSidebarOpen(false);
+  }, [setMessages, setActiveSession, isMobile, setSidebarOpen]);
 
-    if (isDeleting) return // Prevent multiple simultaneous delete operations
-
+  const deleteChatSession = async (sessionId: string) => {
+    if (isDeleting) return
     setIsDeleting(sessionId)
 
     try {
       await chatAPI.deleteChatSession(sessionId)
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId))
 
-      // Remove the session from the local state
-      setSessions((prev: any) => prev.filter((s: any) => s.id !== sessionId))
-
-      // If the active session was deleted, reset it
       if (activeSession === sessionId) {
         setActiveSession(null)
         setMessages([])
       }
 
       toast({
-        title: "Success",
-        description: "Chat session deleted successfully",
+        description: "Chat deleted successfully",
       })
-    } catch (error: any) {
-      console.error("Error deleting chat session:", error)
+    } catch (error) {
+      console.error("Failed to delete chat session:", error)
       toast({
         title: "Error",
-        description: "Failed to delete chat session",
+        description: "Failed to delete chat",
         variant: "destructive",
       })
     } finally {
@@ -122,110 +166,321 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
     setShowRenameDialog(true)
   }
 
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      setSearchResults([])
+      setShowSearchResults(false)
+      return
+    }
+    setIsSearching(true)
+    try {
+      if (!isAuthenticated) {
+        toast({
+          title: "Authentication Required",
+          description: "Please login to search chat sessions",
+          variant: "destructive",
+        })
+        return
+      }
+      const searchableSessions = Array.isArray(sessions) ? sessions : []
+      const results = await searchAPI.searchChatSessions(searchQuery, searchableSessions)
+      setSearchResults(results)
+      setShowSearchResults(true)
+    } catch (error) {
+      console.error("Search failed:", error)
+      toast({
+        title: "Error",
+        description: "Failed to perform search",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleSearch()
+    }
+  }
+
+  const clearSearch = () => {
+    setSearchQuery("")
+    setSearchResults([])
+    setShowSearchResults(false)
+  }
+
+  const handleClose = () => {
+    if (isMobile || isLgScreen || isMediumScreen) {
+      setSidebarOpen(false)
+    } else {
+      setCollapsed(!collapsed)
+    }
+  }
+
+  const displayGroups = showSearchResults ? groupedSearchResults : groupedSessions
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (sidebarRef.current && !sidebarRef.current.contains(event.target as Node) && (isMobile || isMediumScreen)) {
+        setSidebarOpen(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [isMobile, isMediumScreen, setSidebarOpen])
+
+  if ((isMobile || isLgScreen || isMediumScreen) && !sidebarOpen) {
+    return null
+  }
+
   return (
     <div
-    ref={sidebarRef}
-      className={`fixed inset-y-0 left-0 z-50 w-64 bg-card border-r border-border p-4 transition-transform lg:relative lg:translate-x-0 ${
-        sidebarOpen ? "translate-x-0" : "-translate-x-full"
-      }`}
+      className={cn(
+        "fixed inset-y-0 left-0 z-50 w-[280px] bg-[#171717] border-gray-800 flex flex-col h-full overflow-x-hidden",
+        isMobile && !sidebarOpen && "hidden",
+        isLgScreen && !sidebarOpen && "hidden",
+        isMediumScreen && !sidebarOpen && "hidden",
+      )}
+      ref={sidebarRef}
     >
-      <div className="flex items-center justify-between pb-4 border-b border-border">
-        <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)} className="lg:hidden">
-          <X className="w-5 h-5 text-muted-foreground" />
-        </Button>
-        <div className="flex gap-1">
-          <Button variant="ghost" size="icon">
-            <Search className="w-4 h-4 text-muted-foreground" />
-          </Button>
-        
-        </div>
-      </div>
-
-      <div className="py-4">
-        <Button
-          className="justify-start w-full gap-2 text-foreground bg-muted hover:bg-muted/80"
-          onClick={startNewChat}
-        >
-          <Plus className="w-4 h-4" /> New chat
-        </Button>
-      </div>
-
-      <div className="flex flex-col flex-1 overflow-auto">
-        {/* Real sessions (if you have any) */}
-        <div className="px-2 py-2">
-          <div className="px-2 py-2 text-xs font-medium text-muted-foreground">Recent Chats</div>
-
-          {sessions.length > 0 ? (
-            sessions.map((session: any) => (
-              <div
-                key={session.id}
-                className={`flex items-center justify-between px-2 py-2 text-sm rounded-md ${
-                  activeSession === session.id
-                    ? "bg-muted text-foreground font-medium"
-                    : "text-muted-foreground hover:bg-muted/50"
-                }`}
-              >
-                <span className="truncate max-w-[80%] cursor-pointer" onClick={() => selectSession(session.id)}>
-                  {session.chat_title || "Untitled Chat"}
-                </span>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="w-6 h-6 text-muted-foreground hover:text-foreground">
-                      <MoreVertical className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-40">
-                    <DropdownMenuItem
-                      onClick={() => openRenameDialog(session.id, session.chat_title)}
-                      className="cursor-pointer"
-                    >
-                      <Pencil className="w-4 h-4 mr-2" />
-                      Rename
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.preventDefault()
-                        deleteChatSession(session.id, e as any)
-                      }}
-                      className="text-red-600 cursor-pointer focus:text-red-600"
-                    >
-                      <Trash className="w-4 h-4 mr-2" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            ))
-          ) : isAuthenticated ? (
-            // Show message when authenticated but no sessions
-            <div className="px-2 py-4 text-sm text-center text-muted-foreground">
-              No chat sessions yet.
-              <br />
-              Start a new chat to begin.
-            </div>
+      {/* Top Section */}
+      <div className="flex flex-col flex-shrink-0">
+        {/* Header with logo and close button */}
+        <div className="flex items-center justify-between p-4">
+          {isMobile ? (
+            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)} className="md:hidden">
+              <X className="w-5 h-5 text-gray-300" />
+            </Button>
           ) : (
-            // Show login prompt when not authenticated
-            <div className="px-2 py-4 text-sm text-center text-muted-foreground">
-              Sign in to view and save
-              <br />
-              your chat history.
-            </div>
+            <>
+              <div>
+                <Image src={logo || "/placeholder.svg"} alt="logo" className="w-10 h-10" />
+              </div>
+              <button
+                onClick={handleClose}
+                className="transition-colors rounded-md hover:bg-gray-700"
+                aria-label="Close sidebar"
+              >
+                <PanelLeftClose className="w-8 h-8 text-gray-300" />
+              </button>
+            </>
           )}
         </div>
+
+        {/* New Chat Button */}
+        <div className="px-4 pb-4 border-gray-800">
+          <Button
+            onClick={handleNewChat}
+            className={cn(
+              "flex items-center w-[60%] rounded-md justify-start gap-2 bg-[#212121] hover:bg-[#212121] text-[#BEBEBE]",
+              collapsed && "justify-center p-2",
+            )}
+          >
+            <Plus className="w-4 h-4" />
+            {!collapsed && "New chat"}
+          </Button>
+        </div>
+
+        {/* Search Input */}
+        {!collapsed && (
+          <div className="relative w-full p-4 border-gray-800">
+            <input
+              type="text"
+              placeholder="Search chats..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="w-full py-2 pl-8 pr-8 text-sm text-gray-200 bg-[#212121] border-gray-700 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-600"
+              disabled={isSearching}
+            />
+            <Search className="absolute w-4 h-4 text-gray-400 transform -translate-y-1/2 left-6 top-1/2" />
+            {searchQuery && (
+              <button
+                onClick={clearSearch}
+                className="absolute text-gray-400 transform -translate-y-1/2 right-6 top-1/2 hover:text-gray-200"
+                disabled={isSearching}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      <div className="p-4 border-t border-border">
-        <Button
-          variant="ghost"
-          className="justify-start w-full text-muted-foreground hover:text-foreground"
-          onClick={logout}
-        >
-          <LogOut className="w-4 h-4 mr-2" /> Log out
-        </Button>
+      {/* Chat History - Scrollable area */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-[#171717]">
+        {!collapsed && (
+          <div className="px-4 py-2 text-xs font-medium text-gray-400">
+            {showSearchResults ? "Search Results" : ""}
+          </div>
+        )}
+
+        {isLoadingSessions ? (
+          // Loading skeleton - simplified version
+          <div className="px-4 space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="w-full h-10 bg-gray-700 rounded-md" />
+            ))}
+          </div>
+        ) : Object.keys(displayGroups).length > 0 ? (
+          // Grouped sessions with "See More" functionality
+          Object.entries(displayGroups).map(([groupName, groupSessions]) => {
+            const isExpanded = expandedGroups[groupName] || false
+            const sessionsToShow = isExpanded ? groupSessions : groupSessions.slice(0, 3)
+            const hasMore = groupSessions.length > 3
+
+            return (
+              <div key={groupName} className="mb-4">
+                {!collapsed && (
+                  <div className="flex items-center justify-between px-4 py-2">
+                    <span className="text-[13px] font-medium text-gray-500">
+                      {groupName}
+                    </span>
+                    {hasMore && !isExpanded && (
+                      <button
+                        onClick={() => toggleGroupExpansion(groupName)}
+                        className="text-xs text-gray-400 hover:text-gray-200"
+                      >
+                        <ChevronDown className="w-4 h-4 font-semibold" />
+                      </button>
+                    )}
+                  </div>
+                )}
+                {sessionsToShow.map((session) => (
+                  <button
+                    key={session.id}
+                    className={cn(
+                      "flex items-center justify-between mx-2 p-2 rounded-md cursor-pointer group w-full",
+                      activeSession === session.id ? "bg-[#212121] text-white" : "hover:bg-[#212121]"
+                    )}
+                    onClick={() => handleSessionClick(session.id)}
+                  >
+                    <div className="flex items-center min-w-0 text-sm">
+                      {!collapsed && (
+                        <span
+                          className={cn(
+                            "truncate",
+                            activeSession === session.id
+                              ? "text-white"
+                              : "text-[#BEBEBE] group-hover:text-white"
+                          )}
+                        >
+                          {session.chat_title || "New chat"}
+                        </span>
+                      )}
+                    </div>
+
+                    {!collapsed && (
+  <div 
+    className={cn(
+      "flex items-center space-x-1",
+      activeSession === session.id ? "flex" : "hidden group-hover:flex"
+    )}
+    onClick={(e) => e.stopPropagation()}
+  >
+    <button
+      onClick={(e) => {
+        e.stopPropagation()
+        e.preventDefault()
+        openRenameDialog(session.id, session.chat_title)
+      }}
+      className="p-1 text-gray-400 hover:text-gray-200"
+    >
+      <Pencil className="w-4 h-4" />
+    </button>
+    <button
+      onClick={(e) => {
+        e.stopPropagation()
+        e.preventDefault()
+        deleteChatSession(session.id)
+      }}
+      className="p-1 text-gray-400 hover:text-red-500"
+      disabled={isDeleting === session.id}
+    >
+      <Trash2 className="w-4 h-4" />
+    </button>
+  </div>
+)}
+                  </button>
+                ))}
+                {hasMore && isExpanded && (
+                  <div className="flex justify-center mt-1">
+                    <button
+                      onClick={() => toggleGroupExpansion(groupName)}
+                      className="flex items-center text-xs text-gray-400 hover:text-gray-200"
+                    >
+                      <ChevronDown className="w-3 h-3 mr-1 transform rotate-180" />
+                      Show less
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })
+        ) : !collapsed && (
+          <div className="px-4 py-4 text-sm text-center text-gray-400">
+            {isAuthenticated
+              ? "No chat sessions yet.\nStart a new chat to begin."
+              : "Sign in to view and save\n your chat history."}
+          </div>
+        )}
       </div>
+
+      {/* User Section - Fixed at bottom */}
+      {isAuthenticated && (
+        <div className="flex-shrink-0 p-4 border-t border-gray-800">
+          {!collapsed ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="justify-start w-full gap-2 text-gray-200 hover:bg-gray-800">
+                  <div className="flex items-center justify-center w-6 h-6 text-gray-300 bg-gray-700 rounded-full">
+                    {user?.email?.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="truncate">{user?.email}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56 bg-gray-800 border-gray-700">
+                <DropdownMenuItem onClick={logout} className="text-red-400 hover:bg-gray-700 focus:text-red-400">
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <button
+              onClick={logout}
+              className="flex justify-center w-full p-2 rounded-md hover:bg-gray-800"
+              title="Log out"
+            >
+              <LogOut className="w-5 h-5 text-gray-300" />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
-}
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.sidebarOpen === nextProps.sidebarOpen &&
+    prevProps.activeSession === nextProps.activeSession &&
+    prevProps.isAuthenticated === nextProps.isAuthenticated &&
+    prevProps.isMobile === nextProps.isMobile &&
+    prevProps.isLgScreen === nextProps.isLgScreen &&
+    prevProps.isMediumScreen === nextProps.isMediumScreen &&
+    prevProps.isLoadingSessions === nextProps.isLoadingSessions &&
+    prevProps.sessions.length === nextProps.sessions.length &&
+    prevProps.sessions.every((session, index) => 
+      session.id === nextProps.sessions[index].id && 
+      session.chat_title === nextProps.sessions[index].chat_title &&
+      session.created_at === nextProps.sessions[index].created_at
+    )
+  );
+});
+
+ChatSidebar.displayName = 'ChatSidebar';
 
 export default ChatSidebar
-

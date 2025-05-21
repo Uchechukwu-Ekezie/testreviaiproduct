@@ -4,51 +4,9 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from "
 import { useRouter } from "next/navigation"
 import api, { authAPI, userAPI, clearAuthToken, getAuthToken, setAuthToken, verifyToken } from "@/lib/api"
 import { toast } from "@/components/ui/use-toast"
-
+import type { AuthContextType, User } from "@/types/user"
 import { GoogleOAuthPayload } from "@/types/auth"
 
-// ✅ Define user type
-export interface User {
-  id?: string
-  username: string
-  email: string
-  password?: string
-  first_name: string
-  last_name: string
-  type: "user" | "admin"  // Required field with limited options
-  is_superuser?: boolean
-  is_staff?: boolean
-  is_active?: boolean
-  last_login?: string
-  date_joined?: string
-  subscription_type?: "free" | "premium" | "pro"
-  subscription_start_date?: string
-  subscription_end_date?: string
-  created_at?: string
-  updated_at?: string
-  groups?: number[]
-  user_permissions?: number[]
-  avatar?: string  // Custom field for UI purposes
-}
-
-// ✅ Define auth context type
-interface AuthContextType {
-  user: User | null
-  isAuthenticated: boolean
-  isLoading: boolean
-  login: (email: string, password: string) => Promise<boolean>
-  signup: (userData: {
-    username: string
-    email: string
-    first_name: string
-    last_name: string
-    password: string
-  }) => Promise<boolean>
-  logout: () => void
-  requestPasswordReset: (email: string) => Promise<void>
-  updateProfile: (userData: Partial<User>) => Promise<boolean>
-  loginWithGoogle: (credentialResponse: GoogleOAuthPayload) => Promise<boolean>
-}
 
 // ✅ Create auth context with default values
 const AuthContext = createContext<AuthContextType>({
@@ -61,6 +19,8 @@ const AuthContext = createContext<AuthContextType>({
   requestPasswordReset: async () => { },
   updateProfile: async () => false,
   loginWithGoogle: async () => false,
+  updateProfileImage: async () => false,
+
 })
 
 // ✅ Auth provider props
@@ -450,7 +410,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const allowedFields: Partial<User> = {
         username: userData.username,
         first_name: userData.first_name,
-        last_name: userData.last_name
+        last_name: userData.last_name,
+        avatar: userData.avatar
       }
 
       // Remove undefined fields
@@ -507,6 +468,60 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return success
   }
 
+  const updateProfileImage = async (avatarUrl: string): Promise<boolean> => {
+    setIsLoading(true);
+    let success = false;
+  
+    try {
+      console.log("Auth context: Attempting to update profile image...");
+  
+      // First, upload avatar to backend
+      const uploadedAvatarUrl = await userAPI.uploadAvatar(avatarUrl);
+  
+      console.log("Auth context: Uploaded avatar URL:", uploadedAvatarUrl);
+  
+      // Now update the profile with the new avatar URL
+      const response = await userAPI.updateProfile({ avatar: uploadedAvatarUrl });
+      console.log("Auth context: Update profile image response:", response);
+  
+      if (!response) {
+        console.error("Auth context: Updated user data is null");
+        throw new Error("Updated user data is null");
+      }
+  
+      // Update the user context state with the new avatar
+      setUser(prevUser => {
+        if (!prevUser) return null;
+        return {
+          ...prevUser,
+          avatar: uploadedAvatarUrl,
+        };
+      });
+  
+      success = true;
+      console.log("Auth context: Update profile image successful");
+    } catch (error: any) {
+      console.error("Auth context: Update profile image error details:", {
+        error,
+        response: error.response,
+        data: error.response?.data,
+        status: error.response?.status,
+      });
+  
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  
+    return success;
+  };
+  
+
+      
+
+
+
+
   // 🔹 Logout function
   const logout = () => {
     clearAuthToken()
@@ -528,6 +543,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       logout, 
       requestPasswordReset, 
       updateProfile, 
+      updateProfileImage,
+    
       loginWithGoogle 
     }}>
       {children}
