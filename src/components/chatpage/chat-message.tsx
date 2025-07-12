@@ -1,14 +1,11 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Card } from "@/components/ui/card";
-
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-
 import {
   RefreshCw,
   ThumbsUp,
@@ -22,6 +19,9 @@ import {
   Eye,
   Trash2,
   Loader2,
+  ChevronDown,
+  ChevronUp,
+  Home,
 } from "lucide-react";
 import star from "../../../public/Image/Star 1.png";
 import { chatAPI } from "@/lib/api";
@@ -40,207 +40,76 @@ import type {
 import ProgressiveMarkdownRenderer from "../progressivemarkdown";
 import { LoaderAnimation } from "../ui/loader-animation";
 
+// Simplified property parsing function
 const parsePropertyData = (message: any): Context[] => {
   try {
-    // First check if context is already an array
+    // If context is already an array, return it directly
     if (Array.isArray(message.context)) {
-      console.log("Context is already an array, returning directly");
       return message.context;
     }
 
-    // If context is a string, try to parse it
+    // If context is a string, try to parse it as JSON
     if (typeof message.context === "string" && message.context.trim()) {
       try {
-        // Get the raw string for debugging
-        console.log(
-          "Raw context string:",
-          message.context.substring(0, 200) + "..."
-        );
-
-        // Direct string replacement approach
-        let processedString = message.context
-          .replace(/None/g, "null")
-          .replace(/True/g, "true")
-          .replace(/False/g, "false")
-          .replace(/UUID\(["']?([^"')]+)["']?\)/g, '"$1"') // Fix UUID
-          .replace(/uuid\(["']?([^"')]+)["']?\)/g, '"$1"') // Fix uuid
-          .replace(/'/g, '"')
-          .replace(/"nan"/g, "null")
-          .replace(/\n/g, " ")
-          .replace(/,\s*}/g, "}")
-          .replace(/,\s*\]/g, "]");
-
-        // Ensure it's a valid JSON array
-        if (!processedString.trim().startsWith("[")) {
-          processedString = `[${processedString}]`;
-        }
-
-        console.log(
-          "Processed string:",
-          processedString.substring(0, 200) + "..."
-        );
-
-        try {
-          const parsed = JSON.parse(processedString);
-          console.log(
-            "Successfully parsed properties from message.context, found",
-            Array.isArray(parsed) ? parsed.length : 1,
-            "properties"
-          );
+        const parsed = JSON.parse(message.context);
           return Array.isArray(parsed) ? parsed : [parsed];
-        } catch (jsonError) {
-          console.error("Failed to parse with JSON.parse:", jsonError);
-
-          // Last resort - try to extract individual property objects
-          const properties: Context[] = [];
-
-          // IMPROVED: Better approach to extract multiple property objects
-          // First, ensure the string starts with [ and ends with ]
-          let contextStr = message.context.trim();
-          if (!contextStr.startsWith("[")) contextStr = "[" + contextStr;
-          if (!contextStr.endsWith("]")) contextStr = contextStr + "]";
-
-          // Split by "}, {" to get individual objects
-          const objectStrings = contextStr
-            .replace(/^\[/, "") // Remove leading [
-            .replace(/\]$/, "") // Remove trailing ]
-            .split(/},\s*{/);
-
-          console.log(
-            `Found ${objectStrings.length} potential property objects`
-          );
-
-          // Process each object string
-          objectStrings.forEach((objStr: string, index: number) => {
-            try {
-              // Add back the curly braces that were removed in the split
-              if (!objStr.startsWith("{")) objStr = "{" + objStr;
-              if (!objStr.endsWith("}")) objStr = objStr + "}";
-
-              // Clean the object string
-              let cleanedObj: string = objStr
-                .replace(/UUID\(['"]([^'"]+)['"]\)/g, '"$1"')
-                .replace(/uuid\(['"]([^'"]+)['"]\)/g, '"$1"')
-                .replace(/None/g, "null")
-                .replace(/True/g, "true")
-                .replace(/False/g, "false")
-                .replace(/'/g, '"')
-                .replace(/"nan"/g, "null")
-                .replace(/\n/g, " ");
-
-              // Ensure property names are quoted
-              cleanedObj = cleanedObj.replace(
-                /([{,]\s*)(\w+)(\s*:)/g,
-                '$1"$2"$3'
-              );
-
-              // Fix trailing commas
-              cleanedObj = cleanedObj.replace(/,\s*}/g, "}");
-
-              console.log(
-                `Processing object ${index + 1}:`,
-                cleanedObj.substring(0, 100) + "..."
-              );
-              const obj: Context = JSON.parse(cleanedObj);
-              properties.push(obj);
-              console.log(`Successfully parsed object ${index + 1}`);
-            } catch (objError: unknown) {
-              console.error(`Failed to parse object ${index + 1}:`, objError);
-            }
-          });
-
-          if (properties.length > 0) {
-            console.log(
-              `Successfully extracted ${properties.length} properties manually`
-            );
-            return properties;
-          }
-
-          // If all else fails, try a more aggressive approach - create mock properties
-          if (
-            typeof message.context === "string" &&
-            message.context.includes("title") &&
-            message.context.includes("price")
-          ) {
-            console.log("Creating mock properties from context");
-            const mockProperties = [];
-
-            // Extract all titles using regex
-            const titleMatches = message.context.match(
-              /['"]title['"]:\s*['"]([^'"]+)['"]/gi
-            );
-            const priceMatches = message.context.match(
-              /['"]price['"]:\s*['"]([^'"]+)['"]/gi
-            );
-            const addressMatches = message.context.match(
-              /['"]address['"]:\s*['"]([^'"]+)['"]/gi
-            );
-
-            // Determine how many properties we can create
-            const count = Math.max(
-              titleMatches ? titleMatches.length : 0,
-              priceMatches ? priceMatches.length : 0,
-              addressMatches ? addressMatches.length : 0
-            );
-
-            for (let i = 0; i < count; i++) {
-              // Extract values using regex
-              const titleMatch =
-                titleMatches && titleMatches[i]
-                  ? /['"]title['"]:\s*['"]([^'"]+)['"]/i.exec(titleMatches[i])
-                  : null;
-              const priceMatch =
-                priceMatches && priceMatches[i]
-                  ? /['"]price['"]:\s*['"]([^'"]+)['"]/i.exec(priceMatches[i])
-                  : null;
-              const addressMatch =
-                addressMatches && addressMatches[i]
-                  ? /['"]address['"]:\s*['"]([^'"]+)['"]/i.exec(
-                      addressMatches[i]
-                    )
-                  : null;
-
-              const title = titleMatch ? titleMatch[1] : `Property ${i + 1}`;
-              const price = priceMatch ? priceMatch[1] : "Price on request";
-              const address = addressMatch
-                ? addressMatch[1]
-                : "Address not available";
-
-              // Create a mock property with the extracted data
-              const mockProperty = {
-                id: `mock-${Date.now()}-${i}`,
-                title: title,
-                price: price,
-                address: address,
-                status: "for_rent",
-                description: "Property details could not be fully parsed",
-              };
-
-              mockProperties.push(mockProperty);
-            }
-
-            if (mockProperties.length > 0) {
-              console.log(`Created ${mockProperties.length} mock properties`);
-              return mockProperties;
-            }
-          }
-        }
-      } catch (contextError) {
-        console.error("Failed to parse message.context:", contextError);
+      } catch (error) {
+        console.error("Failed to parse property context:", error);
+        return [];
       }
     }
 
-    // If we get here, we couldn't parse the property data
-    console.error("Could not parse property data from context");
     return [];
-  } catch (e) {
-    console.error("Error in parsePropertyData:", e);
+  } catch (error) {
+    console.error("Error in parsePropertyData:", error);
     return [];
   }
 };
 
-const toProperty = (property: any) => {
-  return property;
+// Optimized property validation
+const validateProperty = (property: any): boolean => {
+  return (
+    property &&
+    typeof property === "object" &&
+    (property.title || property.address || property.price || property.id)
+  );
+};
+
+// Clean property formatter
+const formatProperty = (property: any): Context => {
+  return {
+    id:
+      property.id ||
+      `property-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    title: property.title || "Property Listing",
+    description: property.description || property.ai_refined_description || "",
+    ai_refined_description: property.ai_refined_description || "",
+    price: property.price || "Price on request",
+    address: property.address || "Address not available",
+    location:
+      property.coordinate || property.address || "Location not available", // Add required location property
+    property_type: property.property_type || "Property",
+    status: property.status || "available",
+    visibility_status: property.visibility_status || "visible",
+    bedrooms: property.bedrooms || null,
+    bathrooms: property.bathrooms || null,
+    size: property.size || null,
+    listed_by: property.listed_by || null,
+    year_built: property.year_built || "",
+    lot_size: property.lot_size || "",
+    square_footage: property.square_footage || "",
+    state: property.state || "",
+    city: property.city || "",
+    zip_code: property.zip_code || "",
+    image_url: property.image_url || "",
+    coordinate: property.coordinate || "",
+    environmental_report: property.environmental_report || {},
+    environmental_score: property.environmental_score || null,
+    neighborhood_score: property.neighborhood_score || null,
+    rental_grade: property.rental_grade || null,
+    phone: property.phone || "",
+    created_by: property.created_by || "",
+  };
 };
 
 const ThinkingAnimation = () => {
@@ -304,11 +173,138 @@ const ThinkingAnimation = () => {
   );
 };
 
+const getChatsBySessionWithRetry = async (
+  sessionId: string,
+  maxRetries = 3
+) => {
+  let retries = 0;
+
+  while (retries < maxRetries) {
+    try {
+      const response = await chatAPI.getChatsBySession(sessionId);
+      return response;
+    } catch (error: any) {
+      retries++;
+      console.error(
+        `Attempt ${retries} failed for session ${sessionId}:`,
+        error
+      );
+
+      if (error.response?.status === 404) {
+        console.error(`Session ${sessionId} not found (404)`);
+        throw error;
+      }
+
+      if (retries >= maxRetries) {
+        console.error(
+          `Max retries (${maxRetries}) reached for session ${sessionId}`
+        );
+        throw error;
+      }
+
+      const delay = 1000 * Math.pow(2, retries - 1);
+      console.log(`Waiting ${delay}ms before retry...`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+};
+
+// Property Card Component - Moved outside to prevent re-renders
+const PropertyCard = React.memo(({ property }: { property: Context }) => (
+  <div className="p-4 rounded-lg property-card">
+    <div className="w-full gap-4 md:flex-row ml-[-10px]">
+      {/* Property Image */}
+      <div className="relative md:h-[200px] h-[150px] w-full">
+        <div className="absolute top-0 left-0 w-[320px] md:w-[411px] h-[150px] md:h-[200px] bg-gradient-to-b from-[#1e1e1e] to-[#2a2a2a] rounded-t-[15px]">
+          <Image
+            src={
+              property.image_url ||
+              property.property_url ||
+              "https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg?auto=compress&cs=tinysrgb&dpr=1&w=500"
+            }
+            alt={property.property_type || "Property Image"}
+            fill
+            className="object-cover rounded-t-[15px]"
+            unoptimized
+          />
+
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+
+          {/* Status badge */}
+          {property.status && (
+            <div className="absolute px-3 py-1 rounded-full top-3 right-3 bg-gradient-to-r from-emerald-500 to-teal-500 backdrop-blur-sm">
+              <span className="text-xs font-bold tracking-wide text-white capitalize">
+                {property.status}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Property Details */}
+      <div className="p-4 bg-[#262626] mt-4 rounded-b-[15px] md:w-[411px] w-[320px]">
+        <h3 className="font-semibold md:text-lg text-[13px]">
+          {property.title}
+        </h3>
+        <div className="flex items-center mt-1 text-sm text-[#CCCCCC]">
+          <MapPin className="w-4 h-4 mr-1" />
+          <span className="text-[13px]">{property.address}</span>
+        </div>
+
+        <div className="mt-3">
+          <span className="text-[16px] font-bold">{property.price}</span>
+        </div>
+
+        {/* Action Buttons */}
+        {/* <div className="flex items-center justify-between mt-4 space-x-2">
+          <button className="flex-1 px-4 py-2 text-sm text-[#CBCBCB] bg-[#434343] rounded-[15px] flex items-center justify-center gap-2 hover:bg-[#555555] transition-colors">
+            <Eye className="w-4 h-4" />
+            <span>View</span>
+          </button>
+          <button className="flex-1 px-4 py-2 text-sm text-[#CBCBCB] bg-[#434343] rounded-[15px] flex items-center justify-center gap-2 hover:bg-[#555555] transition-colors">
+            <Heart className="w-4 h-4" />
+            <span>Save</span>
+          </button>
+          <button className="flex-1 px-4 py-2 text-sm text-[#CBCBCB] bg-[#434343] rounded-[15px] flex items-center justify-center gap-2 hover:bg-[#555555] transition-colors">
+            <Phone className="w-4 h-4" />
+            <span>Contact</span>
+          </button>
+        </div> */}
+      </div>
+
+      {/* Description */}
+      <div className="mt-5 mb-2 md:w-[415px]">
+        <p className="text-[15px] text-[#CCCCCC]">
+          Would you like to see the rental details or connect with the landlord?
+        </p>
+      </div>
+
+      {/* Property Actions */}
+      <PropertyActions
+        location={property.coordinate || property.address}
+        property={property}
+        description={property.ai_refined_description}
+        status={property.status}
+        year_built={property.year_built}
+        lot_size={property.lot_size}
+        square_footage={property.square_footage}
+        state={property.state}
+        city={property.city}
+        zip_code={property.zip_code}
+        phone={property.phone}
+        created_by={property.created_by}
+        rental_grade={property.rental_grade}
+      />
+    </div>
+  </div>
+));
+
+PropertyCard.displayName = "PropertyCard";
+
 const ChatMessages: React.FC<ChatMessagesProps> = ({
-  messages,
+  messages: messagesProp,
   isLoading,
   setIsLoading,
-  isSessionLoading = false,
   latestMessageId,
   setLatestMessageId,
   messagesEndRef,
@@ -322,9 +318,11 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
   user,
   setMessages,
   refreshSessions,
-  sidebarCollapsed = false, // Default value if not provided
-  sidebarOpen = false, // Default value if not provided
+  sidebarCollapsed = false,
+  sidebarOpen = false,
 }) => {
+  const messages = Array.isArray(messagesProp) ? messagesProp : [];
+
   const router = useRouter();
   const pathname = usePathname();
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -341,126 +339,238 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     Record<string, "up" | "down" | null>
   >({});
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
-  // Add state to cache parsed property data
+
+  // Add ref to track if submission is in progress
+  const submissionInProgress = useRef(false);
+
+  // Simplified state management
   const [parsedPropertyData, setParsedPropertyData] = useState<
     Record<string, Context[]>
   >({});
-  // Add state to track parsing errors
-  const [parsingErrors, setParsingErrors] = useState<Record<string, string>>(
-    {}
-  );
-  // Add state to track property loading status
-  const [propertyLoading, setPropertyLoading] = useState<
+  const [expandedProperties, setExpandedProperties] = useState<
     Record<string, boolean>
   >({});
   const [textAnimationCompleted, setTextAnimationCompleted] = useState<
     Record<string, boolean>
   >({});
 
-  // Handle URL changes when session changes
-  useEffect(() => {
-    if (activeSession && pathname !== `/chats/${activeSession}`) {
-      router.replace(`/chats/${activeSession}/`, {});
-    }
-  }, [activeSession, router, pathname]);
+  // Navigation state
+  const [shouldMoveUp, setShouldMoveUp] = useState(false);
+  const previousMessagesLength = useRef(0);
+  const lastPromptRef = useRef<HTMLDivElement | null>(null);
 
-  // Update the useEffect for property parsing
+  // Session loading state
+  const [sessionLoadingState, setSessionLoadingState] = useState({
+    isLoading: false,
+    currentSessionId: null as string | null,
+    lastLoadedSessionId: null as string | null,
+  });
+
+  // Toggle function for property expansion - memoized to prevent re-renders
+  const togglePropertyExpansion = useCallback((messageId: string) => {
+    setExpandedProperties((prev) => ({
+      ...prev,
+      [messageId]: !prev[messageId],
+    }));
+  }, []);
+
+  // Optimized property parsing effect
   useEffect(() => {
-    const parseProperties = async () => {
-      const newMessages = messages.filter(
+    const parseProperties = () => {
+      const propertyMessages = messages.filter(
         (message) =>
-          message.classification === "Property Search" &&
-          message.response &&
+          message?.classification === "Property Search" &&
+          message?.response &&
           !parsedPropertyData[message.id]
       );
 
-      if (newMessages.length === 0) return;
+      if (propertyMessages.length === 0) return;
 
-      for (const message of newMessages) {
+      const newParsedData: Record<string, Context[]> = {};
+
+      propertyMessages.forEach((message) => {
         try {
-          // Set loading state for this message's properties
-          setPropertyLoading((prev) => ({ ...prev, [message.id]: true }));
+          const rawProperties = parsePropertyData(message);
+          const validProperties = rawProperties
+            .filter(validateProperty)
+            .map(formatProperty);
 
-          // Parse the property data immediately
-          const propertyData = parsePropertyData(message);
-
-          // Update the parsed data state
-          if (propertyData.length > 0) {
-            setParsedPropertyData((prev) => ({
-              ...prev,
-              [message.id]: propertyData,
-            }));
-
-            // Clear any previous parsing errors
-            setParsingErrors((prev) => {
-              const newErrors = { ...prev };
-              delete newErrors[message.id];
-              return newErrors;
-            });
-          } else {
-            setParsingErrors((prev) => ({
-              ...prev,
-              [message.id]: "No properties found in the data",
-            }));
+          if (validProperties.length > 0) {
+            newParsedData[message.id] = validProperties;
           }
         } catch (error) {
-          console.error("Error parsing property data:", error);
-          setParsingErrors((prev) => ({
-            ...prev,
-            [message.id]:
-              error instanceof Error ? error.message : "Unknown parsing error",
-          }));
-        } finally {
-          setPropertyLoading((prev) => ({ ...prev, [message.id]: false }));
+          console.error(
+            `Error parsing properties for message ${message.id}:`,
+            error
+          );
         }
+      });
+
+      if (Object.keys(newParsedData).length > 0) {
+        setParsedPropertyData((prev) => ({ ...prev, ...newParsedData }));
       }
     };
 
     parseProperties();
+  }, [messages, parsedPropertyData]);
+
+  // Session loading logic
+  useEffect(() => {
+    const loadSessionFromUrl = async () => {
+      const path = pathname || "";
+      const pathSegments = path.split("/");
+      const sessionIdFromUrl = pathSegments[2];
+
+      if (!sessionIdFromUrl || sessionIdFromUrl === "new") {
+        if (activeSession !== null) {
+          setActiveSession(null);
+        }
+        if (messages.length > 0) {
+          setMessages([]);
+        }
+        setSessionLoadingState((prev) => ({
+              ...prev,
+          isLoading: false,
+          currentSessionId: null,
+        }));
+        return;
+      }
+
+      if (
+        sessionIdFromUrl === sessionLoadingState.currentSessionId ||
+        sessionIdFromUrl === sessionLoadingState.lastLoadedSessionId ||
+        sessionLoadingState.isLoading
+      ) {
+        return;
+      }
+
+      if (sessionIdFromUrl === activeSession && messages.length > 0) {
+        setSessionLoadingState((prev) => ({
+            ...prev,
+          lastLoadedSessionId: sessionIdFromUrl,
+        }));
+        return;
+      }
+
+      try {
+        setSessionLoadingState({
+          isLoading: true,
+          currentSessionId: sessionIdFromUrl,
+          lastLoadedSessionId: null,
+        });
+
+        if (activeSession !== sessionIdFromUrl) {
+          setActiveSession(sessionIdFromUrl);
+        }
+
+        const chats = await getChatsBySessionWithRetry(sessionIdFromUrl);
+        setMessages(chats || []);
+
+        setSessionLoadingState({
+          isLoading: false,
+          currentSessionId: null,
+          lastLoadedSessionId: sessionIdFromUrl,
+        });
+      } catch (error: any) {
+        console.error("Failed to load session:", sessionIdFromUrl, error);
+
+        setSessionLoadingState({
+          isLoading: false,
+          currentSessionId: null,
+          lastLoadedSessionId: null,
+        });
+
+        if (error.response?.status === 404) {
+          router.replace("/chats/new/");
+          toast({
+            title: "Session not found",
+            description:
+              "The chat session could not be found. Starting a new chat.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Failed to load chat",
+            description:
+              "There was an error loading your chat session. Please try again.",
+            variant: "destructive",
+          });
+        }
+      }
+    };
+
+    loadSessionFromUrl();
+  }, [pathname]);
+
+  // Message tracking
+  useEffect(() => {
+    const currentLength = messages.length;
+
+    if (currentLength > previousMessagesLength.current) {
+      const latestMessage = messages[messages.length - 1];
+      if (latestMessage?.prompt && !latestMessage.response) {
+        setShouldMoveUp(true);
+
+        setTimeout(() => {
+          if (lastPromptRef.current) {
+            lastPromptRef.current.scrollIntoView({
+              behavior: "smooth",
+              block: "center",
+            });
+          }
+        }, 100);
+      }
+    }
+
+    previousMessagesLength.current = currentLength;
   }, [messages]);
 
-  // const handleLoadProperties = async (messageId: string) => {
-  //   const message = messages.find(m => m.id === messageId);
-  //   if (!message) return;
+  // Reset shouldMoveUp when response comes in
+  useEffect(() => {
+    if (messages.length > 0) {
+      const latestMessage = messages[messages.length - 1];
+      if (latestMessage?.response && shouldMoveUp) {
+        setShouldMoveUp(false);
+      }
+    }
+  }, [messages, shouldMoveUp]);
 
-  //   setPropertyLoading((prev) => ({ ...prev, [messageId]: true }));
-
-  //   try {
-  //     const propertyData = parsePropertyData(message);
-  //     if (propertyData.length > 0) {
-  //       setParsedPropertyData((prev) => ({
-  //         ...prev,
-  //         [messageId]: propertyData,
-  //       }));
-  //       setParsingErrors((prev) => {
-  //         const newErrors = { ...prev };
-  //         delete newErrors[messageId];
-  //         return newErrors;
-  //       });
-  //     } else {
-  //       setParsingErrors((prev) => ({
-  //         ...prev,
-  //         [messageId]: 'No properties found in the data',
-  //       }));
-  //     }
-  //   } catch (error) {
-  //     console.error('Error parsing property data:', error);
-  //     setParsingErrors((prev) => ({
-  //       ...prev,
-  //       [messageId]: error instanceof Error ? error.message : 'Unknown parsing error',
-  //     }));
-  //   } finally {
-  //     setPropertyLoading((prev) => ({ ...prev, [messageId]: false }));
-  //   }
-  // };
-
-  // Function to scroll to bottom
+  // Scroll functions
   const scrollToBottom = useCallback(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop =
         chatContainerRef.current.scrollHeight;
     }
   }, []);
+
+  // Auto-scroll effects
+  useEffect(() => {
+    const messagesArray = Array.isArray(messages) ? messages : [];
+
+    if (
+      activeSession &&
+      messagesArray.length > 0 &&
+      !sessionLoadingState.isLoading
+    ) {
+      const timer = setTimeout(() => {
+        scrollToBottom();
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
+  }, [activeSession, scrollToBottom, sessionLoadingState.isLoading, messages]);
+
+  useEffect(() => {
+    const messagesArray = Array.isArray(messages) ? messages : [];
+
+    if (messagesArray.length > 0 && !sessionLoadingState.isLoading) {
+      const timer = setTimeout(() => {
+        scrollToBottom();
+      }, 200);
+
+      return () => clearTimeout(timer);
+    }
+  }, [messages, sessionLoadingState.isLoading, scrollToBottom]);
 
   useEffect(() => {
     const container = chatContainerRef.current;
@@ -471,25 +581,21 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
       const distanceFromBottom =
         container.scrollHeight - container.scrollTop - container.clientHeight;
 
-      if (distanceFromBottom > threshold) {
-        setIsAutoScrollEnabled(false);
-      } else {
-        setIsAutoScrollEnabled(true);
-      }
+      setIsAutoScrollEnabled(distanceFromBottom <= threshold);
     };
 
     container.addEventListener("scroll", handleScroll);
     return () => container.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Scroll when messages change or loading state changes
   useEffect(() => {
-    if (!isAutoScrollEnabled || !chatContainerRef.current) return;
+    if (!isAutoScrollEnabled || !chatContainerRef.current || shouldMoveUp)
+      return;
 
     const isUserAtBottom =
       chatContainerRef.current.scrollTop +
         chatContainerRef.current.clientHeight >=
-      chatContainerRef.current.scrollHeight - 50; // Adjust threshold as needed
+      chatContainerRef.current.scrollHeight - 50;
 
     const timer = setTimeout(() => {
       if (isUserAtBottom) {
@@ -504,11 +610,12 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     scrollToBottom,
     isAutoScrollEnabled,
     parsedPropertyData,
+    shouldMoveUp,
   ]);
 
   // Handle text updates during animation
   const handleTextUpdate = useCallback(() => {
-    if (!chatContainerRef.current) return;
+    if (!chatContainerRef.current || shouldMoveUp) return;
     const isUserAtBottom =
       chatContainerRef.current.scrollTop +
         chatContainerRef.current.clientHeight >=
@@ -519,15 +626,18 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         scrollToBottom();
       }
     }, 100);
-  }, [scrollToBottom, isAutoScrollEnabled]);
+  }, [scrollToBottom, isAutoScrollEnabled, shouldMoveUp]);
 
+  // Message handlers
   const handleResendMessage = async (
     messageId: string,
     newPrompt: string,
     sessionId: string
   ) => {
     try {
-      const originalMessage = messages.find((m) => m.id === messageId);
+      const messagesArray = Array.isArray(messages) ? messages : [];
+      const originalMessage = messagesArray.find((m) => m?.id === messageId);
+
       if (!originalMessage) {
         console.error("Original message not found with ID:", messageId);
         return;
@@ -541,16 +651,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         throw new Error("Prompt and session ID are required");
       }
 
-      const requestData = {
-        prompt: newPrompt,
-        session: sessionId,
-      };
-
-      const response = await chatAPI.editChat(
-        messageId,
-        requestData.prompt,
-        requestData.session
-      );
+      const response = await chatAPI.editChat(messageId, newPrompt, sessionId);
 
       toast({
         title: "Message updated",
@@ -563,7 +664,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         )
       );
 
-      // Clear cached property data for this message to force re-parsing
       setParsedPropertyData((prev) => {
         const newData = { ...prev };
         delete newData[messageId];
@@ -606,7 +706,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         )
       );
 
-      // Clear cached property data for this message to force re-parsing
       setParsedPropertyData((prev) => {
         const newData = { ...prev };
         delete newData[message.id];
@@ -629,8 +728,12 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
       );
 
       toast({
-        title: "Error",
-        description: error.response?.data?.message || "Failed to retry message",
+        title: "Just a moment!",
+        description: error.response?.data?.error?.includes(
+          "Service Not Available"
+        )
+          ? "We're experiencing high demand right now. Please give us about 10 minutes and try again. Thanks for your patience! 🙏"
+          : error.response?.data?.message || "Failed to retry message",
         variant: "destructive",
       });
     } finally {
@@ -678,14 +781,17 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
   };
 
   const handleCardSubmit = async (card: ActionCard) => {
-    if (isLoading || cardLoading) return;
+    // Prevent duplicate submissions
+    if (isLoading || cardLoading || submissionInProgress.current) return;
 
+    submissionInProgress.current = true;
     setCardLoading(card.title);
 
     if (card.title === "Tell your story") {
       setShowTellYourStory(true);
       setTimeout(() => {
         setCardLoading(null);
+        submissionInProgress.current = false;
       }, 500);
       return;
     }
@@ -694,6 +800,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
       setShowLandlordVerification(true);
       setTimeout(() => {
         setCardLoading(null);
+        submissionInProgress.current = false;
       }, 500);
       return;
     }
@@ -703,35 +810,62 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         await handleCardClick(card);
       } catch (error: any) {
         console.error("Error in handleCardClick:", error);
+
+        // Check for specific error messages
+        const errorMessage = error.response?.data?.error || error.message || "";
+        let userFriendlyMessage =
+          "The server encountered an error. Please try again later.";
+
+        if (
+          errorMessage.includes("Service Not Available") ||
+          errorMessage.includes("temporarily busy")
+        ) {
+          userFriendlyMessage =
+            "We're experiencing high demand right now. Please give us about 10 minutes and try again. Thanks for your patience! 🙏";
+        }
+
         toast({
-          title: "Error",
-          description:
-            "The server encountered an error. Please try again later.",
+          title: "Just a moment!",
+          description: userFriendlyMessage,
           variant: "destructive",
         });
       } finally {
         setTimeout(() => {
           setCardLoading(null);
+          submissionInProgress.current = false;
         }, 500);
       }
       return;
     }
 
-    setIsLoading(true);
     const messageText = card.message;
 
+    // Enhanced duplicate prevention - check both messages and recent submissions
     const isDuplicate = messages.some(
       (msg) =>
         msg.prompt === messageText &&
-        (!msg.response || msg.response === "") &&
-        msg.session === activeSession
+        (msg.session === activeSession || !activeSession) &&
+        (Date.now() - new Date((msg as any).created_at || 0).getTime() < 5000) // Within last 5 seconds
     );
 
-    if (!isDuplicate) {
-      const tempId = `temp-${Date.now()}`;
-      const userMessage = { id: tempId, prompt: messageText, response: "" };
-      setMessages((prev) => [...prev, userMessage]);
+    if (isDuplicate) {
+      setCardLoading(null);
+      submissionInProgress.current = false;
+      return;
     }
+
+    setIsLoading(true);
+
+    // Add temporary message immediately to prevent duplicates
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const userMessage = { 
+      id: tempId, 
+      prompt: messageText, 
+      response: "",
+      created_at: new Date().toISOString(),
+      session: activeSession 
+    };
+    setMessages((prev) => [...prev, userMessage]);
 
     try {
       let data;
@@ -754,7 +888,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         const sessionResponse = await chatAPI.createChatSession(sessionData);
         currentSessionId = sessionResponse.id;
 
-        // Update URL with the new session ID
         router.push(`/chats/${currentSessionId}/`, undefined);
         setActiveSession(currentSessionId);
 
@@ -807,8 +940,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
           }
         }
       });
-
-      setTimeout(scrollToBottom, 100);
     } catch (error: any) {
       console.error("Error submitting card message:", error);
       setMessages((prev) =>
@@ -818,420 +949,136 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
             : msg
         )
       );
+
+      // Check for specific error messages
+      const errorMessage = error.response?.data?.error || error.message || "";
+      let userFriendlyMessage =
+        "The server encountered an error. Please try again later.";
+
+      if (
+        errorMessage.includes("Service Not Available") ||
+        errorMessage.includes("temporarily busy")
+      ) {
+        userFriendlyMessage =
+          "We're experiencing high demand right now. Please give us about 10 minutes and try again. Thanks for your patience! 🙏";
+      }
+
       toast({
-        title: "Error",
-        description: "The server encountered an error. Please try again later.",
+        title: "Just a moment!",
+        description: userFriendlyMessage,
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
       setCardLoading(null);
+      submissionInProgress.current = false;
     }
   };
 
   useEffect(() => {
     if (editingMessageId) {
-      const message = messages.find((m) => m.id === editingMessageId);
+      const messagesArray = Array.isArray(messages) ? messages : [];
+      const message = messagesArray.find((m) => m?.id === editingMessageId);
+
       if (message) {
         setEditedPrompt(message.prompt || "");
       }
     }
   }, [editingMessageId, messages]);
 
-  // Update the renderPropertyData function
-  const renderPropertyData = (message: any) => {
-    try {
-      // Check if properties are loading
-      if (propertyLoading[message.id]) {
-        return (
-          <div className="py-8 text-center">
-            <div className="flex flex-col items-center justify-center">
-              <Loader2 className="w-8 h-8 mb-2 animate-spin text-primary" />
-              <p className="text-sm text-muted-foreground">
-                Loading properties...
-              </p>
-            </div>
-          </div>
-        );
-      }
-
-      // Use cached property data if available
-      const context: Context[] = parsedPropertyData[message.id] || [];
-
-      // If no cached data, try to parse it now and show loading state
-      if (context.length === 0 && !parsingErrors[message.id]) {
-        // Set loading state
-        setPropertyLoading((prev) => ({ ...prev, [message.id]: true }));
-
-        // Parse in the next tick to allow loading state to render
-        setTimeout(() => {
-          try {
-            const newContext = parsePropertyData(message);
-
-            // Update state with parsed data
-            if (newContext.length > 0) {
-              setParsedPropertyData((prev) => ({
-                ...prev,
-                [message.id]: newContext,
-              }));
-
-              // Clear any errors
-              setParsingErrors((prev) => {
-                const newErrors = { ...prev };
-                delete newErrors[message.id];
-                return newErrors;
-              });
-            } else {
-              setParsingErrors((prev) => ({
-                ...prev,
-                [message.id]: "No properties found in the data",
-              }));
-            }
-          } catch (error) {
-            console.error("Error parsing property data:", error);
-            setParsingErrors((prev) => ({
-              ...prev,
-              [message.id]:
-                error instanceof Error
-                  ? error.message
-                  : "Unknown parsing error",
-            }));
-          } finally {
-            // Clear loading state
-            setPropertyLoading((prev) => ({ ...prev, [message.id]: false }));
-          }
-        }, 0);
-
-        // Return loading indicator while panrsing
-        return (
-          <div className="py-8 text-center">
-            <div className="flex flex-col items-center justify-center">
-              <Loader2 className="w-8 h-8 mb-2 animate-spin text-primary" />
-              <p className="text-sm text-muted-foreground">
-                Loading properties...
-              </p>
-            </div>
-          </div>
-        );
-      }
-
-      // If we have parsing errors, show error message
-      if (parsingErrors[message.id]) {
-        return (
-          <div className="py-4 text-center text-red-400">
-            <p>Unable to parse property data</p>
-            <p className="mt-2 text-sm">
-              {parsingErrors[message.id] ||
-                "Please check the format of your data"}
-            </p>
-            <details className="p-2 mt-4 text-xs text-left bg-gray-800 rounded">
-              <summary>Debug Info</summary>
-              <pre className="whitespace-pre-wrap overflow-auto max-h-[200px]">
-                {typeof message.context === "string"
-                  ? message.context.substring(0, 500) +
-                    (message.context.length > 500 ? "..." : "")
-                  : JSON.stringify(message.context, null, 2)}
-              </pre>
-            </details>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-4"
-              onClick={() => {
-                // Force a re-parse of the property data
-                setPropertyLoading((prev) => ({ ...prev, [message.id]: true }));
-
-                setTimeout(() => {
-                  try {
-                    const newContext = parsePropertyData(message);
-                    if (newContext.length > 0) {
-                      setParsedPropertyData((prev) => ({
-                        ...prev,
-                        [message.id]: newContext,
-                      }));
-                      // Clear error
-                      setParsingErrors((prev) => {
-                        const newErrors = { ...prev };
-                        delete newErrors[message.id];
-                        return newErrors;
-                      });
-
-                      toast({
-                        title: "Success",
-                        description: `Found ${newContext.length} properties`,
-                      });
-                    } else {
-                      setParsingErrors((prev) => ({
-                        ...prev,
-                        [message.id]: "No properties found in the data",
-                      }));
-
-                      toast({
-                        title: "Warning",
-                        description: "No properties found in the data",
-                        variant: "destructive",
-                      });
-                    }
-                  } catch (error) {
-                    setParsingErrors((prev) => ({
-                      ...prev,
-                      [message.id]:
-                        error instanceof Error
-                          ? error.message
-                          : "Unknown parsing error",
-                    }));
-
-                    toast({
-                      title: "Error",
-                      description: "Could not parse property data",
-                      variant: "destructive",
-                    });
-                  } finally {
-                    setPropertyLoading((prev) => ({
-                      ...prev,
-                      [message.id]: false,
-                    }));
-                  }
-                }, 0);
-              }}
-            >
-              Retry Loading Properties
-            </Button>
-          </div>
-        );
-      }
-
-      // If we still have no properties, show an error
-      if (context.length === 0) {
-        return (
-          <div className="py-4 text-center text-red-400">
-            <p>No properties found</p>
-            <p className="mt-2 text-sm">Please check the format of your data</p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-4"
-              onClick={() => {
-                // Force a re-parse of the property data
-                setPropertyLoading((prev) => ({ ...prev, [message.id]: true }));
-
-                setTimeout(() => {
-                  try {
-                    const newContext = parsePropertyData(message);
-                    if (newContext.length > 0) {
-                      setParsedPropertyData((prev) => ({
-                        ...prev,
-                        [message.id]: newContext,
-                      }));
-
-                      toast({
-                        title: "Success",
-                        description: `Found ${newContext.length} properties`,
-                      });
-                    } else {
-                      setParsingErrors((prev) => ({
-                        ...prev,
-                        [message.id]: "No properties found in the data",
-                      }));
-
-                      toast({
-                        title: "Warning",
-                        description: "No properties found in the data",
-                        variant: "destructive",
-                      });
-                    }
-                  } catch (error) {
-                    setParsingErrors((prev) => ({
-                      ...prev,
-                      [message.id]:
-                        error instanceof Error
-                          ? error.message
-                          : "Unknown parsing error",
-                    }));
-
-                    toast({
-                      title: "Error",
-                      description: "Could not parse property data",
-                      variant: "destructive",
-                    });
-                  } finally {
-                    setPropertyLoading((prev) => ({
-                      ...prev,
-                      [message.id]: false,
-                    }));
-                  }
-                }, 0);
-              }}
-            >
-              Retry Loading Properties
-            </Button>
-          </div>
-        );
-      }
+  // Optimized property rendering with stable references
+  const renderPropertyData = useCallback(
+    (message: any) => {
+      const properties = parsedPropertyData[message.id] || [];
 
       // Filter available properties
-      const availableProperties = context.filter(
+      const availableProperties = properties.filter(
         (prop) =>
-          prop && (prop.status === "for_rent" || prop.status === "for_sale")
+          prop &&
+          (prop.status === "for_rent" ||
+            prop.status === "for_sale" ||
+            prop.status === "available")
       );
 
-      if (availableProperties.length > 0) {
+      if (availableProperties.length === 0) {
+        return null;
+      }
+
+      const isExpanded = expandedProperties[message.id] || false;
+
         return (
-          <div className="my-4 space-y-4">
+        <div className="my-4 space-y-4">
+          {/* Toggle Button */}
+          <div className="flex items-center justify-between">
             <h3 className="text-[16px] font-semibold text-[#CCCCCC]">
-              Available Properties ({availableProperties.length})
+              Found {availableProperties.length} Available Properties
             </h3>
-            {availableProperties.map((property, index) => (
-              <div key={index} className="p-4 rounded-lg property-card">
-                <div className="w-full gap-4 md:flex-row ml-[-30px]">
-                  <div className="relative  md:h-[200px] h-[150px] w-full">
+            <Button
+              onClick={() => togglePropertyExpansion(message.id)}
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2 border-[#434343] bg-[#262626] text-[#CBCBCB] hover:bg-[#434343] transition-colors"
+            >
+              <Home className="w-4 h-4" />
+              <span>{isExpanded ? "Hide Properties" : "See Properties"}</span>
+              {isExpanded ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </Button>
+          </div>
+
+          {/* Property Display */}
+          <AnimatePresence mode="wait">
+            {isExpanded && (
                     <motion.div
-                      initial={{ scale: 0.95 }}
-                      animate={{ scale: 1 }}
-                      transition={{ duration: 0.2 }}
-                      className="absolute top-0 left-0 w-[320px] md:w-[411px] h-[150px] md:h-[200px] bg-gradient-to-b from-[#1e1e1e] to-[#2a2a2a] rounded-t-[15px]"
-                    >
-                      <Image
-                        src={
-                          property.image_url ||
-                          "https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg?auto=compress&cs=tinysrgb&dpr=1&w=500"
-                        }
-                        alt={property.property_type || "Property Image"}
-                        fill
-                        className="object-cover rounded-t-[15px]"
-                        unoptimized
-                      />
-                    </motion.div>
-                  </div>
-
-                  <div className="p-4 bg-[#262626] mt-4 rounded-b-[15px] md:w-[411px] w-[320px]">
-                    <h3 className="font-semibold md:text-lg text-[13px]">
-                      {property.title}
-                    </h3>
-                    <div className="flex items-center mt-1 text-sm text-[#CCCCCC]">
-                      <MapPin className="w-4 h-4 mr-1" />
-                      <span className="text-[13px]">
-                        {property.address || "No address provided"}
-                      </span>
-                    </div>
-
-                    <div className="mt-3">
-                      <span className="text-[16px] font-bold">
-                        {property.price || "Price on request"}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between mt-4 space-x-2">
-                      <button className="flex-1 px-4 py-2 text-sm text-[#CBCBCB] bg-[#434343] rounded-[15px] flex items-center justify-center gap-2">
-                        <Eye className="w-4 h-4" />
-                        <span>View</span>
-                      </button>
-                      <button className="flex-1 px-4 py-2 text-sm text-[#CBCBCB] bg-[#434343] rounded-[15px] flex items-center justify-center gap-2">
-                        <Heart className="w-4 h-4" />
-                        <span>Save</span>
-                      </button>
-                      <button className="flex-1 px-4 py-2 text-sm text-[#CBCBCB] bg-[#434343] rounded-[15px] flex items-center justify-center gap-2">
-                        <Phone className="w-4 h-4" />
-                        <span>Contact</span>
-                      </button>
-                    </div>
-                  </div>
-                  <div className="mt-5 mb-2 md:w-[415px]">
-                    <p className="text-[15px] text-[#CCCCCC]">
-                      Would you like to see the rental details or connect with
-                      the landlord?
-                    </p>
-                  </div>
-
-                  <PropertyActions
-                    location={
-                      property.cordinates ||
-                      property.address ||
-                      "No location available"
-                    }
-                    property={toProperty(property)}
-                    description={property.description || ""}
-                    status={property.status || ""}
-                    year_built={property.year_built || ""}
-                    lot_size={property.lot_size || ""}
-                    square_footage={property.square_footage || ""}
-                    state={property.state || ""}
-                    city={property.city || ""}
-                    zip_code={property.zip_code || ""}
-                    phone={property.phone || "Contact not available"}
-                    created_by={property.created_by || ""}
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.4, ease: "easeInOut" }}
+                className="space-y-4 overflow-hidden"
+              >
+                {availableProperties.map((property, index) => (
+                  <PropertyCard
+                    key={`${property.id}-${index}`}
+                    property={property}
                   />
-                </div>
-              </div>
-            ))}
+                ))}
+                    </motion.div>
+            )}
+          </AnimatePresence>
           </div>
         );
-      } else {
-        return <div className="py-4 text-center text-yellow-400"></div>;
-      }
-    } catch (e) {
-      console.error("Error processing property search:", e);
-      return (
-        <div className="py-4 text-center text-red-400">
-          <p>
-            Error loading property listings:{" "}
-            {e instanceof Error ? e.message : String(e)}
-          </p>
-          <p className="mt-2 text-sm">
-            Please check the format of your property data
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-4"
-            onClick={() => {
-              // Force a re-render
-              setPropertyLoading((prev) => ({ ...prev, [message.id]: true }));
-
-              setTimeout(() => {
-                try {
-                  const newContext = parsePropertyData(message);
-                  if (newContext.length > 0) {
-                    setParsedPropertyData((prev) => ({
-                      ...prev,
-                      [message.id]: newContext,
-                    }));
-                  }
-                } catch (error) {
-                  console.error("Error re-parsing property data:", error);
-                } finally {
-                  setPropertyLoading((prev) => ({
-                    ...prev,
-                    [message.id]: false,
-                  }));
-                }
-              }, 0);
-            }}
-          >
-            Retry
-          </Button>
-        </div>
-      );
-    }
-  };
+    },
+    [parsedPropertyData, expandedProperties, togglePropertyExpansion]
+  );
 
   return (
     <>
       <div
         ref={chatContainerRef}
         className={cn(
-          "flex-1 overflow-y-auto mt-14 bg-background transition-all duration-300 ",
+          "flex-1 mt-14 bg-background transition-all duration-300",
+          // Only allow scrolling when there are messages
+          Array.isArray(messages) && messages.length > 0 ? "overflow-y-auto" : "overflow-hidden",
           sidebarCollapsed ? "md:pl-16" : "md:",
           sidebarOpen ? "lg:pl-44" : "lg:pl-0",
           "pb-[calc(70px+1rem)]"
         )}
       >
-        {isSessionLoading ? (
+        {sessionLoadingState.isLoading ? (
           <LoaderAnimation variant="typing" text="Loading chat session" />
         ) : (
-          <div className="flex flex-col w-full p-4 mx-auto md:max-w-5xl">
-            {/* Show active session title when messages exist */}
-            {activeSession && messages.length > 0 && (
+          <div className={cn(
+            "flex flex-col w-full mx-auto md:max-w-5xl",
+            // Only add padding when there are messages or session title
+            (Array.isArray(messages) && messages.length > 0) || activeSession ? "p-4" : ""
+          )}>
+            {/* Session Title */}
+            {activeSession &&
+              Array.isArray(messages) &&
+              messages.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1247,14 +1094,23 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                 </p>
               </motion.div>
             )}
-            {messages.length === 0 && !isLoading && !isSessionLoading && (
-              <div className="flex flex-col items-center justify-center min-h-[calc(100vh-180px)] max-w-[600px)]">
+
+            {/* Welcome Screen */}
+            {(!Array.isArray(messages) || messages.length === 0) &&
+              !isLoading &&
+              !sessionLoadingState.isLoading && (
+                <motion.div
+                  className="flex flex-col items-center justify-center h-[calc(100vh-120px)] max-w-[600px] mx-auto px-4"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.5 }}
+                >
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.5 }}
                 >
-                  <h1 className="mb-8 text-center text-[32px] text-foreground">
+                    <h1 className="mb-8 text-center md:text-[32px] text-foreground">
                     {isAuthenticated
                       ? `Hi ${
                           user?.first_name
@@ -1265,8 +1121,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                   </h1>
                 </motion.div>
 
-                {/* First two cards */}
-                <div className="grid grid-cols-2 gap-3 w-full text-center mx-auto max-w-[620px]">
+                  {/* Action Cards */}
+                  <div className="grid grid-cols-2 gap-3 w-full text-center mx-auto max-w-[620px]">
                   {actionCards.slice(0, 2).map((card, index) => (
                     <motion.div
                       key={card.title}
@@ -1276,7 +1132,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                     >
                       <Card
                         className={`md:p-1 py-[0.5px] transition-all cursor-pointer border-[1px] border-border md:py-8 bg-gradient-to-br from-[#1e1e1e] to-[#2a2a2a] hover:from-[#2a2a2a] hover:to-[#3a3a3a] hover:shadow-lg hover:shadow-purple-500/10 rounded-full md:rounded-[10px] hover:scale-90 ${
-                          cardLoading === card.title || isLoading
+                          cardLoading === card.title || isLoading || submissionInProgress.current
                             ? "opacity-70 pointer-events-none"
                             : ""
                         }`}
@@ -1284,8 +1140,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                       >
                         <div className="flex items-center justify-center md:gap-3 lg:flex-col">
                           <div className="p-2 md:border-2 border-border md:block rounded-[10px]">
-                            <span className="text-[20px]">{card.image}</span>
-                           
+                              <span className="text-[20px]">{card.image}</span>
                           </div>
                           <div className="text-center">
                             <h3 className="md:mb-1 md:font-medium text-white text-[14px] md:text-[15px] text-wrap overflow-hidden text-ellipsis">
@@ -1301,8 +1156,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                   ))}
                 </div>
 
-                {/* Last two cards with specific widths */}
-                <div className="flex flex-col justify-center items-center w-full gap-4 mt-4 md:flex-row md:w-[620px]">
+                  <div className="flex flex-col justify-center items-center w-full gap-4 mt-4 md:flex-row md:w-[620px]">
                   {actionCards.slice(2).map((card, index) => (
                     <motion.div
                       key={card.title}
@@ -1316,9 +1170,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                       }
                     >
                       <Card
-                        key={card.title}
                         className={`md:p-1 py-[0.5px] transition-colors cursor-pointer rounded-full md:rounded-[10px] border-[1px] border-border md:py-8 bg-card bg-gradient-to-br from-[#1e1e1e] to-[#2a2a2a] hover:from-[#2a2a2a] hover:to-[#3a3a3a] hover:shadow-lg hover:shadow-purple-500/10 hover:bg-muted mx-auto hover:scale-90 ${
-                          cardLoading === card.title || isLoading
+                          cardLoading === card.title || isLoading || submissionInProgress.current
                             ? "opacity-70 pointer-events-none"
                             : ""
                         } ${
@@ -1329,9 +1182,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                         onClick={() => handleCardSubmit(card)}
                       >
                         <div className="flex items-center justify-center md:gap-3 lg:flex-col">
-                          <div className="p-2 md:border-2 border-border md:block rounded-[10px] ">
-                          <span className="text-[20px]">{card.image}</span>
-
+                            <div className="p-2 md:border-2 border-border md:block rounded-[10px]">
+                              <span className="text-[20px]">{card.image}</span>
                           </div>
                           <div className="text-center">
                             <h3 className="md:mb-1 md:font-medium text-white text-[14px] md:text-[15px] text-wrap overflow-hidden text-ellipsis">
@@ -1346,21 +1198,32 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                     </motion.div>
                   ))}
                 </div>
-              </div>
+                </motion.div>
             )}
 
+            {/* Chat Messages */}
             {messages.length > 0 && (
-              <div className="flex flex-col items-start self-start w-full  max-w-[880px] mx-auto space-y-4 font-normal text-white">
+              <div className="flex flex-col items-start self-start w-full max-w-[880px] mx-auto space-y-4 font-normal text-white">
                 <AnimatePresence>
-                  {messages.map((message: any, index: number) => (
+                  {messages.map((message: any, index: number) => {
+                    if (!message) return null;
+
+                    const isLastPrompt =
+                      message.prompt &&
+                      !message.response &&
+                      index === messages.length - 1;
+
+                    return (
                     <motion.div
                       key={index}
+                        ref={isLastPrompt ? lastPromptRef : null}
                       className="w-full space-y-2 group"
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.3 }}
                     >
-                      <div className={`flex justify-end w-full relative`}>
+                        {/* User Message */}
+                        <div className="relative flex justify-end w-full">
                         <div className="flex gap-1 p-1 transition-opacity duration-200 rounded-full opacity-0 bg-background/80 backdrop-blur-sm group-hover:opacity-100">
                           <Button
                             variant="ghost"
@@ -1389,7 +1252,9 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                           <div className="w-full max-w-[80%]">
                             <Textarea
                               value={editedPrompt}
-                              onChange={(e) => setEditedPrompt(e.target.value)}
+                                onChange={(e) =>
+                                  setEditedPrompt(e.target.value)
+                                }
                               className="min-h-[100px] bg-muted border-border"
                             />
                             <div className="flex gap-2 mt-2">
@@ -1451,6 +1316,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                             initial={{ scale: 0.95, x: 20 }}
                             animate={{ scale: 1, x: 0 }}
                             transition={{ duration: 0.2 }}
+                              layout
                           >
                             <p className="text-white whitespace-pre-wrap">
                               {message?.prompt}
@@ -1459,153 +1325,126 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                         )}
                       </div>
 
+                        {/* AI Response */}
                       {message.response ? (
-                        <div className={`flex items-center w-full`}>
+                          <div className="flex items-center w-full">
+                        <motion.div
+                          className="flex items-start gap-2 md:gap-4 md:max-w-[80%] w-full rounded-lg md:p-4 mt-2"
+                          initial={{ scale: 0.95, x: -20 }}
+                          animate={{ scale: 1, x: 0 }}
+                          transition={{ duration: 0.2, delay: 0.1 }}
+                        >
                           <motion.div
-                            className="flex items-start gap-2 md:gap-4 md:max-w-[80%] w-full rounded-lg md:p-4 mt-2"
-                            initial={{ scale: 0.95, x: -20 }}
-                            animate={{ scale: 1, x: 0 }}
-                            transition={{ duration: 0.2, delay: 0.1 }}
+                            initial={{ scale: 0.8 }}
+                            animate={{ scale: 1 }}
+                            transition={{ duration: 0.2 }}
                           >
-                            <motion.div
-                              initial={{ scale: 0.8 }}
-                              animate={{ scale: 1 }}
-                              transition={{ duration: 0.2 }}
-                            >
-                              <Image
-                                src={star || "/placeholder.svg"}
-                                alt="Response Image"
-                                className="relative object-cover w-5 h-5 rounded-full md:w-8 md:h-8 ml-[-2px]"
-                              />
-                            </motion.div>
-                            <div className="flex-1 min-w-0 rounded-lg ">
-                              {/* {(() => {
-                                // Parse the response immediately when the message is received
-                                if (message.classification === "Property Search") {
-                                  try {
-                                    console.log("Parsing property data for message:", message.id);
-                                    console.log("Context data:", message.context);
-                                    
-                                    const propertyData = parsePropertyData(message);
-                                    console.log("Parsed property data:", propertyData);
-                                    
-                                    if (propertyData.length > 0 && !parsedPropertyData[message.id]) {
-                                      setParsedPropertyData((prev) => ({
-                                        ...prev,
-                                        [message.id]: propertyData,
-                                      }));
-                                    }
-                                  } catch (error) {
-                                    console.error("Error parsing property data:", error);
-                                  }
-                                } */}
-                              {(() => {
-                                // Split the response into text parts (before and after JSON)
-                                const textParts =
-                                  message.response.split(/```json[\s\S]*```/);
-                                // const hasProprtyData =
-                                //   message.classification ===
-                                //     "Property Search" &&
-                                //   message.context &&
-                                //   typeof message.context === "string";
+                            <Image
+                              src={star || "/placeholder.svg"}
+                              alt="Response Image"
+                              className="relative object-cover w-5 h-5 rounded-full md:w-8 md:h-8 ml-[-2px]"
+                            />
+                          </motion.div>
+                          <div className="flex-1 min-w-0 rounded-lg">
+                                {(() => {
+                                  const textParts = message.response.split(
+                                    /\`\`\`json[\s\S]*\`\`\`/
+                                  );
 
-                                return (
-                                  <>
-                                    {/* First text part */}
-                                    <ProgressiveMarkdownRenderer
-                                      content={textParts[0]}
-                                      typingSpeed={10}
-                                      shouldAnimate={
-                                        message.id === latestMessageId
-                                      }
-                                      onTextUpdate={handleTextUpdate}
-                                      onComplete={() => {
-                                        setTextAnimationCompleted((prev) => ({
-                                          ...prev,
-                                          [message.id]: true,
-                                        }));
-                                      }}
-                                    />
-
-                                    {textAnimationCompleted[message.id] &&
-                                      message.classification ===
-                                        "Property Search" &&
-                                      renderPropertyData(message)}
-
-                                    {textParts[1] && (
-                                      <ProgressiveMarkdownRenderer
-                                        content={textParts[1]}
-                                        typingSpeed={10} // Increased from 10 to 50
+                                  return (
+                                    <>
+                            <ProgressiveMarkdownRenderer
+                                        content={textParts[0]}
+                              typingSpeed={10}
                                         shouldAnimate={
                                           message.id === latestMessageId
                                         }
-                                        onTextUpdate={handleTextUpdate}
+                              onTextUpdate={handleTextUpdate}
+                                        onComplete={() => {
+                                          setTextAnimationCompleted((prev) => ({
+                                            ...prev,
+                                            [message.id]: true,
+                                          }));
+                                        }}
                                       />
-                                    )}
 
-                                    {/* Render properties only after text animation completes */}
-                                  </>
-                                );
-                              })()}
+                                      {textAnimationCompleted[message.id] &&
+                                        message.classification ===
+                                          "Property Search" &&
+                                        renderPropertyData(message)}
 
-                              <div className="flex items-center justify-between pt-1 mt-4">
-                                <div className="flex space-x-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="px-2 text-xs text-gray-400"
-                                    onClick={() =>
-                                      copyToClipboard(message.response)
-                                    }
-                                  >
-                                    <Copy className="w-3 h-3" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className={`text-xs px-2 ${
-                                      feedbackGiven[message.id] === "up"
-                                        ? "text-green-400"
-                                        : "text-gray-400 hover:text-green-400"
-                                    }`}
-                                    onClick={() =>
-                                      handleFeedback(message.id, "up")
-                                    }
-                                    disabled={!!feedbackGiven[message.id]}
-                                  >
-                                    <ThumbsUp className="w-3 h-3" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className={`text-xs px-2 ${
-                                      feedbackGiven[message.id] === "down"
-                                        ? "text-red-400"
-                                        : "text-gray-400 hover:text-red-400"
-                                    }`}
-                                    onClick={() =>
-                                      handleFeedback(message.id, "down")
-                                    }
-                                    disabled={!!feedbackGiven[message.id]}
-                                  >
-                                    <ThumbsDown className="w-3 h-3" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => retryMessage(message)}
-                                    disabled={!!retryingMessageId}
-                                    className="px-2 text-xs text-gray-400"
-                                  >
-                                    <RefreshCw className="w-3 h-3" />
-                                  </Button>
-                                </div>
+                                      {textParts[1] && (
+                                        <ProgressiveMarkdownRenderer
+                                          content={textParts[1]}
+                                          typingSpeed={10}
+                                          shouldAnimate={
+                                            message.id === latestMessageId
+                                          }
+                                          onTextUpdate={handleTextUpdate}
+                                        />
+                                      )}
+                                    </>
+                                  );
+                                })()}
+                            
+                            <div className="flex items-center justify-between pt-1 mt-4">
+                              <div className="flex space-x-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="px-2 text-xs text-gray-400"
+                                  onClick={() =>
+                                    copyToClipboard(message.response)
+                                  }
+                                >
+                                  <Copy className="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className={`text-xs px-2 ${
+                                    feedbackGiven[message.id] === "up"
+                                      ? "text-green-400"
+                                      : "text-gray-400 hover:text-green-400"
+                                  }`}
+                                  onClick={() =>
+                                    handleFeedback(message.id, "up")
+                                  }
+                                  disabled={!!feedbackGiven[message.id]}
+                                >
+                                  <ThumbsUp className="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className={`text-xs px-2 ${
+                                    feedbackGiven[message.id] === "down"
+                                      ? "text-red-400"
+                                      : "text-gray-400 hover:text-red-400"
+                                  }`}
+                                  onClick={() =>
+                                    handleFeedback(message.id, "down")
+                                  }
+                                  disabled={!!feedbackGiven[message.id]}
+                                >
+                                  <ThumbsDown className="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => retryMessage(message)}
+                                  disabled={!!retryingMessageId}
+                                  className="px-2 text-xs text-gray-400"
+                                >
+                                  <RefreshCw className="w-3 h-3" />
+                                </Button>
                               </div>
                             </div>
-                          </motion.div>
-                        </div>
+                          </div>
+                        </motion.div>
+                      </div>
                       ) : message.error ? (
-                        <div className={`flex justify-start w-full`}>
+                          <div className="flex justify-start w-full">
                           <motion.div
                             className="flex items-start gap-2 md:gap-4 md:max-w-[80%] rounded-lg p-4 bg-red-900/20 border border-red-500/30"
                             initial={{ opacity: 0 }}
@@ -1614,8 +1453,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                           >
                             <div className="flex-1 min-w-0">
                               <p className="mb-2 text-red-400">
-                                The server encountered an error processing this
-                                message.
+                                  {message.response.data}
                               </p>
                               <Button
                                 variant="outline"
@@ -1634,7 +1472,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                         </div>
                       ) : null}
                     </motion.div>
-                  ))}
+                    );
+                  })}
                 </AnimatePresence>
 
                 {isLoading && (
@@ -1655,7 +1494,10 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
               </div>
             )}
 
+            {/* Scroll to Bottom Button */}
             {!isAutoScrollEnabled && (
+              <div className="fixed z-50 w-full max-w-5xl px-4 transform -translate-x-1/2 pointer-events-none bottom-44 left-1/2">
+                <div className="flex justify-end">
               <button
                 onClick={() => {
                   chatContainerRef.current?.scrollTo({
@@ -1664,10 +1506,12 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                   });
                   setIsAutoScrollEnabled(true);
                 }}
-                className="fixed px-3 py-2 text-sm text-white transition-all duration-300 ease-in-out border-2 rounded-full bottom-44 right-[calc(23%-1.5rem)] bg-background border-border hover:bg-muted/50"
+                    className="px-3 py-2 text-sm text-white transition-all duration-300 ease-in-out border-2 rounded-full pointer-events-auto bg-background border-border hover:bg-muted/50"
               >
                 <ArrowDown className="w-4 h-4" />
               </button>
+                </div>
+              </div>
             )}
           </div>
         )}

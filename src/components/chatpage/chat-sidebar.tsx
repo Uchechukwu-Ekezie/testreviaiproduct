@@ -351,13 +351,21 @@ const ChatSidebar: React.FC<ChatSidebarProps> = React.memo(({
                   </div>
                 )}
                 {sessionsToShow.map((session) => (
-                  <button
+                  <div
                     key={session.id}
                     className={cn(
-                      "flex items-center justify-between mx-2 p-2 rounded-md cursor-pointer group w-full",
+                      "flex items-center justify-between mx-2 p-2 rounded-md cursor-pointer group w-full transition-colors",
                       activeSession === session.id ? "bg-[#212121] text-white" : "hover:bg-[#212121]"
                     )}
                     onClick={() => handleSessionClick(session.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault()
+                        handleSessionClick(session.id)
+                      }
+                    }}
                   >
                     <div className="flex items-center min-w-0 text-sm">
                       {!collapsed && (
@@ -375,37 +383,39 @@ const ChatSidebar: React.FC<ChatSidebarProps> = React.memo(({
                     </div>
 
                     {!collapsed && (
-  <div 
-    className={cn(
-      "flex items-center space-x-1",
-      activeSession === session.id ? "flex" : "hidden group-hover:flex"
-    )}
-    onClick={(e) => e.stopPropagation()}
-  >
-    <button
-      onClick={(e) => {
-        e.stopPropagation()
-        e.preventDefault()
-        openRenameDialog(session.id, session.chat_title)
-      }}
-      className="p-1 text-gray-400 hover:text-gray-200"
-    >
-      <Pencil className="w-4 h-4" />
-    </button>
-    <button
-      onClick={(e) => {
-        e.stopPropagation()
-        e.preventDefault()
-        deleteChatSession(session.id)
-      }}
-      className="p-1 text-gray-400 hover:text-red-500"
-      disabled={isDeleting === session.id}
-    >
-      <Trash2 className="w-4 h-4" />
-    </button>
-  </div>
-)}
-                  </button>
+                      <div 
+                        className={cn(
+                          "flex items-center space-x-1",
+                          activeSession === session.id ? "flex" : "hidden group-hover:flex"
+                        )}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            e.preventDefault()
+                            openRenameDialog(session.id, session.chat_title)
+                          }}
+                          className="p-1 text-gray-400 hover:text-gray-200 transition-colors"
+                          aria-label="Rename chat"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            e.preventDefault()
+                            deleteChatSession(session.id)
+                          }}
+                          className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                          disabled={isDeleting === session.id}
+                          aria-label="Delete chat"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 ))}
                 {hasMore && isExpanded && (
                   <div className="flex justify-center mt-1">

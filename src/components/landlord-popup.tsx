@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { X, Plus } from "lucide-react";
+import { X, Plus, Trash2, Star } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { UserReviews } from "@/lib/api";
@@ -26,17 +26,126 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
   const [experience, setExperience] = useState("");
+  const [rating, setRating] = useState<number>(0); // Separate rating state
+  const [hoverRating, setHoverRating] = useState<number>(0); // For visual feedback
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [files, setFiles] = useState<FileList | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // Cloudinary configuration - replace with your actual values
+  const CLOUDINARY_CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "your-cloud-name";
+  const CLOUDINARY_UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET_TWO || "your-upload-preset";
+
+  // Use authUser from context instead of the prop
+  const currentUser = authUser || user;
 
   // Set email from user when component mounts or user changes
   useEffect(() => {
-    if (authUser?.email) {
-      setEmail(authUser.email);
+    if (currentUser?.email) {
+      setEmail(currentUser.email);
     }
-  }, [authUser]);
+  }, [currentUser]);
+
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+
+    // Cleanup on unmount
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const uploadToCloudinary = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+    formData.append('folder', 'landlord-reports'); // Different folder for reports
+
+    try {
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+        {
+          method: 'POST',
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data.secure_url;
+    } catch (error) {
+      console.error('Error uploading to Cloudinary:', error);
+      throw error;
+    }
+  };
+
+  const uploadImages = async (): Promise<string[]> => {
+    if (files.length === 0) return [];
+
+    setIsUploading(true);
+    const urls: string[] = [];
+
+    try {
+      for (const file of files) {
+        try {
+          const url = await uploadToCloudinary(file);
+          urls.push(url);
+          console.log(`Uploaded ${file.name}:`, url);
+        } catch (error) {
+          console.error(`Failed to upload ${file.name}:`, error);
+          toast({
+            title: "Upload Error",
+            description: `Failed to upload ${file.name}. Please try again.`,
+            variant: "destructive",
+          });
+        }
+      }
+
+      if (urls.length > 0) {
+        toast({
+          title: "Success",
+          description: `${urls.length} file${urls.length !== 1 ? 's' : ''} uploaded successfully!`,
+        });
+      }
+
+      return urls;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleRatingClick = (selectedRating: number) => {
+    setRating(selectedRating);
+  };
+
+  const handleRatingHover = (hoveredRating: number) => {
+    setHoverRating(hoveredRating);
+  };
+
+  const handleRatingLeave = () => {
+    setHoverRating(0);
+  };
+
+  const getRatingText = (rating: number) => {
+    switch (rating) {
+      case 1: return "Terrible";
+      case 2: return "Poor";
+      case 3: return "Average";
+      case 4: return "Good";
+      case 5: return "Excellent";
+      default: return "";
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,12 +153,30 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
     if (!address || !experience) {
       toast({
         title: "Warning",
-        description: "Please fill in address and your experience.",
+        description: "Please fill in address and your reason for report.",
       });
       return;
     }
 
-    if (!user) {
+    if (rating === 0) {
+      toast({
+        title: "Warning", 
+        description: "Please select a rating for your landlord experience."
+      });
+      return;
+    }
+
+    // NEW: Check if at least one image is uploaded
+    if (files.length === 0) {
+      toast({
+        title: "Required Field Missing",
+        description: "Please upload at least one file (utility bill or property document).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!currentUser) {
       toast({
         title: "Error",
         description: "You must be logged in to report a landlord.",
@@ -58,18 +185,24 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
       return;
     }
 
-    // Prepare the data for the API
-    const data = {
-      address,
-      review_text: experience,
-      user: user.id || "",
-      chat_session: activeSession || "general",
-      // Add a flag to indicate this is a landlord report
-      report_type: "landlord_report",
-    };
-
     try {
       setIsSubmitting(true);
+
+      // Upload files to Cloudinary first if any files are selected
+      let fileUrls: string[] = [];
+      if (files.length > 0) {
+        fileUrls = await uploadImages();
+      }
+
+      // Prepare the data for the API
+      const data = {
+        address,
+        review_text: experience,
+        user: currentUser.id || "",
+        rating: rating, // Include the rating
+        chat_session: activeSession || "general",
+        evidence: fileUrls.length > 0 ? JSON.stringify(fileUrls) : "", // Convert array to JSON string
+      };
 
       // Log the data being sent to help with debugging
       console.log("Submitting landlord report with data:", data);
@@ -78,20 +211,6 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
       const response = await UserReviews.postReview(data);
 
       console.log("Landlord report submitted successfully:", response);
-
-    
-      if (files && files.length > 0) {
-   
-        console.log("Files to upload:", files);
-
-       
-        // const formData = new FormData()
-        // formData.append('review_id', response.id)
-        // for (let i = 0; i < files.length; i++) {
-        //   formData.append('files', files[i])
-        // }
-        // await api.post('/reviews/upload-files/', formData)
-      }
 
       toast({
         title: "Success",
@@ -102,7 +221,8 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
       // Reset form fields
       setAddress("");
       setExperience("");
-      setFiles(null);
+      setRating(0);
+      setFiles([]);
 
       // Close the popup
       onClose();
@@ -127,155 +247,236 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      setFiles(e.target.files);
+      const selectedFiles = Array.from(e.target.files);
+      setFiles(prev => [...prev, ...selectedFiles]);
     }
   };
 
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/50 backdrop-blur-sm">
-      <div className="w-[90%] max-w-[692px] bg-background border border-border rounded-[10px] shadow-lg flex flex-col overflow-hidden">
-        <div className="relative p-5 max-w-[506px] mx-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/50 backdrop-blur-sm p-2 sm:p-4">
+      {/* Modal Container with Responsive Sizing and Scrolling */}
+      <div className="w-full max-w-[90vw] sm:max-w-[600px] lg:max-w-[692px]  max-h-[95vh] sm:max-h-[90vh] bg-background border border-border rounded-[10px] shadow-lg flex flex-col overflow-hidden">
+        
+        {/* Header - Fixed at top */}
+        <div className="relative flex-shrink-0 p-4 sm:p-5 border-b border-border">
           <button
             onClick={onClose}
-            className="absolute top-4 right-[-50] text-gray-400 hover:text-white"
+            className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-400 hover:text-white transition-colors duration-200 z-10"
             aria-label="Close"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
 
-          <h2 className="pt-6 mb-2 text-xl font-semibold text-center text-white">
-            Report your Landlord
-          </h2>
-          <p className="mb-4 text-sm text-gray-400">
-            Have you recently experienced an unpleasant situation with your
-            landlord? Please share, we would love to help address the issue!
-          </p>
+          <div className="pr-8 sm:pr-10">
+            <h2 className="text-lg sm:text-xl lg:text-2xl font-semibold text-center text-white mb-2">
+              Report your Landlord
+            </h2>
+            <p className="text-xs sm:text-sm text-center text-gray-400 leading-relaxed">
+              Have you recently experienced an unpleasant situation with your
+              landlord? Please share, we would love to help address the issue!
+            </p>
+          </div>
+        </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label
-                htmlFor="email"
-                className="block mb-1 text-sm text-gray-400"
-              >
-                Enter your email
-              </label>
-              <div className="relative">
+        {/* Scrollable Content Area */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-4 sm:p-5 lg:p-6">
+            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+              {/* Email Field */}
+              <div>
+                <label
+                  htmlFor="email"
+                  className="block mb-1 sm:mb-2 text-xs sm:text-sm text-gray-400"
+                >
+                  Enter your email
+                </label>
+                <div className="relative">
+                  <input
+                    type="email"
+                    id="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={!!currentUser?.email} // Disable if user is logged in
+                    className="w-full py-2 sm:py-3 pr-3 text-sm sm:text-base text-white border rounded-[8px] sm:rounded-[12px] bg-background border-border pl-8 sm:pl-9 placeholder:text-gray-500 disabled:opacity-70 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-yellow-400/50"
+                    required
+                  />
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-2 sm:pl-3 pointer-events-none">
+                    <Image
+                      src={sms}
+                      alt="Email icon"
+                      className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400"
+                    />
+                  </div>
+                </div>
+                {currentUser?.email && (
+                  <p className="mt-1 text-xs text-gray-400">
+                    Using your account email. This field is automatically filled.
+                  </p>
+                )}
+              </div>
+
+              {/* Address Field */}
+              <div>
+                <label
+                  htmlFor="address"
+                  className="block mb-1 sm:mb-2 text-xs sm:text-sm text-gray-400"
+                >
+                  Property Address
+                </label>
                 <input
-                  type="email"
-                  id="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={!!authUser?.email} // Disable if user is logged in
-                  className="w-full py-2 pr-3 text-white border rounded-[12px] bg-background border-border pl-9 placeholder:text-gray-500 disabled:opacity-70 disabled:cursor-not-allowed"
+                  type="text"
+                  id="address"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="e.g No. 15, Admiralty Way, Lekki, Lagos"
+                  className="w-full px-3 py-2 sm:py-3 text-sm sm:text-base text-white border rounded-[8px] sm:rounded-[12px] bg-background border-border focus:outline-none focus:ring-2 focus:ring-yellow-400/50 placeholder:text-gray-500"
                   required
                 />
-                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                  <Image
-                    src={sms}
-                    alt="Email icon"
-                    className="w-5 h-5 text-gray-400"
+              </div>
+
+              {/* Experience Field */}
+              <div>
+                <label
+                  htmlFor="experience"
+                  className="block mb-1 sm:mb-2 text-xs sm:text-sm text-gray-400"
+                >
+                  Your reason for report
+                </label>
+                <div className="relative">
+                  <textarea
+                    id="experience"
+                    value={experience}
+                    onChange={(e) => setExperience(e.target.value)}
+                    placeholder="Describe any issues you've faced with your landlord"
+                    className="w-full bg-background border border-border rounded-[8px] sm:rounded-[12px] py-2 sm:py-3 px-3 text-sm sm:text-base text-white focus:outline-none focus:ring-2 focus:ring-yellow-400/50 placeholder:text-gray-500 min-h-[80px] sm:min-h-[100px] resize-y"
+                    required
                   />
                 </div>
               </div>
-              {authUser?.email && (
-                <p className="mt-1 text-xs text-gray-400">
-                  Using your account email. This field is automatically filled.
-                </p>
-              )}
-            </div>
 
-            <div>
-              <label
-                htmlFor="address"
-                className="block mb-1 text-sm text-gray-400"
-              >
-                Property Address
-              </label>
-              <input
-                type="text"
-                id="address"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="e.g No. 15, Admiralty Way, Lekki, Lagos"
-                className="w-full px-3 py-2 text-white border rounded-[12px] bg-background border-border focus:outline-none placeholder:text-gray-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="experience"
-                className="block mb-1 text-sm text-gray-400"
-              >
-                Your reason for report
-              </label>
-              <div className="relative">
-                <textarea
-                  id="experience"
-                  value={experience}
-                  onChange={(e) => setExperience(e.target.value)}
-                  placeholder="Describe any issues you've faced with your landlord"
-                  className="w-full bg-background border border-border rounded-[12px] py-2 px-3 text-white focus:outline-none placeholder:text-gray-500 min-h-[80px]"
-                  required
-                />
-                <button
-                  type="button"
-                  className="absolute text-gray-400 bottom-2 right-2 hover:text-white"
-                  aria-label="Add attachment"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
+              {/* Enhanced Rating System */}
+              <div>
+                <label className="block mb-2 text-xs sm:text-sm text-gray-400">
+                  Rate your landlord experience *
+                </label>
+                <div className="flex items-center mb-2 space-x-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => handleRatingClick(star)}
+                      onMouseEnter={() => handleRatingHover(star)}
+                      onMouseLeave={handleRatingLeave}
+                      className="transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 rounded p-1"
+                    >
+                      <Star
+                        className={`w-6 h-6 sm:w-8 sm:h-8 ${
+                          star <= (hoverRating || rating)
+                            ? 'fill-yellow-400 text-yellow-400'
+                            : 'text-gray-600 hover:text-gray-500'
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+                {rating > 0 && (
+                  <p className="text-xs sm:text-sm text-gray-300">
+                    {rating} star{rating !== 1 ? 's' : ''} - {getRatingText(rating)}
+                  </p>
+                )}
+                {rating === 0 && (
+                  <p className="text-xs text-gray-500">
+                    Click on the stars to rate your landlord experience
+                  </p>
+                )}
               </div>
-            </div>
 
-            <div>
-              <label
-                htmlFor="photos"
-                className="block mb-1 text-sm text-gray-400"
-              >
-                Upload an image of your utiliity bill or proof
-              </label>
-              <label
-                htmlFor="photos"
-                className="flex items-center justify-center w-full px-4 py-3 text-sm text-white transition border rounded-[12px] cursor-pointer bg-gray-800 border-border hover:bg-gray-700"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add photos
-              </label>
+              {/* File Upload */}
+              <div>
+                <label
+                  htmlFor="photos"
+                  className="block mb-1 sm:mb-2 text-xs sm:text-sm text-gray-400"
+                >
+                  Upload your utility bill or property document (image/PDF/document) *
+                </label>
+                <label
+                  htmlFor="photos"
+                  className={`flex items-center justify-center w-full px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-white transition border rounded-[8px] sm:rounded-[12px] cursor-pointer focus-within:ring-2 focus-within:ring-yellow-400/50 ${
+                    files.length === 0 
+                      ? 'border-red-400 hover:border-red-300' 
+                      : 'border-border hover:border-gray-500'
+                  }`}
+                >
+                  <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-2" />
+                  Add files
+                </label>
 
-              <input
-                type="file"
-                id="photos"
-                accept="image/*"
-                multiple
-                onChange={handleFileChange}
-                className="hidden "
-              />
-              {files && files.length > 0 && (
-                <p className="mt-1 text-xs text-gray-400">
-                  {files.length} file{files.length !== 1 ? "s" : ""} selected
+                <input
+                  type="file"
+                  id="photos"
+                  accept="image/*,.pdf,.doc,.docx,.txt,.rtf"
+                  multiple
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+
+                {/* Display selected files */}
+                {files.length > 0 && (
+                  <div className="mt-2 sm:mt-3 space-y-2">
+                    <p className="text-xs text-gray-400">
+                      {files.length} file{files.length !== 1 ? 's' : ''} selected
+                    </p>
+                    <div className="max-h-32 overflow-y-auto space-y-2">
+                      {files.map((file, index) => (
+                        <div key={index} className="flex items-center justify-between p-2 sm:p-3 border rounded border-border">
+                          <span className="text-xs sm:text-sm text-white truncate flex-1 mr-2">{file.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeFile(index)}
+                            className="text-red-400 hover:text-red-300 p-1 rounded focus:outline-none focus:ring-2 focus:ring-red-400/50"
+                          >
+                            <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Show warning if no files selected */}
+                {files.length === 0 && (
+                  <p className="mt-1 text-xs text-red-400">
+                    At least one file is required to submit your report
+                  </p>
+                )}
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={isSubmitting || !currentUser || isUploading}
+                className="w-full py-2 sm:py-3 rounded-[12px] sm:rounded-[15px] text-sm sm:text-base text-white font-medium bg-gradient-to-r from-[#FFD700] to-[#780991] hover:from-yellow-600 hover:to-pink-600 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-yellow-400/50"
+              >
+                {isSubmitting && files.length > 0
+                  ? "Uploading files..."
+                  : isSubmitting
+                  ? "Sending..."
+                  : currentUser
+                  ? "Send"
+                  : "Please log in to submit"}
+              </button>
+
+              {!currentUser && (
+                <p className="text-xs text-center text-red-400">
+                  You need to be logged in to report a landlord.
                 </p>
               )}
-            </div>
-
-            <button
-              type="submit"
-              disabled={isSubmitting || !user}
-              className="w-full py-2 rounded-[15px] text-white font-medium bg-gradient-to-r from-[#FFD700] to-[#780991] hover:from-yellow-600 hover:to-pink-600 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isSubmitting
-                ? "Sending..."
-                : user
-                ? "Send"
-                : "Please log in to submit"}
-            </button>
-
-            {!user && (
-              <p className="text-xs text-center text-red-400">
-                You need to be logged in to report a landlord.
-              </p>
-            )}
-          </form>
+            </form>
+          </div>
         </div>
       </div>
     </div>

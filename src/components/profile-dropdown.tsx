@@ -60,13 +60,13 @@ export function ProfileDropdown() {
 
               <span>Profile</span>
             </DropdownMenuItem>
-            <DropdownMenuItem
+            {/* <DropdownMenuItem
 className="flex items-center gap-2 pb-3 border-0 cursor-pointer text-muted-foreground hover:text-white hover:bg-zinc-800 hover:border-none focus:outline-none focus:ring-0"
 onClick={() => setIsUpgradeOpen(true)}
             >
               <Crown style={{ width: "24px", height: "24px" }} />
               Upgrade Plan
-            </DropdownMenuItem>
+            </DropdownMenuItem> */}
             <DropdownMenuItem
               className="flex items-center gap-2 pb-3 border-0 cursor-pointer text-muted-foreground hover:text-white hover:bg-zinc-800 hover:border-none focus:outline-none focus:ring-0"
               onClick={() => setIsSettingsOpen(true)}

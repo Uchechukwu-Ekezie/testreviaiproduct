@@ -58,7 +58,7 @@ const isTokenOlderThan5Days = (): boolean => {
     const fiveDaysInMs = 10 * 24 * 60 * 60 * 1000; // 10 days in milliseconds
     const diff = currentTime - tokenTimestamp;
     
-    console.log(`Token age check: ${diff / (1000 * 60 * 60 * 24)} days old`);
+    
     return diff > fiveDaysInMs;
   } catch (error) {
     console.error("Error checking token age:", error);
@@ -117,9 +117,21 @@ api.interceptors.request.use(
     // Skip check for auth endpoints and when already refreshing
     const isAuthEndpoint = config.url?.includes('/auth/token') || 
                           config.url?.includes('/auth/register') ||
-                          config.url?.includes('/auth/login');
+                          config.url?.includes('/auth/login') ||
+                          config.url?.includes('/auth/signup') ||
+                          config.url?.includes('/auth/password/reset') ||
+                          config.url?.includes('/auth/email/verify');
     
-    if (!isAuthEndpoint && !isRefreshing) {
+    if (isAuthEndpoint) {
+      // For auth endpoints, explicitly remove Authorization header to prevent expired token issues
+      if (config.headers) {
+        delete config.headers.Authorization;
+        delete config.headers.authorization;
+      }
+      return config;
+    }
+    
+    if (!isRefreshing) {
       // Check if token is older than 5 days
       if (isTokenOlderThan5Days()) {
         console.log("Token is older than 5 days, proactively refreshing before request");
@@ -155,7 +167,11 @@ api.interceptors.response.use(
     
     // Don't attempt to refresh token for login/register endpoints
     const isAuthEndpoint = originalRequest.url?.includes('/auth/token') || 
-                          originalRequest.url?.includes('/auth/register');
+                          originalRequest.url?.includes('/auth/register') ||
+                          originalRequest.url?.includes('/auth/login') ||
+                          originalRequest.url?.includes('/auth/signup') ||
+                          originalRequest.url?.includes('/auth/password/reset') ||
+                          originalRequest.url?.includes('/auth/email/verify');
     
     if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       if (isRefreshing) {
@@ -270,7 +286,7 @@ export const verifyToken = async (): Promise<boolean> => {
     setAuthToken(token)
 
     // Decode the token to extract the user ID
-    console.log(decodedToken)
+    // console.log(decodedToken)
     
     // Make sure you import and use a JWT decoding library like 'jwt-decode'
     const userId = decodedToken?.user_id; // Assuming the token contains the 'id' of the user
@@ -453,14 +469,64 @@ export const authAPI = {
     last_name: string
     password: string
   }) => {
-    const response = await api.post("/auth/register/", userData)
-    // Return the entire response so we can handle different response structures
-    return response
+    try {
+      console.log("API: Attempting signup with userData:", userData);
+  
+      // Clear any existing tokens before signup attempt (same as login)
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('tokenData');
+      delete api.defaults.headers.common["Authorization"];
+  
+      // Also clear from session storage if it exists
+      sessionStorage.removeItem('authToken');
+  
+      const response = await api.post("/auth/register/", userData);
+      console.log("API: Signup successful, response:", response.data);
+      
+      // Return the entire response so we can handle different response structures
+      return response;
+    } catch (error: any) {
+      console.error("API: Signup failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+  
+      // Handle specific error cases
+      if (error.response?.status === 400) {
+        // Handle validation errors
+        const errorData = error.response.data;
+        if (typeof errorData === 'object') {
+          // Extract field-specific errors
+          const fieldErrors = [];
+          for (const [field, messages] of Object.entries(errorData)) {
+            if (Array.isArray(messages)) {
+              fieldErrors.push(`${field}: ${messages.join(', ')}`);
+            } else {
+              fieldErrors.push(`${field}: ${messages}`);
+            }
+          }
+          error.detail = fieldErrors.join('; ');
+        } else {
+          error.detail = String(errorData);
+        }
+      } else if (error.response?.status === 409) {
+        error.detail = "An account with this email already exists. Please try logging in instead.";
+      } else if (error.response?.data?.detail) {
+        error.detail = error.response.data.detail;
+      } else {
+        error.detail = "An error occurred during signup. Please try again.";
+      }
+  
+      throw error;
+    }
   },
 
   verifyEmail: async (email: string, otp: string) => {
     try {
-      console.log("API: Attempting to verify email with payload:", { email, otp });
+      // console.log("API: Attempting to verify email with payload:", { email, otp });
       const response = await api.post("/auth/email/verify/confirm/", {
         email: email.trim(),
         otp: otp.trim()
@@ -469,7 +535,7 @@ export const authAPI = {
           "Content-Type": "application/json"
         }
       });
-      console.log("API: Email verification successful, response:", response.data);
+      // console.log("API: Email verification successful, response:", response.data);
       return response.data;
     } catch (error: any) {
       console.error("API: Email verification failed with detailed error:", {
@@ -490,7 +556,7 @@ export const authAPI = {
 
   verifyEmailOtp: async (email: string, otp: string) => {
     try {
-      console.log("API: Attempting to verify password reset OTP with payload:", { email, otp });
+      // console.log("API: Attempting to verify password reset OTP with payload:", { email, otp });
       const response = await api.post("/auth/password/reset/confirm", {
         email: email.trim(),
         otp: otp.trim()
@@ -499,7 +565,7 @@ export const authAPI = {
           "Content-Type": "application/json"
         }
       });
-      console.log("API: Password reset OTP verification successful, response:", response.data);
+      // console.log("API: Password reset OTP verification successful, response:", response.data);
       
       // Store email, OTP, and any token received from the response
       localStorage.setItem('resetEmail', email.trim());
@@ -541,6 +607,13 @@ export const authAPI = {
       // First attempt: standard endpoint without trailing slash
       try {
         console.log("Attempting password reset with standard endpoint");
+
+        // clear local stirage
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('tokenData');
+        delete api.defaults.headers.common["Authorization"];
+
         const response = await api.post("/auth/password/reset/request/", payload, {
           timeout: 15000, // Increased timeout
           headers: {
@@ -620,12 +693,12 @@ export const authAPI = {
   
   passwordChange: async (new_password1: string, new_password2: string) => {
     try {
-      console.log("API: Attempting to change password");
+      // console.log("API: Attempting to change password");
       const response = await api.post("/auth/password/change/", {
         new_password1,
         new_password2
       });
-      console.log("API: Password change successful");
+      // console.log("API: Password change successful");
       return response.data;
     } catch (error: any) {
       console.error("API: Password change failed with detailed error:", {
@@ -645,9 +718,9 @@ export const authAPI = {
   
   deleteUser: async () => {
     try {
-      console.log("API: Attempting to delete user account...");
+      // console.log("API: Attempting to delete user account...");
       const response = await api.delete("/auth/user/");
-      console.log("API: User account deleted successfully");
+      // console.log("API: User account deleted successfully");
       // Clear auth tokens after successful deletion
       clearAuthToken();
       return response.data;
@@ -673,12 +746,12 @@ export const authAPI = {
 export const userAPI = {
   getProfile: async () => {
     try {
-      console.log("API: Attempting to fetch user profile...")
+      // console.log("API: Attempting to fetch user profile...")
       const token = getAuthToken();
       if (token) {
         setAuthToken(token)
         const response = await api.get("/auth/me")
-        console.log("API: Profile fetch successful, response status:", response.status)
+        // console.log("API: Profile fetch successful, response status:", response.status)
         return response.data
       } else {
         console.error("please login first");
@@ -725,9 +798,9 @@ export const userAPI = {
 
   updatePreferences: async (data: { role: string }) => {
     try {
-      console.log("API: Attempting to update user preferences...")
+      // console.log("API: Attempting to update user preferences...")
       const response = await api.put("/user/preferences", data)
-      console.log("API: Preferences update successful, response status:", response.status)
+      // console.log("API: Preferences update successful, response status:", response.status)
       return response.data
     } catch (error: any) {
       console.error("API: Preferences update failed with detailed error:", {
@@ -753,7 +826,7 @@ export const userAPI = {
     avatar?: string
   }) => {
     try {
-      console.log("API: Attempting profile update with data:", userData)
+      // console.log("API: Attempting profile update with data:", userData)
 
       // Get the current user's ID from the auth token
       const token = getAuthToken();
@@ -772,7 +845,7 @@ export const userAPI = {
 
       // Use the correct endpoint with user ID
       const response = await api.patch(`/auth/users/${userId}/`, userData)
-      console.log("API: Profile update successful, response status:", response.status)
+      // console.log("API: Profile update successful, response status:", response.status)
 
       return response.data
     } catch (error: any) {
@@ -796,7 +869,7 @@ export const userAPI = {
   uploadAvatar: async (avatarUrl: string) => {
     try {
       console.log("API: Attempting to upload avatar with URL:", avatarUrl)
-      const response = await api.patch("/auth/user/update-avatar/", { avatar_url: avatarUrl })
+      const response = await api.patch("/auth/update-user-avatar/", { avatar_url: avatarUrl })
       console.log("API: Avatar upload successful, response status:", response.status)
       return response.data.avatar_url
     } catch (error: any) {
@@ -817,12 +890,12 @@ export const userAPI = {
   },
 
   resendVerificationOtp: async (email: string) => {
-    console.log("Attempting to resend verification OTP for email:", email)
+    // console.log("Attempting to resend verification OTP for email:", email)
     try {
       const response = await api.post(`/auth/email/verify/request/`, {
         email: email.trim()
       })
-      console.log("Successfully sent verification OTP")
+      // console.log("Successfully sent verification OTP")
       return response.data
     } catch (error) {
       console.error("Failed to resend verification OTP:", error)
@@ -861,9 +934,9 @@ export const chatAPI = {
     user: string;
   }) => {
     try {
-      console.log("API: Creating new chat session with data:", data);
+      // console.log("API: Creating new chat session with data:", data);
       const response = await api.post(`/chat-sessions/`, data);
-      console.log("API: Chat session created successfully, response:", response.data);
+      // console.log("API: Chat session created successfully, response:", response.data);
       return response.data;
     } catch (error: any) {
       console.error("API: Create chat session failed with detailed error:", {
@@ -883,18 +956,18 @@ export const chatAPI = {
       // Check if user is authenticated before making the request
       const token = localStorage.getItem('authToken');
       if (!token) {
-        console.log("User not authenticated, skipping chat sessions fetch");
+        // console.log("User not authenticated, skipping chat sessions fetch");
         return [];
       }
 
-      console.log("API: Fetching all chat sessions");
+      // console.log("API: Fetching all chat sessions");
       const response = await api.get(`/chat-sessions/`);
-      console.log("API: Chat sessions fetched successfully, count:", response.data.length);
+      // console.log("API: Chat sessions fetched successfully, count:", response.data.length);
       return response.data;
     } catch (error: any) {
       // If unauthorized, return empty array instead of throwing error
       if (error.response?.status === 401) {
-        console.log("User not authenticated, returning empty chat sessions list");
+        // console.log("User not authenticated, returning empty chat sessions list");
         return [];
       }
 
@@ -944,10 +1017,28 @@ export const chatAPI = {
     }
   },
 
+  // delete all chat session for the current user
+  deleteAllChatSessions: async () => {
+    try {
+      console.log("API: Deleting all chat sessions for the current user");
+      const response = await api.delete(`/chat-sessions/delete_all_my_sessions/`);
+      console.log("API: All chat sessions deleted successfully, response status:", response.status);
+      return response.data;
+    } catch (error: any) {
+      console.error("API: Delete all chat sessions failed with detailed error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw error;
+    }
+  },
+
   getChatsBySession: async (sessionId: string) => {
     try {
       const response = await api.get(`/chats/session/${sessionId}/`);
-      console.log("uchehe" , sessionId);
+      // console.log("uchehe" , sessionId);
       return response.data;
     } catch (error: any) {
       console.error("API: Fetch chats failed with detailed error:", {
@@ -1248,7 +1339,9 @@ export const UserReviews = {
     address: string;
     review_text: string;
     user: string;
+    rating: number;
     chat_session: string;
+    evidence: string;
   }) => {
     try {
       console.log("API: Posting review with data:", data);

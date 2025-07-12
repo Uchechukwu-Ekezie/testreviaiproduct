@@ -31,7 +31,7 @@ export interface User {
     isLoading: boolean
     login: (email: string, password: string) => Promise<boolean>
     signup: (userData: {
-      username: string
+     
       email: string
       first_name: string
       last_name: string
@@ -42,5 +42,5 @@ export interface User {
     updateProfile: (userData: Partial<User>) => Promise<boolean>
     loginWithGoogle: (credentialResponse: GoogleOAuthPayload) => Promise<boolean>
     updateProfileImage: (imageUrl: string) => Promise<boolean>
+    refreshAccessToken: () => Promise<string | null>  
   }
-  

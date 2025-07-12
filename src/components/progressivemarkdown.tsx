@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
-import SyntaxHighlighter from 'react-syntax-highlighter';
-import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
@@ -65,7 +63,7 @@ const ProgressiveMarkdownRenderer: React.FC<ProgressiveMarkdownProps> = ({
             return prev;
           }
           
-          // Call onTextUpdate but limit how often
+          // Call onTextUpdate but limit how o
           if (prev % 5 === 0) {
             onTextUpdateRef.current?.();
           }
@@ -104,75 +102,75 @@ const ProgressiveMarkdownRenderer: React.FC<ProgressiveMarkdownProps> = ({
         rehypePlugins={[rehypeRaw, rehypeSanitize]}
         components={{
           h1: ({ children, ...props }) => (
-            <h1 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white" {...props}>
+            <h1 className="pb-4 mt-6 mb-8 text-3xl font-bold text-gray-900 border-b border-gray-200 dark:text-white dark:border-gray-700" {...props}>
               {children}
             </h1>
           ),
           h2: ({ children, ...props }) => (
-            <h2 className="mb-3 text-xl font-semibold text-gray-900 dark:text-white" {...props}>
+            <h2 className="pb-3 mt-8 mb-6 text-2xl font-semibold text-gray-900 border-b border-gray-100 dark:text-white dark:border-gray-800" {...props}>
               {children}
             </h2>
           ),
           h3: ({ children, ...props }) => (
-            <h3 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white" {...props}>
+            <h3 className="mb-5 text-xl font-semibold text-gray-900 mt-7 dark:text-white" {...props}>
               {children}
             </h3>
           ),
           h4: ({ children, ...props }) => (
-            <h4 className="mb-2 text-base font-semibold text-gray-900 dark:text-white" {...props}>
+            <h4 className="mt-6 mb-4 text-lg font-semibold text-gray-900 dark:text-white" {...props}>
               {children}
             </h4>
           ),
           h5: ({ children, ...props }) => (
-            <h5 className="mb-2 text-base font-medium text-gray-900 dark:text-white" {...props}>
+            <h5 className="mt-5 mb-4 text-base font-semibold text-gray-900 dark:text-white" {...props}>
               {children}
             </h5>
           ),
           h6: ({ children, ...props }) => (
-            <h6 className="mb-2 text-sm font-medium text-gray-900 dark:text-white" {...props}>
+            <h6 className="mt-4 mb-3 text-sm font-semibold tracking-wide text-gray-700 uppercase dark:text-gray-300" {...props}>
               {children}
             </h6>
           ),
           table: ({ children, ...props }) => (
-            <div className="my-4 overflow-auto">
-              <table className="min-w-full text-sm text-left border border-gray-300 dark:border-gray-600" {...props}>
+            <div className="my-8 overflow-auto border border-gray-200 rounded-lg shadow-sm dark:border-gray-700">
+              <table className="w-full text-sm border-collapse" {...props}>
                 {children}
               </table>
             </div>
           ),
           thead: ({ children, ...props }) => (
-            <thead className="text-gray-700 bg-gray-100 dark:bg-gray-700 dark:text-gray-200" {...props}>
+            <thead className="bg-gray-50 dark:bg-[#0D1117]" {...props}>
               {children}
             </thead>
           ),
           tbody: ({ children, ...props }) => (
-            <tbody className="bg-white dark:bg-gray-800" {...props}>
+            <tbody className="bg-white dark:bg-[#0D1117]" {...props}>
               {children}
             </tbody>
           ),
           tr: ({ children, ...props }) => (
-            <tr className="border-t border-gray-200 dark:border-gray-700" {...props}>
+            <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-[#0D1117]" {...props}>
               {children}
             </tr>
           ),
           th: ({ children, ...props }) => (
-            <th className="px-4 py-2 font-semibold border-r border-gray-200 dark:border-gray-700" {...props}>
+            <th className="px-6 py-3 text-xs font-semibold tracking-wider text-left text-gray-700 uppercase dark:text-gray-300" {...props}>
               {children}
             </th>
           ),
           td: ({ children, ...props }) => (
-            <td className="px-4 py-2 border-r border-gray-200 dark:border-gray-700" {...props}>
+            <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-300" {...props}>
               {children}
             </td>
           ),
           
           p: ({ children, ...props }) => (
-            <p className="mb-4 text-[15px] leading-relaxed text-gray-800 dark:text-gray-300" {...props}>
+            <p className="mb-6 text-base leading-7 text-gray-800 dark:text-gray-300" {...props}>
               {children}
             </p>
           ),
           strong: ({ children, ...props }) => (
-            <strong className="text-gray-900 font-semibold dark:text-white text-[17px]" {...props}>
+            <strong className="font-bold text-gray-900 dark:text-white" {...props}>
               {children}
             </strong>
           ),
@@ -182,34 +180,50 @@ const ProgressiveMarkdownRenderer: React.FC<ProgressiveMarkdownProps> = ({
             </em>
           ),
           ul: ({ children, ...props }) => (
-            <ul className="mb-4 list-disc list-inside text-[16px] text-gray-800 dark:text-gray-300" {...props}>
+            <ul className="mb-6 ml-6 space-y-3 text-gray-800 list-disc dark:text-gray-300" {...props}>
               {children}
             </ul>
           ),
           ol: ({ children, ...props }) => (
-            <ol className="mb-4 list-decimal list-inside text-[16px] text-gray-800 dark:text-gray-300" {...props}>
+            <ol className="mb-6 ml-6 space-y-3 text-gray-800 list-decimal dark:text-gray-300" {...props}>
               {children}
             </ol>
           ),
           li: ({ children, ...props }) => (
-            <li className="mb-1 text-[15px] text-gray-800 dark:text-gray-300" {...props}>
+            <li className="text-base leading-7 text-gray-800 dark:text-gray-300" {...props}>
               {children}
             </li>
           ),
           span: ({ children, ...props }) => (
-            <span className="text-[15px] text-gray-800 dark:text-gray-300" {...props}>
+            <span className="text-base text-gray-800 dark:text-gray-300" {...props}>
               {children}
             </span>
           ),
           hr: ({ ...props }) => (
-            <hr className="my-4 border-gray-300 dark:border-gray-500" {...props} />
+            <hr className="my-12 border-t-2 border-gray-200 dark:border-gray-700" {...props} />
           ),
 
           pre: ({ children, ...props }) => (
-            <div className="p-3 my-2 overflow-x-auto bg-gray-800 rounded-lg">
-              <code className="px-1 text-sm bg-gray-200 rounded" {...props}>
+            <div className="relative my-4 bg-[#0D1117] overflow-hidden border  rounded-xl">
+              <div className="flex items-center justify-between px-4 py-3 bg-[#0D1117] ">
+                <span className="text-sm text-[#7D8590] font-mono">code</span>
+                <button
+                  onClick={() => {
+                    const textContent = String(children);
+                    navigator.clipboard.writeText(textContent);
+                  }}
+                  className="flex items-center gap-1 px-2 py-1 text-xs text-[#7D8590] hover:text-[#C9D1D9] hover:bg-[#21262D] rounded transition-colors"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                  </svg>
+                  Copy
+                </button>
+              </div>
+              <pre className="p-4 text-sm font-mono text-[#C9D1D9] bg-[#0D1117] leading-relaxed whitespace-pre overflow-x-auto" {...props}>
                 {children}
-              </code>
+              </pre>
             </div>
           ),
           
@@ -217,42 +231,44 @@ const ProgressiveMarkdownRenderer: React.FC<ProgressiveMarkdownProps> = ({
             const match = /language-(\w+)/.exec(className || '');
             if (!inline && match) {
               return (
-                <div className="relative mb-6 rounded-md overflow-hidden bg-[#282a36]">
-                  <div className="flex justify-between items-center px-4 py-2 text-sm bg-[#1e1f29] text-white">
-                    <span>{match[1]}</span>
+                <div className="relative my-4 bg-[#161B22] rounded-lg overflow-hidden border border-[#30363D]">
+                  <div className="flex items-center justify-between px-4 py-3 bg-[#161B22]">
+                    <span className="text-sm text-[#7D8590] font-mono">{match[1]}</span>
                     <button
                       onClick={() => navigator.clipboard.writeText(String(children))}
-                      className="text-xs text-blue-400 hover:underline"
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-[#7D8590] hover:text-[#C9D1D9] hover:bg-[#21262D] rounded transition-colors"
                     >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                      </svg>
                       Copy
                     </button>
                   </div>
-                  <SyntaxHighlighter
-                    showLineNumbers
-                    language={match[1]}
-                    style={atomDark}
-                    wrapLines
-                    className="px-4 py-3 text-sm"
-                    {...props}
-                  >
-                    {String(children)}
-                  </SyntaxHighlighter>
+                  <div className="overflow-x-auto">
+                    <pre className="p-4 text-sm font-mono text-[#C9D1D9] bg-[#161B22] leading-relaxed whitespace-pre overflow-x-auto">
+                      <code>{String(children)}</code>
+                    </pre>
+                  </div>
                 </div>
               );
             }
         
             return (
-              <code className="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-sm font-mono" {...props}>
+              <code className="px-1.5 py-0.5 mx-0.5 text-sm font-mono  dark:bg-[#161B22] " {...props}>
                 {children}
               </code>
             );
           },
           blockquote: ({ children, ...props }) => (
             <blockquote
-              className="pl-4 mb-4 italic text-gray-600 border-l-4 border-gray-300 dark:border-gray-500 dark:text-gray-400"
+              className="relative py-6 pl-8 pr-6 my-8 italic text-gray-700 border-l-4 border-blue-500 rounded-r-lg dark:text-gray-300 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-900/10"
               {...props}
             >
-              {children}
+              <div className="absolute text-3xl leading-none text-blue-500 left-3 top-6 dark:text-blue-400">&ldquo;</div>
+              <div className="pl-4">
+                {children}
+              </div>
             </blockquote>
           ),
           a: ({ children, href, ...props }) => {
@@ -264,16 +280,19 @@ const ProgressiveMarkdownRenderer: React.FC<ProgressiveMarkdownProps> = ({
                 onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                   if (href) handleLinkClick(e, href);
                 }}
-                className="px-3 py-1 text-sm text-blue-600 rounded-md cursor-pointer hover:underline dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30"
+                className="inline-flex items-center px-4 py-2 mx-1 text-sm font-medium text-blue-600 transition-colors border border-blue-200 rounded-md dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/50"
                 // Only spread props safe for buttons
                 {...(props as React.ButtonHTMLAttributes<HTMLButtonElement>)}
               >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
                 View Link
               </button>
             ) : (
               <a
                 href={href}
-                className="text-blue-600 cursor-pointer hover:underline dark:text-blue-400"
+                className="mx-1 font-medium text-blue-600 underline transition-colors dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline-offset-4 decoration-blue-400 hover:decoration-blue-600"
                 onClick={(e: React.MouseEvent<HTMLAnchorElement>) => {
                   if (href) handleLinkClick(e, href);
                 }}

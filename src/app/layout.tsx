@@ -37,7 +37,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark ${inter.variable} ${publicSans.variable}`}>
       <body
-        className="font-sans transition-colors duration-300 bg-background text-muted-foreground"
+        className="font-sans text-muted-foreground"
         suppressHydrationWarning
       >
         <GoogleOAuthProvider

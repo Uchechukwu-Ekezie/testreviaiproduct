@@ -37,7 +37,7 @@ export default function WelcomePage() {
                 Let’s make your experience even better. Get instant insights or
                 AI-tailored recommendations for your needs.
               </p>
-              <p className="pt-3 pb-20 text-sm text-zinc-400">
+              {/* <p className="pt-3 pb-20 text-sm text-zinc-400">
                 <Button
                   variant="link"
                   onClick={() => router.push("/preferences")}
@@ -45,7 +45,7 @@ export default function WelcomePage() {
                 >
                   Help us understand you better for personalized recommendations
                 </Button>
-              </p>
+              </p> */}
             </div>
 
             <Button

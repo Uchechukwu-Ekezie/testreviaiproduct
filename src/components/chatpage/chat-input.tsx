@@ -236,7 +236,7 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(({
         paddingLeft: isMobile ? 0 : sidebarCollapsed ? "4rem" : "16rem",
         paddingRight: isMobile ? 0 : "14px",
       }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.1 }}
     >
       <div className="flex justify-center w-full">
         <div className="w-full md:max-w-[880px] mx-auto p-4">
@@ -249,7 +249,7 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(({
             <form onSubmit={handleLocalSubmit}>
               <textarea
                 ref={textareaRef}
-                placeholder="Ask me anything about housing..."
+                placeholder="Ask me anything about real estate..."
                 value={input}
                 onChange={handleChange}
                 onKeyDown={(e) => {

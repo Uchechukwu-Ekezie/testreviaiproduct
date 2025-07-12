@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 // import { Input } from "@/components/ui/input";
 import {
@@ -37,6 +37,12 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const isMobile = useMediaQuery("(max-width: 1024px)");
   const { login} = useAuth();
+  
+  // clear local storage
+
+  useEffect(() => {
+    localStorage.clear();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -173,12 +179,12 @@ export default function LoginPage() {
               </div> */}
 
               <div className="relative py-4">
-                <div className="absolute inset-0 flex items-center">
+                {/* <div className="absolute inset-0 flex items-center">
                   <span className="w-full border-t border-zinc-700" />
                 </div>
                 <div className="relative flex justify-center text-[16px] ">
                   <span className="p-2 bg-background text-zinc-400">Or</span>
-                </div>
+                </div> */}
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-7">

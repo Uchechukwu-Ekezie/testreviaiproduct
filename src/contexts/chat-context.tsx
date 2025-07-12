@@ -51,6 +51,11 @@ interface Property {
   created_by?: string
   location?: string
   cordinates?: string
+  rentalGrade?: number | string
+  environmentalScore?: number | string
+  neighborhoodScore?: number | string
+  aiRefinedDescription?: string | null
+  environmentalReport?: string | null
 }
 
 // Define types for our context

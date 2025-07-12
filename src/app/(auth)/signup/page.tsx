@@ -4,7 +4,7 @@ import type React from "react";
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+
 import {
   Card,
   CardContent,
@@ -19,8 +19,6 @@ import Image from "next/image";
 import { useMediaQuery } from "@/hooks/use-mobile";
 import { useRouter } from "next/navigation";
 
-// import google from "../../../../public/Image/Google - Original.png";
-// import apple from "../../../../public/Image/Apple - Negative.png";
 import Testimonial from "@/components/testimonial";
 import { useAuth } from "@/contexts/auth-context";
 import { toast } from "@/components/ui/use-toast";
@@ -35,7 +33,6 @@ import axios from "axios";
 
 export default function SignUpPage() {
   const [formData, setFormData] = useState({
-    username: "",
     email: "",
     first_name: "",
     last_name: "",
@@ -44,9 +41,7 @@ export default function SignUpPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  // const [isProviderLoading, setIsProviderLoading] = useState<
-  //   "google" | "apple" | null
-  // >(null);
+
   const isMobile = useMediaQuery("(max-width: 1024px)");
   const router = useRouter();
   const { signup } = useAuth();
@@ -78,15 +73,6 @@ export default function SignUpPage() {
       toast({
         title: "Invalid Password",
         description: "Password must be at least 6 characters long.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!formData.username) {
-      toast({
-        title: "Username Required",
-        description: "Please enter a username.",
         variant: "destructive",
       });
       return;
@@ -141,36 +127,6 @@ export default function SignUpPage() {
     }
   };
 
-  // const handleProviderSignup = async (provider: "google" | "apple") => {
-  //   if (!termsAccepted) {
-  //     toast({
-  //       title: "Terms Required",
-  //       description: "Please accept the Terms of Service and Privacy Policy to continue.",
-  //       variant: "destructive",
-  //     })
-  //     return
-  //   }
-
-  //   setIsProviderLoading(provider)
-
-  //   try {
-  //     if (signupWithProvider) {
-  //       await signupWithProvider(provider)
-  //     } else {
-  //       toast({
-  //         title: "Provider signup unavailable",
-  //         description: "This login method is currently unavailable.",
-  //         variant: "destructive",
-  //       })
-  //     }
-  //   } catch (error) {
-  //     console.error(`${provider} signup failed:`, error)
-  //     // Error toast is handled in the auth context
-  //   } finally {
-  //     setIsProviderLoading(null)
-  //   }
-  // }
-
   return (
     <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-[#212121] font-sf-pro">
       <div className="flex flex-col items-center w-full gap-8 mx-auto lg:flex-row max-w-1440">
@@ -184,37 +140,6 @@ export default function SignUpPage() {
 
           <CardContent className="flex-grow py-4 overflow-y-auto">
             <div className="space-y-2">
-              {/* <div className="grid gap-3">
-                <Button
-                  variant="outline"
-                  className="w-full text-white rounded-[15px] text-[15px] font-[400] border-zinc-700 hover:bg-zinc-800 py-5 h-11"
-                  disabled={isLoading || isProviderLoading !== null}
-                  onClick={() => handleProviderSignup("google")}
-                >
-                  <Image src={google || "/placeholder.svg"} alt="Google Logo" width={24} height={24} />
-                  Sign up with Google
-                </Button>
-
-                <Button
-                  variant="outline"
-                  className="w-full text-white rounded-[15px] text-[15px] font-[400] bg-transparent border-zinc-700 hover:bg-zinc-800 py-5 h-11"
-                  disabled={isLoading || isProviderLoading !== null}
-                  onClick={() => handleProviderSignup("apple")}
-                >
-                  <Image src={apple || "/placeholder.svg"} alt="Apple Logo" width={24} height={24} />
-                  Sign up with Apple
-                </Button>
-              </div> */}
-
-              {/* <div className="relative py-6">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-zinc-700" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="px-2 bg-zinc-900 text-zinc-400">Or</span>
-                </div>
-              </div> */}
-
               <form onSubmit={handleSubmit} className="pt-10 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -274,33 +199,6 @@ export default function SignUpPage() {
                         className="absolute w-[20px] h-[17px] transform -translate-y-1/2 left-3 top-1/2 text-zinc-400"
                       />
                     </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="username"
-                    className="text-zinc-400 text-[16px]"
-                  >
-                    Username
-                  </Label>
-                  <div className="relative">
-                    <input
-                      id="username"
-                      placeholder="Choose a username"
-                      value={formData.username}
-                      onChange={(e) =>
-                        setFormData({ ...formData, username: e.target.value })
-                      }
-                      className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[15px] placeholder:text-[17px] placeholder:text-white pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
-                      disabled={isLoading}
-                      required
-                    />
-                    <Image
-                      src={user || "/placeholder.svg"}
-                      alt="user icon"
-                      className="absolute w-[20px] h-[17px] transform -translate-y-1/2 left-3 top-1/2 text-zinc-400"
-                    />
                   </div>
                 </div>
 

@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useMemo } from 'react';
-import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import { Suspense, useMemo } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import type React from "react";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/auth-context";
@@ -39,36 +39,58 @@ function ChatContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const id = searchParams?.get('id') || pathname?.split('/').pop() || null;
-  
+  const id = searchParams?.get("id") || pathname?.split("/").pop() || null;
+
   // Use localStorage to persist sidebar state across navigation and refreshes
   const [sidebarOpen, setSidebarOpen] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('sidebarState');
-      return stored ? stored === 'true' : false;
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("sidebarState");
+      return stored ? stored === "true" : false;
     }
     return false;
   });
-  
+
   useEffect(() => {
-    localStorage.setItem('sidebarState', String(sidebarOpen));
+    localStorage.setItem("sidebarState", String(sidebarOpen));
   }, [sidebarOpen]);
 
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSessionLoading, setIsSessionLoading] = useState(false);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
+  // FIXED: Ensure messages is always initialized as an array
+  const [messagesState, setMessagesState] = useState<Message[]>([]);
+  
+  // FIXED: Create a safe getter for messages that always returns an array
+  const messages = Array.isArray(messagesState) ? messagesState : [];
+  
+  // FIXED: Create a safe setter that only accepts arrays
+  const setMessages = useCallback((value: Message[] | ((prev: Message[]) => Message[])) => {
+    if (typeof value === 'function') {
+      setMessagesState(prev => {
+        const currentMessages = Array.isArray(prev) ? prev : [];
+        const newMessages = value(currentMessages);
+        return Array.isArray(newMessages) ? newMessages : [];
+      });
+    } else {
+      setMessagesState(Array.isArray(value) ? value : []);
+    }
+  }, []);
+  
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSession, setActiveSession] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const [showRenameDialog, setShowRenameDialog] = useState(false);
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
+    null
+  );
   const [latestMessageId, setLatestMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user, isAuthenticated, logout } = useAuth();
   const isMobile = useMediaQuery("(max-width: 768px)");
-  const isMediumScreen = useMediaQuery("(min-width: 768px) and (max-width: 1023px)");
+  const isMediumScreen = useMediaQuery(
+    "(min-width: 768px) and (max-width: 1023px)"
+  );
   const isLgScreen = useMediaQuery("(min-width: 1024px)");
   const isCreatingNewSession = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -99,6 +121,7 @@ function ChatContent() {
       message: "Tell me about my neighborhood.",
     },
   ];
+  
   const getSessions = async () => {
     try {
       if (!isAuthenticated) {
@@ -108,7 +131,6 @@ function ChatContent() {
 
       setIsLoadingSessions(true);
       const data = await chatAPI.getSessionsMine();
-     
 
       if (!data || !data.results || !Array.isArray(data.results)) {
         console.warn("Unexpected response format from getSessionsMine:", data);
@@ -140,9 +162,15 @@ function ChatContent() {
       return sortedSessions;
     } catch (error: unknown) {
       console.error("Error fetching sessions:", error);
-      if (typeof error === 'object' && error !== null && 'response' in error && 
-          typeof error.response === 'object' && error.response && 'status' in error.response && 
-          error.response.status !== 401) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        typeof error.response === "object" &&
+        error.response &&
+        "status" in error.response &&
+        error.response.status !== 401
+      ) {
         toast({
           title: "Error",
           description: "Failed to fetch chat sessions",
@@ -162,7 +190,7 @@ function ChatContent() {
     }
 
     const hasPendingMessage = messages.some(
-      (msg) => msg.session === sessionId && !msg.response && !msg.error
+      (msg) => msg && msg.session === sessionId && !msg.response && !msg.error
     );
 
     if (hasPendingMessage) {
@@ -172,7 +200,9 @@ function ChatContent() {
     try {
       const data = await chatAPI.getChatsBySession(sessionId);
 
-      if (!data || !data.results) {
+      // FIXED: Better validation of API response
+      if (!data || !data.results || !Array.isArray(data.results)) {
+        console.warn("Invalid response from getChatsBySession:", data);
         return [];
       }
 
@@ -185,22 +215,25 @@ function ChatContent() {
         return 0;
       });
 
-      const existingMessageIds = new Set(messages.map((msg) => msg.id));
-      const uniqueNewMessages = sortedMessages.filter(
-        (msg) => !existingMessageIds.has(msg.id)
+      // FIXED: Ensure we're working with valid message objects
+      const validMessages = sortedMessages.filter(msg => msg && typeof msg === 'object' && msg.id);
+
+      const existingMessageIds = new Set(messages.map((msg) => msg && msg.id).filter(Boolean));
+      const uniqueNewMessages = validMessages.filter(
+        (msg) => msg && !existingMessageIds.has(msg.id)
       );
 
       if (hasPendingMessage) {
         const pendingMessages = messages.filter(
-          (msg) => !msg.response && !msg.error
+          (msg) => msg && !msg.response && !msg.error
         );
-        const nonPendingFetchedMessages = sortedMessages.filter(
-          (msg) => !pendingMessages.some((pending) => pending.id === msg.id)
+        const nonPendingFetchedMessages = validMessages.filter(
+          (msg) => msg && !pendingMessages.some((pending) => pending && pending.id === msg.id)
         );
         setMessages([...nonPendingFetchedMessages, ...pendingMessages]);
       } else {
         if (messages.length === 0 || uniqueNewMessages.length > 0) {
-          setMessages(sortedMessages);
+          setMessages(validMessages);
         }
       }
 
@@ -208,7 +241,7 @@ function ChatContent() {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
       }, 100);
 
-      return sortedMessages;
+      return validMessages;
     } catch (error: unknown) {
       console.error("Error fetching chats for session:", sessionId, error);
       toast({
@@ -229,7 +262,7 @@ function ChatContent() {
   useEffect(() => {
     if (activeSession && !isCreatingNewSession.current) {
       const hasMessagesForSession = messages.some(
-        (msg) => msg.session === activeSession
+        (msg) => msg && msg.session === activeSession
       );
 
       if (!hasMessagesForSession) {
@@ -264,16 +297,16 @@ function ChatContent() {
 
   useEffect(() => {
     if (activeSession && pathname !== `/chats/${activeSession}`) {
-      window.history.pushState({}, '', `/chats/${activeSession}`);
+      window.history.pushState({}, "", `/chats/${activeSession}`);
     }
   }, [activeSession, pathname]);
 
   useEffect(() => {
     const handlePopState = () => {
-      const pathParts = window.location.pathname.split('/');
+      const pathParts = window.location.pathname.split("/");
       const sessionId = pathParts[pathParts.length - 1];
-      
-      if (sessionId && sessionId !== 'chats') {
+
+      if (sessionId && sessionId !== "chats") {
         setActiveSession(sessionId);
       } else {
         setActiveSession(null);
@@ -281,8 +314,8 @@ function ChatContent() {
       }
     };
 
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
   useEffect(() => {
@@ -291,10 +324,11 @@ function ChatContent() {
         try {
           setIsSessionLoading(true);
           const sessionId = id as string;
-          
-          const sessionExists = sessions.some(s => s.id === sessionId) || 
-                               await chatAPI.getChatSession(sessionId).catch(() => false);
-          
+
+          const sessionExists =
+            sessions.some((s) => s.id === sessionId) ||
+            (await chatAPI.getChatSession(sessionId).catch(() => false));
+
           if (sessionExists) {
             setActiveSession(sessionId);
             await getChats(sessionId);
@@ -304,11 +338,11 @@ function ChatContent() {
               description: "The requested chat session could not be found",
               variant: "destructive",
             });
-            router.push('/');
+            router.push("/");
           }
         } catch (error) {
           console.error("Error loading session from URL:", error);
-          router.push('/');
+          router.push("/");
         } finally {
           setIsSessionLoading(false);
         }
@@ -318,150 +352,173 @@ function ChatContent() {
     }
   }, [id]);
 
-  const postChat = useCallback(async (input: string, activeSession?: string, options?: { signal?: AbortSignal, skipAddingTempMessage?: boolean }) => {
-    try {
-      const tempMessageId = "temp-" + Date.now();
+  const postChat = useCallback(
+    async (
+      input: string,
+      activeSession?: string,
+      options?: { signal?: AbortSignal; skipAddingTempMessage?: boolean }
+    ) => {
+      try {
+        const tempMessageId = "temp-" + Date.now();
 
-      const tempMessage: Message = {
-        id: tempMessageId,
-        prompt: input,
-        response: "",
-        session: activeSession,
-      };
-
-      const isDuplicate = messages.some(
-        (msg) =>
-          msg.prompt === input &&
-          (!msg.response || msg.response === "") &&
-          msg.session === activeSession
-      );
-
-      if (!isDuplicate && !options?.skipAddingTempMessage) {
-        setMessages((prev) => [...prev, tempMessage]);
-      }
-
-      let sessionId = activeSession;
-      let newSessionData: ChatSession | null = null;
-
-      if (!sessionId) {
-        isCreatingNewSession.current = true;
-
-        const userId = user?.id || "guest";
-        const sessionData = {
-          chat_title: input.substring(0, 30),
-          user: userId,
+        const tempMessage: Message = {
+          id: tempMessageId,
+          prompt: input,
+          response: "",
+          session: activeSession,
         };
 
-        try {
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === tempMessageId ? { ...msg, isNewSession: true } : msg
-            )
-          );
+        // FIXED: Safe array operation
+        const isDuplicate = messages.some(
+          (msg) =>
+          
+            msg.prompt === input &&
+            (!msg.response || msg.response === "") &&
+            msg.session === activeSession
+        );
 
-          newSessionData = await chatAPI.createChatSession(sessionData);
+        if (!isDuplicate && !options?.skipAddingTempMessage) {
+          setMessages((prev) => [...prev, tempMessage]);
+        }
 
-          if (!newSessionData) {
-            throw new Error("Failed to create new chat session");
-          }
+        let sessionId = activeSession;
+        let newSessionData: ChatSession | null = null;
 
-          sessionId = newSessionData.id;
+        if (!sessionId) {
+          isCreatingNewSession.current = true;
 
-          setSessions((prev: ChatSession[]) => {
-            if (prev.some((s) => s.id === newSessionData!.id)) {
-              return prev;
+          const userId = user?.id || "guest";
+          const sessionData = {
+            chat_title: input.substring(0, 30),
+            user: userId,
+          };
+
+          try {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg && msg.id === tempMessageId ? { ...msg, isNewSession: true } : msg
+              )
+            );
+
+            newSessionData = await chatAPI.createChatSession(sessionData);
+
+            if (!newSessionData) {
+              throw new Error("Failed to create new chat session");
             }
-            return [newSessionData!, ...prev];
+
+            sessionId = newSessionData.id;
+
+            setSessions((prev: ChatSession[]) => {
+              if (prev.some((s) => s.id === newSessionData!.id)) {
+                return prev;
+              }
+              return [newSessionData!, ...prev];
+            });
+
+            setActiveSession(sessionId);
+
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === tempMessageId
+                  ? { ...msg, session: sessionId, isNewSession: true }
+                  : msg
+              )
+            );
+          } catch (error) {
+            console.error("Error creating session:", error);
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === tempMessageId ? { ...msg, error: true } : msg
+              )
+            );
+            throw error;
+          }
+        }
+
+        try {
+          const data = await chatAPI.postNewChat(
+            input,
+            sessionId!,
+            options?.signal ? { signal: options.signal } : undefined
+          );
+          setLatestMessageId(data.id);
+
+          setMessages((prev) => {
+            const tempIndex = prev.findIndex((msg) => msg && msg.id === tempMessageId);
+
+            if (tempIndex >= 0) {
+              const newMessages = [...prev];
+              newMessages[tempIndex] = { ...data, session: sessionId };
+              return newMessages;
+            } else {
+              const existingIndex = prev.findIndex((msg) => msg && msg.id === data.id);
+              if (existingIndex >= 0) {
+                const newMessages = [...prev];
+                newMessages[existingIndex] = { ...data, session: sessionId };
+                return newMessages;
+              } else {
+                return [...prev, { ...data, session: sessionId }];
+              }
+            }
           });
 
-          setActiveSession(sessionId);
+          if (newSessionData) {
+            setSessions((prev) => {
+              const existingSession = prev.find((s) => s.id === sessionId);
+              if (!existingSession) {
+                return [
+                  {
+                    ...newSessionData!,
+                    chat_title: newSessionData!.chat_title,
+                    first_message: input,
+                  },
+                  ...prev,
+                ];
+              }
+              return prev;
+            });
 
+            setTimeout(() => {
+              setActiveSession(sessionId);
+              isCreatingNewSession.current = false;
+            }, 100);
+          }
+
+          setTimeout(scrollToBottom, 100);
+          return data;
+        } catch (error) {
+          console.error("Error posting chat:", error);
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === tempMessageId
-                ? { ...msg, session: sessionId, isNewSession: true }
+                ? { ...msg, error: true, session: sessionId }
                 : msg
             )
           );
-        } catch (error) {
-          console.error("Error creating session:", error);
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === tempMessageId ? { ...msg, error: true } : msg
-            )
-          );
+
+          if (newSessionData && sessionId) {
+            setActiveSession(sessionId);
+          }
+
+          isCreatingNewSession.current = false;
           throw error;
         }
-      }
-
-      try {
-        const data = await chatAPI.postNewChat(input, sessionId!, options?.signal ? { signal: options.signal } : undefined);
-        setLatestMessageId(data.id);
-
-        setMessages((prev) => {
-          const tempIndex = prev.findIndex((msg) => msg.id === tempMessageId);
-
-          if (tempIndex >= 0) {
-            const newMessages = [...prev];
-            newMessages[tempIndex] = { ...data, session: sessionId };
-            return newMessages;
-          } else {
-            const existingIndex = prev.findIndex((msg) => msg.id === data.id);
-            if (existingIndex >= 0) {
-              const newMessages = [...prev];
-              newMessages[existingIndex] = { ...data, session: sessionId };
-              return newMessages;
-            } else {
-              return [...prev, { ...data, session: sessionId }];
-            }
-          }
-        });
-
-        if (newSessionData) {
-          setSessions((prev) => {
-            const existingSession = prev.find((s) => s.id === sessionId);
-            if (!existingSession) {
-              return [
-                {
-                  ...newSessionData!,
-                  chat_title: newSessionData!.chat_title,
-                  first_message: input,
-                },
-                ...prev,
-              ];
-            }
-            return prev;
-          });
-
-          setTimeout(() => {
-            setActiveSession(sessionId);
-            isCreatingNewSession.current = false;
-          }, 100);
-        }
-
-        setTimeout(scrollToBottom, 100);
-        return data;
-      } catch (error) {
-        console.error("Error posting chat:", error);
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === tempMessageId ? { ...msg, error: true, session: sessionId } : msg
-          )
-        );
-
-        if (newSessionData && sessionId) {
-          setActiveSession(sessionId);
-        }
-
+      } catch (error: unknown) {
+        console.error("Error in postChat:", error);
         isCreatingNewSession.current = false;
         throw error;
       }
-    } catch (error: unknown) {
-      console.error("Error in postChat:", error);
-      isCreatingNewSession.current = false;
-      throw error;
-    }
-  }, [messages, user, setMessages, setSessions, setActiveSession, setLatestMessageId, scrollToBottom]);
+    },
+    [
+      messages,
+      user,
+      setMessages,
+      setSessions,
+      setActiveSession,
+      setLatestMessageId,
+      scrollToBottom,
+    ]
+  );
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -475,43 +532,45 @@ function ChatContent() {
         response: "",
         session: activeSession,
       };
-      
-      setMessages(prev => [...prev, tempMessage]);
+
+      setMessages((prev) => [...prev, tempMessage]);
 
       const controller = new AbortController();
       abortControllerRef.current = controller;
       setIsLoading(true);
-      
+
       try {
         await postChat(input, activeSession || undefined, {
           signal: controller.signal,
-          skipAddingTempMessage: true
+          skipAddingTempMessage: true,
         });
       } catch (error: unknown) {
-        if (error instanceof Error && error.name !== 'AbortError') {
+        if (error instanceof Error && error.name !== "AbortError") {
           console.error("Error submitting chat:", error);
-          
-          setMessages(prev => 
-            prev.map(msg => 
-              msg.id === tempId ? { ...msg, error: true } : msg
+
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg && msg.id === tempId ? { ...msg, error: true } : msg
             )
           );
-          
+
           const errorMessage = (() => {
-            if (error instanceof Error && 
-                'response' in error && 
-                typeof error.response === 'object' && 
-                error.response && 
-                'data' in error.response && 
-                typeof error.response.data === 'object' && 
-                error.response.data && 
-                'message' in error.response.data && 
-                typeof error.response.data.message === 'string') {
+            if (
+              error instanceof Error &&
+              "response" in error &&
+              typeof error.response === "object" &&
+              error.response &&
+              "data" in error.response &&
+              typeof error.response.data === "object" &&
+              error.response.data &&
+              "message" in error.response.data &&
+              typeof error.response.data.message === "string"
+            ) {
               return error.response.data.message;
             }
             return "Failed to send message";
           })();
-          
+
           toast({
             title: "Error",
             description: errorMessage,
@@ -539,182 +598,215 @@ function ChatContent() {
       });
     }
   }, [toast, setIsLoading]);
-  
-  const handleCardSubmit = useCallback(async (card: (typeof actionCards)[0]) => {
-    if (isLoading) return;
 
-    setIsLoading(true);
-    const tempId = `temp-${Date.now()}`;
-    const initialMessage = {
-      id: tempId,
-      prompt: card.message,
-      response: "",
-      session: activeSession,
-    };
+  const handleCardSubmit = useCallback(
+    async (card: (typeof actionCards)[0]) => {
+      if (isLoading) return;
 
-    setMessages(prev => [...prev, initialMessage]);
-    
-    try {
-      await postChat(card.message, activeSession || undefined, {
-        skipAddingTempMessage: true
-      });
-    } catch (error: unknown) {
-      console.error("Error submitting card message:", error);
+      setIsLoading(true);
+      const tempId = `temp-${Date.now()}`;
+      const initialMessage = {
+        id: tempId,
+        prompt: card.message,
+        response: "",
+        session: activeSession,
+      };
 
-      setMessages(prev => 
-        prev.map(msg => 
-          msg.id === tempId ? { ...msg, error: true } : msg
-        )
-      );
+      setMessages((prev) => [...prev, initialMessage]);
 
-      let errorMessage =
-        "The server encountered an error. Please try again later.";
-      
-      if (error && typeof error === 'object' && 'response' in error && error.response && 
-          typeof error.response === 'object' && 'status' in error.response) {
-        const status = error.response.status as number;
-        if (status === 401) {
-          errorMessage = "Authentication required. Please log in to continue.";
-        } else if (status === 403) {
-          errorMessage = "You don't have permission to perform this action.";
-        } else if (status === 404) {
-          errorMessage = "Resource not found. The session may have been deleted.";
-        } else if (status === 500) {
-          errorMessage = "Server error. Please try again later.";
+      try {
+        await postChat(card.message, activeSession || undefined, {
+          skipAddingTempMessage: true,
+        });
+      } catch (error: unknown) {
+        console.error("Error submitting card message:", error);
+
+        setMessages((prev) =>
+          prev.map((msg) => (msg && msg.id === tempId ? { ...msg, error: true } : msg))
+        );
+
+        let errorMessage =
+          "The server encountered an error. Please try again later.";
+
+        if (
+          error &&
+          typeof error === "object" &&
+          "response" in error &&
+          error.response &&
+          typeof error.response === "object" &&
+          "status" in error.response
+        ) {
+          const status = error.response.status as number;
+          if (status === 401) {
+            errorMessage =
+              "Authentication required. Please log in to continue.";
+          } else if (status === 403) {
+            errorMessage = "You don't have permission to perform this action.";
+          } else if (status === 404) {
+            errorMessage =
+              "Resource not found. The session may have been deleted.";
+          } else if (status === 500) {
+            errorMessage = "Server error. Please try again later.";
+          }
         }
+
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
       }
+    },
+    [activeSession, isLoading, postChat, toast]
+  );
 
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [activeSession, isLoading, postChat, toast]);
-  
-  const handleRename = useCallback(async (sessionId: string) => {
-    if (!newTitle.trim()) return;
+  const handleRename = useCallback(
+    async (sessionId: string) => {
+      if (!newTitle.trim()) return;
 
-    try {
-      const updatedSession = await chatAPI.updateChatSession(sessionId, {
-        chat_title: newTitle.trim(),
-      });
+      try {
+        const updatedSession = await chatAPI.updateChatSession(sessionId, {
+          chat_title: newTitle.trim(),
+        });
 
-      setSessions((prev: ChatSession[]) =>
-        prev.map((session: ChatSession) =>
-          session.id === sessionId ? { ...session, ...updatedSession } : session
-        )
-      );
+        setSessions((prev: ChatSession[]) =>
+          prev.map((session: ChatSession) =>
+            session.id === sessionId
+              ? { ...session, ...updatedSession }
+              : session
+          )
+        );
 
-      setShowRenameDialog(false);
-      setNewTitle("");
-      setSelectedSessionId(null);
+        setShowRenameDialog(false);
+        setNewTitle("");
+        setSelectedSessionId(null);
 
-      toast({
-        title: "Success",
-        description: "Chat session renamed successfully",
-      });
-    } catch (error: unknown) {
-      console.error("Error renaming chat session:", error);
+        toast({
+          title: "Success",
+          description: "Chat session renamed successfully",
+        });
+      } catch (error: unknown) {
+        console.error("Error renaming chat session:", error);
 
-      let errorMessage = "Failed to rename chat session";
-      
-      if (error && typeof error === 'object' && 'response' in error && 
-          error.response && typeof error.response === 'object' && 
-          'data' in error.response && error.response.data && 
-          typeof error.response.data === 'object' && 'detail' in error.response.data) {
-        errorMessage = String(error.response.data.detail);
+        let errorMessage = "Failed to rename chat session";
+
+        if (
+          error &&
+          typeof error === "object" &&
+          "response" in error &&
+          error.response &&
+          typeof error.response === "object" &&
+          "data" in error.response &&
+          error.response.data &&
+          typeof error.response.data === "object" &&
+          "detail" in error.response.data
+        ) {
+          errorMessage = String(error.response.data.detail);
+        }
+
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
       }
-
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    }
-  }, [newTitle, setSessions, setShowRenameDialog, setNewTitle, setSelectedSessionId]);
+    },
+    [
+      newTitle,
+      setSessions,
+      setShowRenameDialog,
+      setNewTitle,
+      setSelectedSessionId,
+    ]
+  );
 
   // Memoize callbacks
   const handleSetActiveSession = useCallback((sessionId: string | null) => {
     setActiveSession(sessionId);
     if (sessionId) {
-      window.history.pushState({}, '', `/chats/${sessionId}`);
+      window.history.pushState({}, "", `/chats/${sessionId}`);
     } else {
-      window.history.pushState({}, '', '/');
+      window.history.pushState({}, "", "/");
     }
   }, []);
 
   const handleSetSidebarOpen = useCallback((open: boolean) => {
     setSidebarOpen(open);
-    localStorage.setItem('sidebarState', String(open));
+    localStorage.setItem("sidebarState", String(open));
   }, []);
 
   const handleStartNewChat = useCallback(() => {
     setActiveSession(null);
     setMessages([]);
     setInput("");
-    window.history.pushState({}, '', '/');
+    window.history.pushState({}, "", "/");
     isCreatingNewSession.current = false;
   }, [setMessages, setInput]);
 
   // Memoize child components' props
-  const sidebarProps = useMemo(() => ({
-    sidebarOpen,
-    setSidebarOpen: handleSetSidebarOpen,
-    sessions,
-    setSessions,
-    activeSession,
-    setActiveSession: handleSetActiveSession,
-    setMessages,
-    isAuthenticated,
-    logout,
-    isMobile,
-    setShowRenameDialog,
-    setSelectedSessionId,
-    setNewTitle,
-    isLgScreen,
-    isMediumScreen,
-    isLoadingSessions
-  }), [
-    sidebarOpen,
-    sessions,
-    activeSession,
-    isAuthenticated,
-    isMobile,
-    isLgScreen,
-    isMediumScreen,
-    handleSetSidebarOpen,
-    handleSetActiveSession,
-    logout
-  ]);
+  const sidebarProps = useMemo(
+    () => ({
+      sidebarOpen,
+      setSidebarOpen: handleSetSidebarOpen,
+      sessions,
+      setSessions,
+      activeSession,
+      setActiveSession: handleSetActiveSession,
+      setMessages,
+      isAuthenticated,
+      logout,
+      isMobile,
+      setShowRenameDialog,
+      setSelectedSessionId,
+      setNewTitle,
+      isLgScreen,
+      isMediumScreen,
+      isLoadingSessions,
+    }),
+    [
+      sidebarOpen,
+      sessions,
+      activeSession,
+      isAuthenticated,
+      isMobile,
+      isLgScreen,
+      isMediumScreen,
+      handleSetSidebarOpen,
+      handleSetActiveSession,
+      logout,
+    ]
+  );
 
-  const chatInputProps = useMemo(() => ({
-    input,
-    setInput,
-    handleSubmit,
-    isLoading,
-    isMobile,
-    activeSession,
-    isAuthenticated,
-    setMessages,
-    setActiveSession: handleSetActiveSession,
-    setSessions,
-    refreshSessions,
-    sidebarCollapsed: !sidebarOpen,
-    handleStop
-  }), [
-    input,
-    isLoading,
-    isMobile,
-    activeSession,
-    isAuthenticated,
-    sidebarOpen,
-    handleSetActiveSession,
-    handleSubmit,
-    handleStop
-  ]);
+  const chatInputProps = useMemo(
+    () => ({
+      input,
+      setInput,
+      handleSubmit,
+      isLoading,
+      isMobile,
+      activeSession,
+      isAuthenticated,
+      setMessages,
+      setActiveSession: handleSetActiveSession,
+      setSessions,
+      refreshSessions,
+      sidebarCollapsed: !sidebarOpen,
+      handleStop,
+    }),
+    [
+      input,
+      isLoading,
+      isMobile,
+      activeSession,
+      isAuthenticated,
+      sidebarOpen,
+      handleSetActiveSession,
+      handleSubmit,
+      handleStop,
+    ]
+  );
 
   return (
     <div className="flex h-screen bg-gradient-to-b from-[#121212] to-[#1a1a1a]">
@@ -784,8 +876,16 @@ function ChatContent() {
 
 export default function ChatPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading chat...</div>}>
-      <ChatContent />
-    </Suspense>
+<Suspense
+  fallback={
+    <div className="flex flex-col items-center justify-center h-screen space-y-4">
+      <div className="w-12 h-12 border-t-4 border-blue-500 border-solid rounded-full animate-spin"></div>
+      <p className="text-lg text-gray-500">Loading chat...</p>
+    </div>
+  }
+>
+  <ChatContent />
+</Suspense>
+
   );
 }
