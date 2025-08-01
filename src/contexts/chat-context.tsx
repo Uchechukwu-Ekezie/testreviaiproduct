@@ -23,7 +23,7 @@ interface ChatMessage {
   response?: string
   classification?: string
   context?: Context[]
-  properties?: Property[]
+  properties?: Property[] | string | null
   session: string
   created_at?: string
   updated_at?: string
@@ -222,6 +222,7 @@ const postChat = useCallback(
         // Update the messages with the response
         setMessages([{
           ...response,
+          properties: response.properties ? (typeof response.properties === 'string' ? JSON.parse(response.properties) : response.properties) : undefined,
           isLoading: false,
         }]);
 
@@ -244,7 +245,11 @@ const postChat = useCallback(
         // Update the messages with the response
         setMessages((prev) =>
           prev.map((msg) =>
-            msg.id === tempMessage.id ? { ...response, isLoading: false } : msg
+            msg.id === tempMessage.id ? { 
+              ...response, 
+              properties: response.properties ? (typeof response.properties === 'string' ? JSON.parse(response.properties) : response.properties) : undefined,
+              isLoading: false 
+            } : msg
           )
         );
 

@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from "framer-motion";
 interface ChatInputProps {
   input: string;
   setInput: React.Dispatch<React.SetStateAction<string>>;
-  handleSubmit: (e: React.FormEvent) => void;
+  handleSubmit: (e: React.FormEvent, options?: { imageUrls?: string[]; file?: File }) => void;
   isLoading: boolean;
   isMobile: boolean;
   activeSession?: string | null;
@@ -29,6 +29,7 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(({
   input,
   setInput,
   handleSubmit,
+  
   isLoading,
   isMobile,
   activeSession,
@@ -40,6 +41,7 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(({
   refreshSessions,
   sidebarCollapsed,
   handleStop,
+  
 }) => {
   // Memoize refs to prevent re-renders
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -50,14 +52,61 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(({
   const tempIdRef = useRef<string>("");
   const isStreamingRef = useRef(false);
 
-  // Memoize state setters
+  // State for file handling
   const [images, setImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [imageUrls, setImageUrls] = useState<string[]>([]); // Store Cloudinary URLs
   const [attachments, setAttachments] = useState<File[]>([]);
   const [localIsLoading, setLocalIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState<boolean[]>([]);
+
+  // Direct Cloudinary upload method for chat images (using your existing setup)
+  const uploadToCloudinary = async (file: File): Promise<string> => {
+    try {
+      // Create a FormData object for Cloudinary upload
+      const cloudinaryFormData = new FormData();
+      cloudinaryFormData.append("file", file);
+
+      // For unsigned uploads, an upload preset is REQUIRED
+      const uploadPreset =
+        process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET_TWO || "reviews";
+      cloudinaryFormData.append("upload_preset", uploadPreset);
+
+      // Add folder parameter for organization (allowed in unsigned uploads)
+      cloudinaryFormData.append("folder", "chat_images");
+
+      // Make sure the cloud name is defined
+      const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+      if (!cloudName) {
+        throw new Error("Cloudinary cloud name is not defined");
+      }
+
+      const cloudinaryUrl = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+
+      const response = await fetch(cloudinaryUrl, {
+        method: "POST",
+        body: cloudinaryFormData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error?.message || "Failed to upload to Cloudinary"
+        );
+      }
+
+      const data = await response.json();
+
+      // Use the URL from Cloudinary directly - no transformations
+      return data.secure_url;
+    } catch (error) {
+      console.error("Cloudinary upload error:", error);
+      throw error;
+    }
+  };
 
   // Memoize handlers
   const handleChange = React.useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -71,13 +120,59 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(({
     }
   }, [setInput]);
 
-  const handleLocalSubmit = React.useCallback((e: React.FormEvent) => {
+  const handleLocalSubmit = React.useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (handleSubmit) {
-      setInput("");
-      handleSubmit(e);
+    
+    // Check if any images are still uploading
+    const hasUploadingImages = uploadingImages.some(uploading => uploading);
+    
+    if (hasUploadingImages) {
+      toast({
+        title: "Please wait",
+        description: "Images are still uploading. Please wait a moment.",
+        variant: "default",
+      });
+      return;
     }
-  }, [handleSubmit, setInput]);
+
+    if (handleSubmit) {
+      // Prepare options object with both imageUrls and file
+      const options: { imageUrls?: string[]; file?: File } = {};
+      
+      if (imageUrls.length > 0) {
+        options.imageUrls = imageUrls;
+      }
+      
+      if (attachments.length > 0) {
+        options.file = attachments[0]; // Pass the first attachment as File object
+      }
+      
+      // Pass to parent handler with both imageUrls and file
+      handleSubmit(e, Object.keys(options).length > 0 ? options : undefined);
+      
+      // Clear everything after submission
+      setInput("");
+      setImages([]);
+      setImagePreviews(prev => {
+        prev.forEach(url => URL.revokeObjectURL(url));
+        return [];
+      });
+      setImageUrls([]);
+      setUploadingImages([]);
+      setAttachments([]);
+      return;
+    }
+
+    // Handle submission if no input and no files
+    if (!input.trim() && images.length === 0 && attachments.length === 0) return;
+
+    // Simple fallback if no external handler
+    toast({
+      title: "No handler",
+      description: "No submit handler provided.",
+      variant: "destructive",
+    });
+  }, [handleSubmit, setInput, input, images, attachments, uploadingImages, imageUrls]);
 
   const handleStopGenerating = React.useCallback(() => {
     setIsStopping(true);
@@ -118,15 +213,86 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(({
     }
   };
 
-  // File handling
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Enhanced image upload handler using your Cloudinary setup
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const selectedImages = Array.from(e.target.files);
-      const newImagePreviews = selectedImages.map((file) =>
+      
+      // Validate image files
+      const validImages = selectedImages.filter(file => {
+        const isValidType = file.type.startsWith('image/');
+        const isValidSize = file.size <= 10 * 1024 * 1024; // 10MB limit
+        
+        if (!isValidType) {
+          toast({
+            title: "Invalid file type",
+            description: `${file.name} is not a valid image file.`,
+            variant: "destructive",
+          });
+          return false;
+        }
+        
+        if (!isValidSize) {
+          toast({
+            title: "File too large",
+            description: `${file.name} exceeds the 10MB limit.`,
+            variant: "destructive",
+          });
+          return false;
+        }
+        
+        return true;
+      });
+
+      if (validImages.length === 0) return;
+
+      // Create previews immediately
+      const newImagePreviews = validImages.map((file) =>
         URL.createObjectURL(file)
       );
-      setImages((prev) => [...prev, ...selectedImages]);
+      
+      setImages((prev) => [...prev, ...validImages]);
       setImagePreviews((prev) => [...prev, ...newImagePreviews]);
+      setUploadingImages((prev) => [...prev, ...validImages.map(() => true)]);
+
+      // Show upload start notification
+      toast({
+        title: "Uploading images",
+        description: `Uploading ${validImages.length} image(s) to cloud storage...`,
+      });
+
+      // Upload each image to Cloudinary
+      for (let i = 0; i < validImages.length; i++) {
+        const imageIndex = images.length + i; // Calculate the correct index
+        try {
+          const url = await uploadToCloudinary(validImages[i]);
+          if (url) {
+            setImageUrls(prev => {
+              const newUrls = [...prev];
+              newUrls[imageIndex] = url;
+              return newUrls;
+            });
+            
+            toast({
+              title: "Image uploaded",
+              description: `${validImages[i].name} uploaded successfully.`,
+            });
+          }
+        } catch (error) {
+          console.error('Error uploading image:', error);
+          toast({
+            title: "Upload failed",
+            description: `Failed to upload ${validImages[i].name}.`,
+            variant: "destructive",
+          });
+        } finally {
+          setUploadingImages(prev => {
+            const newState = [...prev];
+            newState[imageIndex] = false;
+            return newState;
+          });
+        }
+      }
     }
   };
 
@@ -141,12 +307,15 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(({
     setImages((prev) => prev.filter((_, i) => i !== index));
     URL.revokeObjectURL(imagePreviews[index]);
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
+    setImageUrls((prev) => prev.filter((_, i) => i !== index));
+    setUploadingImages((prev) => prev.filter((_, i) => i !== index));
   };
 
   const removeAttachment = (index: number) => {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
-  // Chat submission
+
+  // Internal chat submission (when not using external handleSubmit)
   const onLocalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -170,19 +339,43 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(({
     }
 
     const tempId = `temp-${Date.now()}`;
-    const userMessage = { id: tempId, prompt: currentMessage, response: "", isComplete: false };
+    const userMessage = { 
+      id: tempId, 
+      prompt: currentMessage, 
+      response: "", 
+      isComplete: false,
+      imageUrls: imageUrls.length > 0 ? imageUrls : undefined
+      
+    };
     setMessages((prev) => [...prev, userMessage]);
 
     try {
-      const messageData = {
-        message: currentMessage,
-        ...(attachments.length > 0 && { attachment: attachments[0] }),
-        ...(images.length > 0 && { image: images[0] }),
-      };
+      const messageOptions: {
+        image_url?: string;
+        file?: File;
+        properties?: string;
+        classification?: string;
+      } = {};
+      
+      // Add image URLs as separate field (first image URL for now, can be extended for multiple)
+      if (imageUrls.length > 0) {
+        messageOptions.image_url = imageUrls[0]; // Send first image URL
+        console.log("Chat Input: Adding image_url to messageOptions:", imageUrls[0]);
+        // If multiple images, you might want to join them or send as array
+        // messageOptions.image_url = imageUrls.join(','); // Alternative: comma-separated
+      }
+      
+      // Add attachment file separately (not as JSON string)
+      if (attachments.length > 0) {
+        messageOptions.file = attachments[0]; // Send first attachment as file
+        console.log("Chat Input: Adding file to messageOptions:", attachments[0].name, attachments[0]);
+      }
+
+      console.log("Chat Input: Final messageOptions:", messageOptions);
 
       let data;
       if (activeSession) {
-        data = await chatAPI.postNewChat(messageData.message, activeSession);
+        data = await chatAPI.postNewChat(currentMessage, activeSession, messageOptions);
       } else {
         const sessionData = {
           chat_title: currentMessage.substring(0, 30),
@@ -190,10 +383,7 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(({
         };
         const sessionResponse = await chatAPI.createChatSession(sessionData);
         setActiveSession(sessionResponse.id);
-        data = await chatAPI.postNewChat(
-          messageData.message,
-          sessionResponse.id
-        );
+        data = await chatAPI.postNewChat(currentMessage, sessionResponse.id, messageOptions);
 
         setSessions((prev) => {
           if (!prev.some((s) => s.id === sessionResponse.id)) {
@@ -208,18 +398,30 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(({
       setMessages((prev) =>
         prev.map((msg) => (msg.id === tempId ? { ...data, isComplete: true } : msg))
       );
+      
+      // Clear files after successful submission
       setAttachments([]);
       setImages([]);
-      setImagePreviews([]);
-    } catch (error: any) {
+      setImagePreviews(prev => {
+        prev.forEach(url => URL.revokeObjectURL(url));
+        return [];
+      });
+      setImageUrls([]);
+      setUploadingImages([]);
+    } catch (error: unknown) {
       console.error("Error submitting chat:", error);
       setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
+      
+      const errorMessage = error && typeof error === 'object' && 'response' in error 
+        ? (error as any).response?.data?.message || "Failed to send message."
+        : "Failed to send message.";
+      
       toast({
         title: "Error",
-        description: error.response?.data?.message || "Failed to send message.",
+        description: errorMessage,
         variant: "destructive",
       });
-      setInput("");
+      setInput(currentMessage); // Restore the input if failed
     } finally {
       setLocalIsLoading(false);
       setIsGenerating(false);
@@ -263,6 +465,24 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(({
                 className="w-full p-3 overflow-y-auto bg-transparent resize-none text-foreground placeholder:text-muted-foreground focus:outline-none max-h-72"
               />
 
+              {/* Upload Status Indicator */}
+              <AnimatePresence>
+                {uploadingImages.some(uploading => uploading) && (
+                  <motion.div
+                    className="flex items-center gap-2 p-2 mt-2 border border-yellow-200 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-800"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <div className="w-4 h-4 border-2 border-yellow-500 rounded-full border-t-transparent animate-spin"></div>
+                    <span className="text-sm text-yellow-700 dark:text-yellow-300">
+                      Uploading images to cloud storage...
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Uploaded Images */}
               <AnimatePresence>
                 {images.length > 0 && (
@@ -282,19 +502,56 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(({
                         exit={{ scale: 0.8, opacity: 0 }}
                         transition={{ duration: 0.2 }}
                       >
-                        <Image
-                          src={imagePreviews[index] || "/placeholder.svg"}
-                          alt="preview"
-                          width={64}
-                          height={64}
-                          className="object-cover w-16 h-16 rounded-md"
-                        />
+                        <div className="relative">
+                          <Image
+                            src={imagePreviews[index] || "/placeholder.svg"}
+                            alt="preview"
+                            width={64}
+                            height={64}
+                            className={`object-cover w-16 h-16 rounded-md ${
+                              uploadingImages[index] ? 'opacity-50' : ''
+                            }`}
+                          />
+                          {/* Upload progress indicator */}
+                          {uploadingImages[index] && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-md">
+                              <div className="w-6 h-6 border-2 border-white rounded-full border-t-transparent animate-spin"></div>
+                            </div>
+                          )}
+                          {/* Success indicator */}
+                          {imageUrls[index] && !uploadingImages[index] && (
+                            <div className="absolute flex items-center justify-center w-4 h-4 bg-green-500 rounded-full top-1 left-1">
+                              <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs text-muted-foreground truncate max-w-[80px]">
+                            {image.name}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {(image.size / 1024).toFixed(1)} KB
+                          </span>
+                          {uploadingImages[index] && (
+                            <span className="text-xs text-blue-500">Uploading...</span>
+                          )}
+                          {imageUrls[index] && !uploadingImages[index] && (
+                            <span className="text-xs text-green-500">Uploaded</span>
+                          )}
+                        </div>
                         <motion.button
                           type="button"
                           onClick={() => removeImage(index)}
-                          className="absolute top-0 right-0 p-1 bg-red-500 rounded-full"
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
+                          disabled={uploadingImages[index]}
+                          className={`absolute top-0 right-0 p-1 rounded-full ${
+                            uploadingImages[index] 
+                              ? 'bg-gray-400 cursor-not-allowed' 
+                              : 'bg-red-500 hover:bg-red-600'
+                          }`}
+                          whileHover={{ scale: uploadingImages[index] ? 1 : 1.1 }}
+                          whileTap={{ scale: uploadingImages[index] ? 1 : 0.9 }}
                         >
                           <X className="w-4 h-4 text-white" />
                         </motion.button>
@@ -372,7 +629,7 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(({
                       type="button"
                       disabled={isLoading || localIsLoading}
                       onClick={() => imageInputRef.current?.click()}
-                      className="flex items-center gap-2 p-2 transition-colors rounded-md"
+                      className="flex items-center gap-2 p-2 transition-colors rounded-md hover:bg-muted disabled:opacity-50"
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                     >
@@ -386,7 +643,7 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(({
                       type="button"
                       disabled={isLoading || localIsLoading}
                       onClick={() => attachmentInputRef.current?.click()}
-                      className="flex items-center gap-2 p-2 transition-colors rounded-md"
+                      className="flex items-center gap-2 p-2 transition-colors rounded-md hover:bg-muted disabled:opacity-50"
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                     >
@@ -428,23 +685,29 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(({
                         !isStopping &&
                         !input.trim() &&
                         images.length === 0 &&
-                        attachments.length === 0) 
-                     
+                        attachments.length === 0) || 
+                      uploadingImages.some(uploading => uploading) // Disable if images are uploading
                     }
                     className={`flex items-center justify-center w-10 h-10 rounded-full ${
                       (isLoading || localIsLoading || isGenerating) && !isStopping
                         ? "bg-red-500 hover:bg-red-600"
+                        : uploadingImages.some(uploading => uploading)
+                        ? "bg-yellow-500 cursor-not-allowed"
                         : "bg-white from-[#FFD700] to-[#780991]"
                     } text-white`}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                    whileHover={{ 
+                      scale: uploadingImages.some(uploading => uploading) ? 1 : 1.05 
+                    }}
+                    whileTap={{ 
+                      scale: uploadingImages.some(uploading => uploading) ? 1 : 0.95 
+                    }}
                     animate={
-                      isLoading || localIsLoading || isGenerating || isStopping
+                      isLoading || localIsLoading || isGenerating || isStopping || uploadingImages.some(uploading => uploading)
                         ? { scale: [1, 0.95, 1] }
                         : {}
                     }
                     transition={
-                      isLoading || localIsLoading || isGenerating || isStopping
+                      isLoading || localIsLoading || isGenerating || isStopping || uploadingImages.some(uploading => uploading)
                         ? {
                             repeat: Number.POSITIVE_INFINITY,
                             duration: 1.5,
@@ -452,7 +715,9 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(({
                         : {}
                     }
                   >
-                    {(isLoading || localIsLoading || isGenerating) && !isStopping ? (
+                    {uploadingImages.some(uploading => uploading) ? (
+                      <div className="w-5 h-5 border-2 border-white rounded-full border-t-transparent animate-spin"></div>
+                    ) : (isLoading || localIsLoading || isGenerating) && !isStopping ? (
                       <X className="w-5 h-5 text-white" />
                     ) : isGenerating ? (
                       <StopCircle className="text-red-800"/>
@@ -508,7 +773,7 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(({
                             imageInputRef.current?.click();
                             setIsModalOpen(false);
                           }}
-                          className="flex items-center w-full gap-3 p-3 transition-colors rounded-md hover:bg-muted"
+                          className="flex items-center w-full gap-3 p-3 transition-colors rounded-md hover:bg-muted disabled:opacity-50"
                           whileHover={{
                             backgroundColor: "rgba(255,255,255,0.1)",
                           }}
@@ -524,7 +789,7 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(({
                             attachmentInputRef.current?.click();
                             setIsModalOpen(false);
                           }}
-                          className="flex items-center w-full gap-3 p-3 transition-colors rounded-md hover:bg-muted"
+                          className="flex items-center w-full gap-3 p-3 transition-colors rounded-md hover:bg-muted disabled:opacity-50"
                           whileHover={{
                             backgroundColor: "rgba(255,255,255,0.1)",
                           }}

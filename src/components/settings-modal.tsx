@@ -1,27 +1,28 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 // import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-import { Settings, User, Lock, Trash2, Eye, EyeOff, Share, Check, Copy } from "lucide-react"
+import { Settings, User, Lock, Trash2, Eye, EyeOff, Check, Copy, UserPlus } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { DeleteAccountModal } from "./delete-account-modal"
 import { FilteredResponseModal } from "./filtered-response-modal"
+import { AgentVerificationModal } from "./agent-verification-modal"
 import { useIsMobile } from "../hooks/use-mobile"
-import { authAPI, chatAPI } from "@/lib/api"
+import { authAPI, chatAPI, userAPI } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
+import graph from "../../public/Image/graph.svg"
+import Image from "next/image"
 
 interface SettingsModalProps {
   isOpen: boolean
   onClose: () => void
 }
 
-type SettingsTab = "general" | "personalization" | "password" | "delete" | "invite"
+type SettingsTab = "general" | "personalization" | "password" | "delete" | "invite" | "Landlord/agent"
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const isMobile = useIsMobile()
@@ -29,7 +30,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   // const [theme, setTheme] = useState("system")
   // const [language, setLanguage] = useState("auto-english")
   const [isChangingPassword, setIsChangingPassword] = useState(false)
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [passwordForm, setPasswordForm] = useState({
@@ -46,7 +46,110 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [copied, setCopied] = useState(false)
   const [isDeletingAllChats, setIsDeletingAllChats] = useState(false)
   const [memoryEnabled, setMemoryEnabled] = useState(false)
-  const { logout } = useAuth()
+  const [verificationStatus, setVerificationStatus] = useState<'none' | 'pending' | 'verified' | 'rejected'>('none')
+  const [showVerificationModal, setShowVerificationModal] = useState(false)
+  const { logout, user, submitAgentRequest } = useAuth()
+
+  // Get verification status from user object and server
+  const fetchVerificationStatus = useCallback(async () => {
+    if (!user?.id) {
+      setVerificationStatus("none")
+      return
+    }
+    
+    try {
+      // Fetch latest data from server using /auth/me endpoint
+      const userData = await userAPI.getProfile();
+      
+      // Check agent_info.status from the backend response
+      if (userData?.agent_info?.status) {
+        const agentStatus = userData.agent_info.status;
+        if (agentStatus === "pending") {
+          setVerificationStatus("pending");
+        } else if (agentStatus === "approved") {
+          setVerificationStatus("verified");
+        } else if (agentStatus === "rejected") {
+          setVerificationStatus("rejected");
+        } else {
+          setVerificationStatus("none");
+        }
+      } else {
+        // Fallback to user object data if server data is not available
+        if (user?.agent_request?.status) {
+          const agentStatus = user.agent_request.status;
+          if (agentStatus === "pending") {
+            setVerificationStatus("pending");
+          } else if (agentStatus === "approved") {
+            setVerificationStatus("verified");
+          } else if (agentStatus === "rejected") {
+            setVerificationStatus("rejected");
+          } else {
+            setVerificationStatus("none");
+          }
+        } else {
+          setVerificationStatus("none");
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch verification status:", error);
+      // Fallback to local user data if API fails
+      if (user?.agent_request?.status) {
+        const agentStatus = user.agent_request.status;
+        if (agentStatus === "pending") {
+          setVerificationStatus("pending");
+        } else if (agentStatus === "approved") {
+          setVerificationStatus("verified");
+        } else if (agentStatus === "rejected") {
+          setVerificationStatus("rejected");
+        } else {
+          setVerificationStatus("none");
+        }
+      } else {
+        setVerificationStatus("none");
+      }
+    }
+  }, [user?.id, user?.agent_request])
+
+  // Fetch verification status when modal opens or when switching to landlord/agent tab
+  useEffect(() => {
+    if (isOpen && activeTab === "Landlord/agent" && user?.id) {
+      fetchVerificationStatus();
+    }
+  }, [isOpen, activeTab, user?.id, fetchVerificationStatus])
+
+  // Also fetch when user data is updated
+  useEffect(() => {
+    // Check if we have fresh server data from agent_info (new structure)
+    if (user?.agent_info?.status) {
+      const agentStatus = user.agent_info.status;
+      if (agentStatus === "pending") {
+        setVerificationStatus("pending");
+      } else if (agentStatus === "approved") {
+        setVerificationStatus("verified");
+      } else if (agentStatus === "rejected") {
+        setVerificationStatus("rejected");
+      } else {
+        setVerificationStatus("none");
+      }
+    }
+    // Fallback to legacy agent_request structure
+    else if (user?.agent_request?.status) {
+      const agentStatus = user.agent_request.status;
+      if (agentStatus === "pending") {
+        setVerificationStatus("pending");
+      } else if (agentStatus === "approved") {
+        setVerificationStatus("verified");
+      } else if (agentStatus === "rejected") {
+        setVerificationStatus("rejected");
+      } else {
+        setVerificationStatus("none");
+      }
+    } else if (user?.verification_status) {
+      setVerificationStatus(user.verification_status);
+    } else {
+      setVerificationStatus("none");
+    }
+  }, [user?.verification_status, user?.agent_request, user?.agent_info])
 
   // const handleFilteredResponseToggle = (checked: boolean) => {
   //   if (checked) {
@@ -57,11 +160,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   //   }
   // }
 
-  const handleRoleSelect = (role: string) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleRoleSelect = (role: string, preferences: unknown) => {
     setSelectedRole(role)
     setFilteredResponseEnabled(true)
   }
-  
+
   const copyReferralCode = () => {
     navigator.clipboard.writeText(referralCode)
     setCopied(true)
@@ -81,9 +185,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         title: "Success",
         description: "All chat sessions have been deleted successfully",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Delete all chat sessions error:", error);
-      const errorMessage = error.detail || "Failed to delete all chat sessions";
+      let errorMessage = "Failed to delete all chat sessions"
+      if (error && typeof error === 'object' && 'detail' in error) {
+        errorMessage = (error as { detail?: string }).detail || errorMessage
+      }
       toast({
         title: "Error",
         description: errorMessage,
@@ -110,6 +217,37 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       description: `Memory has been turned ${!memoryEnabled ? 'on' : 'off'}`,
     })
   }
+
+  const handleRequestVerification = () => {
+    setShowVerificationModal(true)
+  }
+
+  const handleVerificationSuccess = async (data?: { phone?: string; verification_document?: File | string }) => {
+    try {
+      // Submit the agent request using the auth context
+      await submitAgentRequest(data || {});
+      
+      // Update the local verification status
+      setVerificationStatus('pending');
+      
+      toast({
+        title: "Success",
+        description: "Agent verification request submitted successfully",
+      });
+    } catch (error: unknown) {
+      console.error("Failed to submit agent request:", error);
+      let errorMessage = "Failed to submit verification request";
+      if (error && typeof error === 'object' && 'response' in error) {
+        const responseError = error as { response?: { data?: { detail?: string } } };
+        errorMessage = responseError.response?.data?.detail || errorMessage;
+      }
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
+  };
 
   const handlePasswordChange = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -147,9 +285,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         new_password1: "",
         new_password2: "",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Password change error:", error);
-      const errorMessage = error.detail || "Failed to change password";
+      let errorMessage = "Failed to change password"
+      if (error && typeof error === 'object' && 'detail' in error) {
+        errorMessage = (error as { detail?: string }).detail || errorMessage
+      }
       toast({
         title: "Error",
         description: errorMessage,
@@ -161,7 +302,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const tabs = [
     { id: "general" as const, label: "General", icon: Settings },
     { id: "personalization" as const, label: "Personalization", icon: User },
-    // { id: "invite" as const, label: "Invite & Earn", icon: Share },
+    { id: "Landlord/agent" as const, label: "Landlord/agent", icon: UserPlus },
     { id: "password" as const, label: "Password", icon: Lock },
     { id: "delete" as const, label: "Delete Account", icon: Trash2 },
   ]
@@ -183,16 +324,16 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 const Icon = tab.icon
                 return (
                   <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={cn(
-                    "flex items-center gap-1 px-3 py-3 text-xs whitespace-nowrap text-zinc-400 hover:bg-zinc-800/50",
-                    activeTab === tab.id && "bg-[#3B3B3B] text-white rounded-[10px]",
-                  )}
-                >
-                  <Icon className="w-3 h-3 sm:w-4 sm:h-4" />
-                  <span className="text-[15px]">{tab.label}</span>
-                </button>
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={cn(
+                      "flex items-center gap-1 px-3 py-3 text-xs whitespace-nowrap text-zinc-400 hover:bg-zinc-800/50",
+                      activeTab === tab.id && "bg-[#3B3B3B] text-white rounded-[10px]",
+                    )}
+                  >
+                    <Icon className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="text-[15px]">{tab.label}</span>
+                  </button>
                 )
               })}
             </div>
@@ -254,7 +395,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center sm:gap-0">
                       <div className="max-w-[50vw]">
                         <h4 className="text-xs font-medium text-white sm:text-sm">Delete account</h4>
-                        <p className="text-xs text-zinc-400 ">Permanently delete your account and all <br/> associated data</p>
+                        <p className="text-xs text-zinc-400 ">Permanently delete your account and all <br /> associated data</p>
                       </div>
                       <Button
                         variant="destructive"
@@ -388,7 +529,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       <div className="space-y-4">
                         <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center sm:gap-0">
                           <span className="text-xs sm:text-sm text-zinc-400">Delete all chats</span>
-                          <Button 
+                          <Button
                             onClick={deleteAllSessions}
                             disabled={isDeletingAllChats}
                             className="p-1 sm:p-2 rounded-[10px] bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm h-8 sm:h-auto self-end sm:self-auto"
@@ -401,7 +542,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center sm:gap-0">
                           <span className="text-xs sm:text-sm text-zinc-400">Log out on this device</span>
                           <Button
-                            onClick={handleLogout} 
+                            onClick={handleLogout}
                             className="p-1 sm:p-2 rounded-[10px] bg-transparent border border-zinc-600 hover:bg-zinc-800 text-white/90 text-xs sm:text-sm h-8 sm:h-auto self-end sm:self-auto"
                           >
                             Log out
@@ -428,11 +569,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                           )}
                         </div>
                         <div
-                          className={`px-2 sm:px-3 py-1 rounded-full text-xs ${
-                            filteredResponseEnabled
+                          className={`px-2 sm:px-3 py-1 rounded-full text-xs ${filteredResponseEnabled
                               ? "bg-gradient-to-r from-yellow-500 to-pink-500 text-white"
                               : "bg-zinc-700 text-zinc-400"
-                          }`}
+                            }`}
                         >
                           {filteredResponseEnabled ? "On" : "Off"}
                         </div>
@@ -447,11 +587,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                           <span className="text-xs sm:text-sm text-zinc-300">Memory</span>
                           <p className="text-xs text-zinc-500">Remember preferences and history</p>
                         </div>
-                        <div className={`px-2 py-1 text-xs rounded-full sm:px-3 ${
-                          memoryEnabled 
+                        <div className={`px-2 py-1 text-xs rounded-full sm:px-3 ${memoryEnabled
                             ? "bg-gradient-to-r from-yellow-500 to-pink-500 text-white"
                             : "bg-zinc-700 text-zinc-400"
-                        }`}>
+                          }`}>
                           {memoryEnabled ? "On" : "Off"}
                         </div>
                       </button>
@@ -476,7 +615,153 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       </div>
                     </div>
                   )}
-                  
+
+                  {activeTab === "Landlord/agent" && (
+                    <div className="space-y-4 sm:space-y-6">
+                      <div className="space-y-4">
+                        <h3 className="text-base font-medium text-white sm:text-lg">Landlord/Agent Verification</h3>
+                        <p className="text-xs sm:text-sm text-zinc-400">
+                          Become a verified landlord or agent to list your properties and gain access to advanced features.
+                        </p>
+
+                        {/* Verification Status & Request Button */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[16px] text-white">Verification Status:</span>
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                              verificationStatus === 'pending' 
+                                ? 'bg-yellow-600/20 text-yellow-400 border border-yellow-600/30'
+                                : verificationStatus === 'verified'
+                                ? 'bg-green-600/20 text-green-400 border border-green-600/30'
+                                : verificationStatus === 'rejected'
+                                ? 'bg-red-600/20 text-red-400 border border-red-600/30'
+                                : 'bg-zinc-600/20 text-zinc-400 border border-zinc-600/30'
+                            }`}>
+                              {verificationStatus === 'pending' ? 'Pending Review' 
+                               : verificationStatus === 'verified' ? 'Verified'
+                               : verificationStatus === 'rejected' ? 'Rejected'
+                               : 'Not Submitted'}
+                            </span>
+                          </div>
+                          
+                          {verificationStatus === 'none' && (
+                            <button 
+                              onClick={handleRequestVerification}
+                              className="underline text-[16px] text-white hover:text-zinc-300"
+                            >
+                              Submit Request
+                            </button>
+                          )}
+
+                          {verificationStatus === 'rejected' && (
+                            <button 
+                              onClick={handleRequestVerification}
+                              className="underline text-[16px] text-white hover:text-zinc-300"
+                            >
+                              Submit Again
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Show agent request details if exists */}
+                        {(user?.agent_info || user?.agent_request) && (
+                          <div className="p-3 border rounded-[10px] sm:p-4 border-[#383838] bg-[#303030]">
+                            <h4 className="mb-2 text-sm font-medium text-white">Request Details:</h4>
+                            <div className="space-y-1 text-xs text-zinc-300">
+                              {user?.agent_info ? (
+                                // Use new agent_info structure
+                                <>
+                                  <p><span className="text-zinc-400">Submitted:</span> {new Date(user.agent_info.request_date).toLocaleDateString()}</p>
+                                  {user.agent_info.phone && (
+                                    <p><span className="text-zinc-400">Phone:</span> {user.agent_info.phone}</p>
+                                  )}
+                                  <p><span className="text-zinc-400">Status:</span> {user.agent_info.status}</p>
+                                </>
+                              ) : (
+                                // Fallback to legacy agent_request structure
+                                <>
+                                  <p><span className="text-zinc-400">Submitted:</span> {new Date(user.agent_request!.created_at).toLocaleDateString()}</p>
+                                  {user.agent_request!.phone && (
+                                    <p><span className="text-zinc-400">Phone:</span> {user.agent_request!.phone}</p>
+                                  )}
+                                  <p><span className="text-zinc-400">Status:</span> {user.agent_request!.status}</p>
+                                  {user.agent_request!.updated_at !== user.agent_request!.created_at && (
+                                    <p><span className="text-zinc-400">Last Updated:</span> {new Date(user.agent_request!.updated_at).toLocaleDateString()}</p>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Benefits Section */}
+                        <div className="flex flex-col gap-3 p-3 border rounded-[10px] sm:p-4 border-[#383838] bg-[#303030] text-[14px]">
+                          <h4 className="mb-2 text-sm font-medium text-white">Verification Benefits:</h4>
+                          
+                          <div className="flex items-start gap-2">
+                            <Image src={graph} alt="Graph" className="w-[16px] h-[16px] mt-0.5" />
+                            <p className="text-zinc-300">Priority listing placement</p>
+                          </div>
+                          
+                          <div className="flex items-start gap-2">
+                            <Image src={graph} alt="Graph" className="w-[16px] h-[16px] mt-0.5" />
+                            <p className="text-zinc-300">Verified badge for trust building</p>
+                          </div>
+
+                          <div className="flex items-start gap-2">
+                            <Image src={graph} alt="Graph" className="w-[16px] h-[16px] mt-0.5" />
+                            <p className="text-zinc-300">Advanced analytics and insights</p>
+                          </div>
+
+                          <div className="flex items-start gap-2">
+                            <Image src={graph} alt="Graph" className="w-[16px] h-[16px] mt-0.5" />
+                            <p className="text-zinc-300">Reduced platform fees</p>
+                          </div>
+                        </div>
+
+                        {/* Status Information */}
+                        {verificationStatus === 'pending' && (
+                          <div className="p-3 border rounded-lg sm:p-4 border-yellow-600/30 bg-yellow-600/10">
+                            <p className="text-xs text-yellow-400">
+                              Your verification request is being reviewed. We&apos;ll notify you within 2-3 business days. 
+                              You&apos;ll receive an email once the review is complete.
+                            </p>
+                          </div>
+                        )}
+
+                        {verificationStatus === 'verified' && (
+                          <div className="p-3 border rounded-lg sm:p-4 border-green-600/30 bg-green-600/10">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <div>
+                                <p className="mb-2 text-xs text-green-400">
+                                  Congratulations! You are now a verified landlord/agent. You can now list properties 
+                                  and access all premium features.
+                                </p>
+                              </div>
+                              <Button
+                                onClick={() => {
+                                  window.open('https://www.reviai.tech/login', '_blank');
+                                }}
+                                className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-[10px] text-xs sm:text-sm px-4 py-2 whitespace-nowrap"
+                              >
+                                Go to Dashboard
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+
+                        {verificationStatus === 'rejected' && (
+                          <div className="p-3 border rounded-lg sm:p-4 border-red-600/30 bg-red-600/10">
+                            <p className="text-xs text-red-400">
+                              Your verification request was not approved. Please contact support for more information 
+                              or to submit additional documentation.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {activeTab === "invite" && (
                     <div className="space-y-6">
                       <div className="flex flex-col items-center justify-center mb-6">
@@ -524,7 +809,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       </div>
                     </div>
                   )}
-                  
 
                   {activeTab === "password" && (
                     <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center sm:gap-0">
@@ -549,6 +833,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         isOpen={showFilteredResponse}
         onClose={() => setShowFilteredResponse(false)}
         onSelect={handleRoleSelect}
+      />
+      <AgentVerificationModal
+        isOpen={showVerificationModal}
+        onClose={() => setShowVerificationModal(false)}
+        onSuccess={handleVerificationSuccess}
       />
     </>
   )

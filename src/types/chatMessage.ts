@@ -9,6 +9,10 @@ export interface Message {
   isNewSession?: boolean;
   properties?: Property[];
   context?: Context[];
+  imageUrls?: string[]; // For legacy support
+  image_url?: string | null; // Single image URL from API
+  file?: string | null; // File attachment from API
+  attachments?: File[]; // Local file attachments before upload
 }
 
 export interface Property {

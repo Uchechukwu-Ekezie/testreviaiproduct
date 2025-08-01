@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
-import api, { authAPI, userAPI, clearAuthToken, getAuthToken, setAuthToken, verifyToken } from "@/lib/api"
+import api, { authAPI, userAPI, clearAuthToken, getAuthToken, setAuthToken, verifyToken, landlordAPI } from "@/lib/api"
 import { toast } from "@/components/ui/use-toast"
 import type { AuthContextType, User } from "@/types/user"
 import { GoogleOAuthPayload } from "@/types/auth"
@@ -19,7 +19,8 @@ const AuthContext = createContext<AuthContextType>({
   updateProfile: async () => false,
   loginWithGoogle: async () => false,
   updateProfileImage: async () => false,
-  refreshAccessToken: async () => null, // Add this to your AuthContextType
+  refreshAccessToken: async () => null,
+  submitAgentRequest: async () => false,
 })
 
 // ✅ Auth provider props
@@ -173,7 +174,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
             is_active: userData.is_active,
             avatar: userData.avatar || "/placeholder.svg",
             date_joined: userData.date_joined,
-            last_login: userData.last_login
+            last_login: userData.last_login,
+            agent_request: userData.agent_request || undefined  // ← FIXED: Include agent_request
           })
         } else {
           // console.log("Auth context: User profile is empty or invalid")
@@ -242,7 +244,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           is_active: response.user.is_active,
           avatar: response.user.avatar || "/placeholder.svg",
           date_joined: response.user.date_joined,
-          last_login: response.user.last_login
+          last_login: response.user.last_login,
+          agent_request: response.user.agent_request || undefined  // ← FIXED: Include agent_request
         }
       } else {
         const userData = await userAPI.getProfile()
@@ -259,7 +262,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           is_active: userData.is_active,
           avatar: userData.avatar || "/placeholder.svg",
           date_joined: userData.date_joined,
-          last_login: userData.last_login
+          last_login: userData.last_login,
+          agent_request: userData.agent_request || undefined  // ← FIXED: Include agent_request
         }
       }
 
@@ -329,7 +333,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           is_active: response.user.is_active,
           avatar: response.user.avatar || "/placeholder.svg",
           date_joined: response.user.date_joined,
-          last_login: response.user.last_login
+          last_login: response.user.last_login,
+          agent_request: response.user.agent_request || undefined  // ← FIXED: Include agent_request
         }
       } else {
         const userData = await userAPI.getProfile()
@@ -346,7 +351,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           is_active: userData.is_active,
           avatar: userData.avatar || "/placeholder.svg",
           date_joined: userData.date_joined,
-          last_login: userData.last_login
+          last_login: userData.last_login,
+          agent_request: userData.agent_request || undefined  // ← FIXED: Include agent_request
         }
       }
 
@@ -410,6 +416,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         is_active: responseData.is_active !== undefined ? responseData.is_active : true,
         avatar: responseData.avatar || "/placeholder.svg",
         date_joined: responseData.date_joined || new Date().toISOString(),
+        agent_request: responseData.agent_request || undefined  // ← FIXED: Include agent_request
       }
 
       setUser(userObj)
@@ -505,6 +512,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           subscription_start_date: response.subscription_start_date || prevUser.subscription_start_date,
           subscription_end_date: response.subscription_end_date || prevUser.subscription_end_date,
           is_active: response.is_active !== undefined ? response.is_active : prevUser.is_active,
+          agent_request: response.agent_request || prevUser.agent_request  // ← FIXED: Preserve agent_request
         }
       })
 
@@ -549,6 +557,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return {
           ...prevUser,
           avatar: uploadedAvatarUrl,
+          agent_request: response.agent_request || prevUser.agent_request  // ← FIXED: Preserve agent_request
         };
       });
   
@@ -569,6 +578,70 @@ export function AuthProvider({ children }: AuthProviderProps) {
   
     return success;
   };
+
+  // 🔹 Submit agent request function
+ const submitAgentRequest = async (data: {
+  phone?: string;
+  verification_document?: string | File;
+}): Promise<boolean> => {
+  setIsLoading(true);
+  
+  try {
+    console.log("=== DEBUGGING SUBMIT AGENT REQUEST ===");
+    console.log("1. Input data:", data);
+    
+    // Validate required data
+    if (!data.phone || !data.verification_document) {
+      throw new Error("Phone and verification document are required");
+    }
+
+    // Convert File to string if needed
+    let verificationDoc: string;
+    if (data.verification_document instanceof File) {
+      // If it's a File, you might need to upload it first or convert to base64
+      // For now, using the file name as a placeholder
+      verificationDoc = data.verification_document.name;
+    } else {
+      verificationDoc = data.verification_document;
+    }
+
+    // ONLY send what the backend expects
+    const requestData = {
+      phone: data.phone,
+      verification_document: verificationDoc
+    };
+
+    console.log("2. Request data to API:", requestData);
+
+    const response = await landlordAPI.postAgentRequest(requestData);
+    console.log("3. API response:", response);
+
+    // Update user with pending status
+    setUser(prevUser => {
+      if (!prevUser) return null;
+      return {
+        ...prevUser,
+        agent_request: {
+          id: response.id || 'temp-id',
+          status: 'pending' as const,
+          phone: data.phone,
+          verification_document: typeof data.verification_document === 'string' 
+            ? data.verification_document 
+            : data.verification_document?.name || undefined,
+          created_at: response.created_at || new Date().toISOString(),
+          updated_at: response.updated_at || new Date().toISOString(),
+        }
+      };
+    });
+
+    return true;
+  } catch (error) {
+    console.error("Agent request submission error:", error);
+    throw error;
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // 🔹 Logout function
   const logout = () => {
@@ -593,7 +666,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       updateProfile, 
       updateProfileImage,
       loginWithGoogle,
-      refreshAccessToken  // ✅ Expose refresh function
+      refreshAccessToken,
+      submitAgentRequest  // ← FIXED: Include submitAgentRequest
     }}>
       {children}
     </AuthContext.Provider>

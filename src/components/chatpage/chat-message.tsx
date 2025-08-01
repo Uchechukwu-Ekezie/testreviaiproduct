@@ -1,4 +1,4 @@
-"use client";
+   "use client";
 
 import { useRouter, usePathname } from "next/navigation";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -39,6 +39,125 @@ import type {
 } from "@/types/chatMessage";
 import ProgressiveMarkdownRenderer from "../progressivemarkdown";
 import { LoaderAnimation } from "../ui/loader-animation";
+
+// Add MessageImages component for displaying uploaded images
+const MessageImages: React.FC<{ imageUrls: string[] }> = ({ imageUrls }) => {
+  if (!imageUrls || imageUrls.length === 0) return null;
+
+  return (
+    <motion.div
+      className="flex flex-wrap gap-2 mt-2 mb-3"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      {imageUrls.map((url, index) => (
+        <motion.div
+          key={index}
+          className="relative group"
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.2, delay: index * 0.1 }}
+        >
+          <div className="relative w-32 h-32 overflow-hidden border rounded-lg md:w-40 md:h-40 border-border">
+            <Image
+              src={url}
+              alt={`Attached image ${index + 1}`}
+              fill
+              className="object-cover transition-transform group-hover:scale-105"
+              unoptimized
+            />
+            <div className="absolute inset-0 transition-opacity bg-black bg-opacity-0 group-hover:bg-opacity-10" />
+          </div>
+          
+          {/* Click handler to view full size */}
+          <motion.button
+            onClick={() => {
+              // Open image in new tab
+              window.open(url, '_blank');
+            }}
+            className="absolute inset-0 flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100"
+            whileHover={{ scale: 1.02 }}
+          >
+            <div className="p-2 bg-black bg-opacity-50 rounded-full">
+              <Eye className="w-4 h-4 text-white" />
+            </div>
+          </motion.button>
+        </motion.div>
+      ))}
+    </motion.div>
+  );
+};
+
+// Add MessageFiles component for displaying file attachments
+const MessageFiles: React.FC<{ file: string | null }> = ({ file }) => {
+  if (!file) return null;
+
+  const getFileIcon = (fileName: string) => {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    switch (extension) {
+      case 'pdf':
+        return '📄';
+      case 'doc':
+      case 'docx':
+        return '📝';
+      case 'txt':
+        return '📝';
+      case 'xls':
+      case 'xlsx':
+        return '📊';
+      case 'ppt':
+      case 'pptx':
+        return '📎';
+      default:
+        return '📁';
+    }
+  };
+
+  const handleFileClick = () => {
+    if (file.startsWith('http')) {
+      // If it's a URL, open in new tab
+      window.open(file, '_blank');
+    } else {
+      // If it's a file name, trigger download (you may need to adjust this based on your backend)
+      const link = document.createElement('a');
+      link.href = file;
+      link.download = file.split('/').pop() || 'file';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  const fileName = file.split('/').pop() || file;
+
+  return (
+    <motion.div
+      className="mt-2 mb-3"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <motion.button
+        onClick={handleFileClick}
+        className="flex items-center gap-2 p-3 transition-all border rounded-lg cursor-pointer bg-muted/50 hover:bg-muted border-border hover:border-border/60"
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+      >
+        <span className="text-lg">{getFileIcon(fileName)}</span>
+        <div className="flex flex-col items-start">
+          <span className="text-sm font-medium text-foreground truncate max-w-[200px]">
+            {fileName}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            Click to view/download
+          </span>
+        </div>
+        <Eye className="w-4 h-4 text-muted-foreground ml-auto" />
+      </motion.button>
+    </motion.div>
+  );
+};
 
 // Simplified property parsing function
 const parsePropertyData = (message: any): Context[] => {
@@ -187,6 +306,7 @@ const getChatsBySessionWithRetry = async (
       retries++;
       console.error(
         `Attempt ${retries} failed for session ${sessionId}:`,
+`Attempt ${retries} failed for session ${sessionId}:`,
         error
       );
 
@@ -254,22 +374,6 @@ const PropertyCard = React.memo(({ property }: { property: Context }) => (
         <div className="mt-3">
           <span className="text-[16px] font-bold">{property.price}</span>
         </div>
-
-        {/* Action Buttons */}
-        {/* <div className="flex items-center justify-between mt-4 space-x-2">
-          <button className="flex-1 px-4 py-2 text-sm text-[#CBCBCB] bg-[#434343] rounded-[15px] flex items-center justify-center gap-2 hover:bg-[#555555] transition-colors">
-            <Eye className="w-4 h-4" />
-            <span>View</span>
-          </button>
-          <button className="flex-1 px-4 py-2 text-sm text-[#CBCBCB] bg-[#434343] rounded-[15px] flex items-center justify-center gap-2 hover:bg-[#555555] transition-colors">
-            <Heart className="w-4 h-4" />
-            <span>Save</span>
-          </button>
-          <button className="flex-1 px-4 py-2 text-sm text-[#CBCBCB] bg-[#434343] rounded-[15px] flex items-center justify-center gap-2 hover:bg-[#555555] transition-colors">
-            <Phone className="w-4 h-4" />
-            <span>Contact</span>
-          </button>
-        </div> */}
       </div>
 
       {/* Description */}
@@ -340,9 +444,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
   >({});
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
 
-  // Add ref to track if submission is in progress
-  const submissionInProgress = useRef(false);
-
   // Simplified state management
   const [parsedPropertyData, setParsedPropertyData] = useState<
     Record<string, Context[]>
@@ -355,6 +456,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
   >({});
 
   // Navigation state
+  const [hasMessages, setHasMessages] = useState(false);
   const [shouldMoveUp, setShouldMoveUp] = useState(false);
   const previousMessagesLength = useRef(0);
   const lastPromptRef = useRef<HTMLDivElement | null>(null);
@@ -464,7 +566,28 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         }
 
         const chats = await getChatsBySessionWithRetry(sessionIdFromUrl);
-        setMessages(chats || []);
+        
+        // Transform messages from API to match Message interface
+        const transformedChats = (chats || []).map((chat: any): Message => ({
+          id: chat.id,
+          prompt: chat.prompt,
+          response: chat.response,
+          session: chat.session,
+          classification: chat.classification,
+          context: chat.context,
+          image_url: chat.image_url,
+          file: chat.file,
+          // Parse properties if it's a JSON string
+          properties: chat.properties ? (() => {
+            try {
+              return JSON.parse(chat.properties);
+            } catch {
+              return undefined;
+            }
+          })() : undefined,
+        }));
+        
+        setMessages(transformedChats);
 
         setSessionLoadingState({
           isLoading: false,
@@ -505,6 +628,10 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
   // Message tracking
   useEffect(() => {
     const currentLength = messages.length;
+
+    if (currentLength > 0) {
+      setHasMessages(true);
+    }
 
     if (currentLength > previousMessagesLength.current) {
       const latestMessage = messages[messages.length - 1];
@@ -689,20 +816,42 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         )
       );
 
-      const data = await chatAPI.postNewChat(message.prompt, activeSession);
+      // Prepare options with image URLs if they exist
+      const apiOptions: { file?: string } = {};
+      if (message.imageUrls && message.imageUrls.length > 0) {
+        apiOptions.file = message.imageUrls.join(','); // Send as comma-separated string
+      }
+
+      const data = await chatAPI.postNewChat(message.prompt, activeSession, apiOptions);
 
       setLatestMessageId(data.id);
+      
+      // Transform the API response properly
+      const transformedMessage: Message = {
+        id: data.id,
+        prompt: message.prompt,
+        response: data.response,
+        session: activeSession,
+        classification: data.classification,
+        context: data.context,
+        retrying: false,
+        error: false,
+        imageUrls: message.imageUrls, // Preserve the original image URLs
+        image_url: data.image_url,
+        file: data.file,
+        // Parse properties if it's a JSON string
+        properties: data.properties ? (() => {
+          try {
+            return JSON.parse(data.properties);
+          } catch {
+            return undefined;
+          }
+        })() : undefined,
+      };
+
       setMessages((prev) =>
         prev.map((msg) =>
-          msg.id === message.id
-            ? {
-                ...data,
-                prompt: message.prompt,
-                session: activeSession,
-                retrying: false,
-                error: false,
-              }
-            : msg
+          msg.id === message.id ? transformedMessage : msg
         )
       );
 
@@ -781,27 +930,19 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
   };
 
   const handleCardSubmit = async (card: ActionCard) => {
-    // Prevent duplicate submissions
-    if (isLoading || cardLoading || submissionInProgress.current) return;
+    if (isLoading || cardLoading) return;
 
-    submissionInProgress.current = true;
     setCardLoading(card.title);
 
     if (card.title === "Tell your story") {
       setShowTellYourStory(true);
-      setTimeout(() => {
-        setCardLoading(null);
-        submissionInProgress.current = false;
-      }, 500);
+      setTimeout(() => setCardLoading(null), 500);
       return;
     }
 
     if (card.title === "Report your Landlord") {
       setShowLandlordVerification(true);
-      setTimeout(() => {
-        setCardLoading(null);
-        submissionInProgress.current = false;
-      }, 500);
+      setTimeout(() => setCardLoading(null), 500);
       return;
     }
 
@@ -830,42 +971,26 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
           variant: "destructive",
         });
       } finally {
-        setTimeout(() => {
-          setCardLoading(null);
-          submissionInProgress.current = false;
-        }, 500);
+        setTimeout(() => setCardLoading(null), 500);
       }
       return;
     }
 
+    setIsLoading(true);
     const messageText = card.message;
 
-    // Enhanced duplicate prevention - check both messages and recent submissions
     const isDuplicate = messages.some(
       (msg) =>
         msg.prompt === messageText &&
-        (msg.session === activeSession || !activeSession) &&
-        (Date.now() - new Date((msg as any).created_at || 0).getTime() < 5000) // Within last 5 seconds
+        (!msg.response || msg.response === "") &&
+        msg.session === activeSession
     );
 
-    if (isDuplicate) {
-      setCardLoading(null);
-      submissionInProgress.current = false;
-      return;
+    if (!isDuplicate) {
+      const tempId = `temp-${Date.now()}`;
+      const userMessage = { id: tempId, prompt: messageText, response: "" };
+      setMessages((prev) => [...prev, userMessage]);
     }
-
-    setIsLoading(true);
-
-    // Add temporary message immediately to prevent duplicates
-    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const userMessage = { 
-      id: tempId, 
-      prompt: messageText, 
-      response: "",
-      created_at: new Date().toISOString(),
-      session: activeSession 
-    };
-    setMessages((prev) => [...prev, userMessage]);
 
     try {
       let data;
@@ -920,6 +1045,27 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
       }
 
       setLatestMessageId(data.id);
+      
+      // Transform the API response to match the Message interface
+      const transformedMessage: Message = {
+        id: data.id,
+        prompt: data.prompt,
+        response: data.response,
+        session: data.session,
+        classification: data.classification,
+        context: data.context,
+        image_url: data.image_url,
+        file: data.file,
+        // Parse properties if it's a JSON string
+        properties: data.properties ? (() => {
+          try {
+            return JSON.parse(data.properties);
+          } catch {
+            return undefined;
+          }
+        })() : undefined,
+      };
+
       setMessages((prev) => {
         const tempIndex = prev.findIndex(
           (msg) => msg.prompt === messageText && !msg.response && !msg.error
@@ -927,16 +1073,16 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
         if (tempIndex >= 0) {
           const newMessages = [...prev];
-          newMessages[tempIndex] = data;
+          newMessages[tempIndex] = transformedMessage;
           return newMessages;
         } else {
           const existingIndex = prev.findIndex((msg) => msg.id === data.id);
           if (existingIndex >= 0) {
             const newMessages = [...prev];
-            newMessages[existingIndex] = data;
+            newMessages[existingIndex] = transformedMessage;
             return newMessages;
           } else {
-            return [...prev, data];
+            return [...prev, transformedMessage];
           }
         }
       });
@@ -971,7 +1117,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     } finally {
       setIsLoading(false);
       setCardLoading(null);
-      submissionInProgress.current = false;
     }
   };
 
@@ -1059,9 +1204,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
       <div
         ref={chatContainerRef}
         className={cn(
-          "flex-1 mt-14 bg-background transition-all duration-300",
-          // Only allow scrolling when there are messages
-          Array.isArray(messages) && messages.length > 0 ? "overflow-y-auto" : "overflow-hidden",
+          "flex-1 overflow-y-auto mt-14 bg-background transition-all duration-300",
           sidebarCollapsed ? "md:pl-16" : "md:",
           sidebarOpen ? "lg:pl-44" : "lg:pl-0",
           "pb-[calc(70px+1rem)]"
@@ -1070,11 +1213,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         {sessionLoadingState.isLoading ? (
           <LoaderAnimation variant="typing" text="Loading chat session" />
         ) : (
-          <div className={cn(
-            "flex flex-col w-full mx-auto md:max-w-5xl",
-            // Only add padding when there are messages or session title
-            (Array.isArray(messages) && messages.length > 0) || activeSession ? "p-4" : ""
-          )}>
+          <div className="flex flex-col w-full p-4 mx-auto md:max-w-5xl">
             {/* Session Title */}
             {activeSession &&
               Array.isArray(messages) &&
@@ -1100,7 +1239,10 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
               !isLoading &&
               !sessionLoadingState.isLoading && (
                 <motion.div
-                  className="flex flex-col items-center justify-center h-[calc(100vh-120px)] max-w-[600px] mx-auto px-4"
+                  className={cn(
+                    "flex flex-col items-center justify-center max-w-[600px] h-[60vh] md:min-h-[63vh] mx-auto",
+                    !hasMessages && "min-h-[calc(83vh-180px)]"
+                  )}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.5 }}
@@ -1132,7 +1274,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                     >
                       <Card
                         className={`md:p-1 py-[0.5px] transition-all cursor-pointer border-[1px] border-border md:py-8 bg-gradient-to-br from-[#1e1e1e] to-[#2a2a2a] hover:from-[#2a2a2a] hover:to-[#3a3a3a] hover:shadow-lg hover:shadow-purple-500/10 rounded-full md:rounded-[10px] hover:scale-90 ${
-                          cardLoading === card.title || isLoading || submissionInProgress.current
+                          cardLoading === card.title || isLoading
                             ? "opacity-70 pointer-events-none"
                             : ""
                         }`}
@@ -1171,7 +1313,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                     >
                       <Card
                         className={`md:p-1 py-[0.5px] transition-colors cursor-pointer rounded-full md:rounded-[10px] border-[1px] border-border md:py-8 bg-card bg-gradient-to-br from-[#1e1e1e] to-[#2a2a2a] hover:from-[#2a2a2a] hover:to-[#3a3a3a] hover:shadow-lg hover:shadow-purple-500/10 hover:bg-muted mx-auto hover:scale-90 ${
-                          cardLoading === card.title || isLoading || submissionInProgress.current
+                          cardLoading === card.title || isLoading
                             ? "opacity-70 pointer-events-none"
                             : ""
                         } ${
@@ -1309,19 +1451,57 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                             </div>
                           </div>
                         ) : (
-                          <motion.div
-                            className={`max-w-[80%] rounded-[10px] rounded-tr-none p-4 border-2 border-border ${
-                              message?.response ? "" : "bg-muted"
-                            }`}
-                            initial={{ scale: 0.95, x: 20 }}
-                            animate={{ scale: 1, x: 0 }}
-                            transition={{ duration: 0.2 }}
+                          <div className="max-w-[80%] flex flex-col items-end space-y-3">
+                            {/* Display attached images for user message - legacy imageUrls */}
+                            {message?.imageUrls && (
+                              <motion.div
+                                className="w-[70%] md:w-[60%] mb-2"
+                                initial={{ scale: 0.95, x: 20 }}
+                                animate={{ scale: 1, x: 0 }}
+                                transition={{ duration: 0.2 }}
+                              >
+                                <MessageImages imageUrls={message.imageUrls} />
+                              </motion.div>
+                            )}
+
+                            {/* Display attached image from API - single image_url */}
+                            {message?.image_url && (
+                              <motion.div
+                                className="w-[70%] md:w-[60%] mb-2"
+                                initial={{ scale: 0.95, x: 20 }}
+                                animate={{ scale: 1, x: 0 }}
+                                transition={{ duration: 0.2 }}
+                              >
+                                <MessageImages imageUrls={[message.image_url]} />
+                              </motion.div>
+                            )}
+
+                            {/* Display attached file from API */}
+                            {message?.file && (
+                              <motion.div
+                                className="w-[70%] md:w-[60%] mb-2"
+                                initial={{ scale: 0.95, x: 20 }}
+                                animate={{ scale: 1, x: 0 }}
+                                transition={{ duration: 0.2 }}
+                              >
+                                <MessageFiles file={message.file} />
+                              </motion.div>
+                            )}
+                            
+                            <motion.div
+                              className={`rounded-[10px] rounded-tr-none p-4 border-2 border-border ${
+                                message?.response ? "" : "bg-muted"
+                              }`}
+                              initial={{ scale: 0.95, x: 20 }}
+                              animate={{ scale: 1, x: 0 }}
+                              transition={{ duration: 0.2, delay: 0.1 }}
                               layout
-                          >
-                            <p className="text-white whitespace-pre-wrap">
-                              {message?.prompt}
-                            </p>
-                          </motion.div>
+                            >
+                              <p className="text-white whitespace-pre-wrap">
+                                {message?.prompt}
+                              </p>
+                            </motion.div>
+                          </div>
                         )}
                       </div>
 
@@ -1386,6 +1566,29 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                     </>
                                   );
                                 })()}
+
+                                {/* Display images and files from AI response */}
+                                {message?.image_url && (
+                                  <motion.div
+                                    className="mt-3"
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.3 }}
+                                  >
+                                    <MessageImages imageUrls={[message.image_url]} />
+                                  </motion.div>
+                                )}
+
+                                {message?.file && (
+                                  <motion.div
+                                    className="mt-3"
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.3 }}
+                                  >
+                                    <MessageFiles file={message.file} />
+                                  </motion.div>
+                                )}
                             
                             <div className="flex items-center justify-between pt-1 mt-4">
                               <div className="flex space-x-1">
@@ -1453,7 +1656,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                           >
                             <div className="flex-1 min-w-0">
                               <p className="mb-2 text-red-400">
-                                  {message.response.data}
+                                  {message.response?.data || "An error occurred"}
                               </p>
                               <Button
                                 variant="outline"
@@ -1530,3 +1733,4 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 };
 
 export default ChatMessages;
+                       

@@ -10,14 +10,14 @@ import { toast } from "@/components/ui/use-toast";
 import { chatAPI } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-// Import images
+// Import components
 import ChatSidebar from "@/components/chatpage/chat-sidebar";
 import ChatHeader from "@/components/chatpage/chat-header";
 import ChatMessages from "@/components/chatpage/chat-message";
 import RenameDialog from "@/components/chatpage/rename-dialog";
 import ChatInput from "@/components/chatpage/chat-input";
 
-// Add interface for Message type
+// Add interface for Message type with image support
 interface Message {
   id: string;
   prompt?: string;
@@ -26,6 +26,7 @@ interface Message {
   error?: boolean;
   retrying?: boolean;
   isNewSession?: boolean;
+  imageUrls?: string[]; // Add image URLs support
 }
 
 interface ChatSession {
@@ -58,6 +59,7 @@ function ChatContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSessionLoading, setIsSessionLoading] = useState(false);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+  
   // FIXED: Ensure messages is always initialized as an array
   const [messagesState, setMessagesState] = useState<Message[]>([]);
   
@@ -352,11 +354,13 @@ function ChatContent() {
     }
   }, [id]);
 
-  const postChat = useCallback(
+  // Enhanced postChat function with image support
+  const postChatWithImages = useCallback(
     async (
       input: string,
       activeSession?: string,
-      options?: { signal?: AbortSignal; skipAddingTempMessage?: boolean }
+      imageUrls?: string[],
+      options?: { signal?: AbortSignal; skipAddingTempMessage?: boolean; file?: File }
     ) => {
       try {
         const tempMessageId = "temp-" + Date.now();
@@ -366,18 +370,11 @@ function ChatContent() {
           prompt: input,
           response: "",
           session: activeSession,
+          imageUrls: imageUrls && imageUrls.length > 0 ? imageUrls : undefined,
         };
 
-        // FIXED: Safe array operation
-        const isDuplicate = messages.some(
-          (msg) =>
-          
-            msg.prompt === input &&
-            (!msg.response || msg.response === "") &&
-            msg.session === activeSession
-        );
-
-        if (!isDuplicate && !options?.skipAddingTempMessage) {
+        // Check if we should skip adding temp message (to avoid duplicates)
+        if (!options?.skipAddingTempMessage) {
           setMessages((prev) => [...prev, tempMessage]);
         }
 
@@ -436,11 +433,32 @@ function ChatContent() {
         }
 
         try {
+          // Prepare message for API call with image URLs and files
+          const apiOptions: {
+            signal?: AbortSignal;
+            imageUrls?: string[];
+            image_url?: string;
+            file?: File;
+          } = options?.signal ? { signal: options.signal } : {};
+
+          // Include image URLs properly
+          if (imageUrls && imageUrls.length > 0) {
+            apiOptions.imageUrls = imageUrls;
+            apiOptions.image_url = imageUrls[0]; // Use first image as primary
+          }
+
+          // Include file if provided from handleSubmit options
+          if (options?.file) {
+            apiOptions.file = options.file;
+          }
+
           const data = await chatAPI.postNewChat(
             input,
             sessionId!,
-            options?.signal ? { signal: options.signal } : undefined
+            apiOptions
           );
+          console.log("API Response data:", data);
+          console.log("Original imageUrls:", imageUrls);
           setLatestMessageId(data.id);
 
           setMessages((prev) => {
@@ -448,16 +466,28 @@ function ChatContent() {
 
             if (tempIndex >= 0) {
               const newMessages = [...prev];
-              newMessages[tempIndex] = { ...data, session: sessionId };
+              newMessages[tempIndex] = { 
+                ...data, 
+                session: sessionId,
+                imageUrls: imageUrls && imageUrls.length > 0 ? imageUrls : undefined
+              };
               return newMessages;
             } else {
               const existingIndex = prev.findIndex((msg) => msg && msg.id === data.id);
               if (existingIndex >= 0) {
                 const newMessages = [...prev];
-                newMessages[existingIndex] = { ...data, session: sessionId };
+                newMessages[existingIndex] = { 
+                  ...data, 
+                  session: sessionId,
+                  imageUrls: imageUrls && imageUrls.length > 0 ? imageUrls : undefined
+                };
                 return newMessages;
               } else {
-                return [...prev, { ...data, session: sessionId }];
+                return [...prev, { 
+                  ...data, 
+                  session: sessionId,
+                  imageUrls: imageUrls && imageUrls.length > 0 ? imageUrls : undefined
+                }];
               }
             }
           });
@@ -504,7 +534,7 @@ function ChatContent() {
           throw error;
         }
       } catch (error: unknown) {
-        console.error("Error in postChat:", error);
+        console.error("Error in postChatWithImages:", error);
         isCreatingNewSession.current = false;
         throw error;
       }
@@ -520,39 +550,41 @@ function ChatContent() {
     ]
   );
 
+  // Original postChat function for backward compatibility
+  const postChat = useCallback(
+    async (
+      input: string,
+      activeSession?: string,
+      options?: { signal?: AbortSignal; skipAddingTempMessage?: boolean }
+    ) => {
+      return postChatWithImages(input, activeSession, undefined, options);
+    },
+    [postChatWithImages]
+  );
+
+  // Enhanced handleSubmit with image and file support
   const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
+    async (e: React.FormEvent, options?: { imageUrls?: string[]; file?: File }) => {
       e.preventDefault();
-      if (!input.trim()) return;
+      if (!input.trim() && (!options?.imageUrls || options.imageUrls.length === 0) && !options?.file) return;
 
-      const tempId = `temp-${Date.now()}`;
-      const tempMessage = {
-        id: tempId,
-        prompt: input.trim(),
-        response: "",
-        session: activeSession,
-      };
-
-      setMessages((prev) => [...prev, tempMessage]);
+      const imageUrls = options?.imageUrls || [];
+      const file = options?.file;
 
       const controller = new AbortController();
       abortControllerRef.current = controller;
       setIsLoading(true);
 
       try {
-        await postChat(input, activeSession || undefined, {
+        // Pass both imageUrls and file to postChatWithImages
+        await postChatWithImages(input, activeSession || undefined, imageUrls, {
           signal: controller.signal,
-          skipAddingTempMessage: true,
+          skipAddingTempMessage: false, // Let postChatWithImages handle the temp message
+          file: file, // Pass the file option
         });
       } catch (error: unknown) {
         if (error instanceof Error && error.name !== "AbortError") {
           console.error("Error submitting chat:", error);
-
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg && msg.id === tempId ? { ...msg, error: true } : msg
-            )
-          );
 
           const errorMessage = (() => {
             if (
@@ -585,7 +617,7 @@ function ChatContent() {
         setInput("");
       }
     },
-    [input, activeSession, postChat, toast, setIsLoading]
+    [input, activeSession, postChatWithImages, setIsLoading]
   );
 
   const handleStop = useCallback(() => {
@@ -783,7 +815,7 @@ function ChatContent() {
     () => ({
       input,
       setInput,
-      handleSubmit,
+      handleSubmit, // This now supports image URLs
       isLoading,
       isMobile,
       activeSession,
@@ -794,6 +826,7 @@ function ChatContent() {
       refreshSessions,
       sidebarCollapsed: !sidebarOpen,
       handleStop,
+      user: user?.id ? { id: user.id } : null, // Fix type issue
     }),
     [
       input,
@@ -805,6 +838,7 @@ function ChatContent() {
       handleSetActiveSession,
       handleSubmit,
       handleStop,
+      user,
     ]
   );
 
@@ -876,16 +910,15 @@ function ChatContent() {
 
 export default function ChatPage() {
   return (
-<Suspense
-  fallback={
-    <div className="flex flex-col items-center justify-center h-screen space-y-4">
-      <div className="w-12 h-12 border-t-4 border-blue-500 border-solid rounded-full animate-spin"></div>
-      <p className="text-lg text-gray-500">Loading chat...</p>
-    </div>
-  }
->
-  <ChatContent />
-</Suspense>
-
+    <Suspense
+      fallback={
+        <div className="flex flex-col items-center justify-center h-screen space-y-4">
+          <div className="w-12 h-12 border-t-4 border-blue-500 border-solid rounded-full animate-spin"></div>
+          <p className="text-lg text-gray-500">Loading chat...</p>
+        </div>
+      }
+    >
+      <ChatContent />
+    </Suspense>
   );
 }

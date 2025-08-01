@@ -37,6 +37,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     first_name: user?.first_name || "",
     last_name: user?.last_name || "",
     avatar: user?.avatar || "",
+    phone: user?.phone || "",
   });
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(
     null
@@ -66,6 +67,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         first_name: user.first_name || "",
         last_name: user.last_name || "",
         avatar: user.avatar || "",
+        phone: user.phone || "",
       });
       setSelectedAvatarFile(null);
       setAvatarPreview(null);
@@ -381,6 +383,22 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
               disabled
               className="opacity-70 border border-white/15 w-full bg-transparent h-9 rounded-[10px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-muted-foreground pl-3 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
 
+            />
+          </div>
+
+          {/* Phone */}
+          <div className="space-y-2">
+            <Label htmlFor="phone" className="text-muted-foreground">
+              Phone Number
+            </Label>
+            <input
+              id="phone"
+              name="phone"
+              type="tel"
+              value={formData.phone}
+              onChange={handleInputChange}
+              className="border border-white/15 w-full bg-transparent h-9 rounded-[10px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-muted-foreground pl-3 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
+              placeholder="Enter your phone number"
             />
           </div>
 

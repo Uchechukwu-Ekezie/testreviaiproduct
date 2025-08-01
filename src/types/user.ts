@@ -23,6 +23,22 @@ export interface User {
     groups?: number[]
     user_permissions?: number[]
     avatar?: string
+    verification_status?: "none" | "pending" | "verified" | "rejected"
+    phone?: string
+    agent_request?: {
+      id: string
+      status: "pending" | "approved" | "rejected"
+      phone?: string
+      verification_document?: string
+      created_at: string
+      updated_at: string
+    }
+    agent_info?: {
+      status: "pending" | "approved" | "rejected"
+      request_date: string
+      verification_document?: string
+      phone?: string
+    }
   }
   
   export interface AuthContextType {
@@ -43,4 +59,5 @@ export interface User {
     loginWithGoogle: (credentialResponse: GoogleOAuthPayload) => Promise<boolean>
     updateProfileImage: (imageUrl: string) => Promise<boolean>
     refreshAccessToken: () => Promise<string | null>  
+    submitAgentRequest: (data: { phone?: string; verification_document?: File | string }) => Promise<boolean>
   }

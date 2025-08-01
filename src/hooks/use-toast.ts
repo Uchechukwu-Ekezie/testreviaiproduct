@@ -17,46 +17,62 @@ interface ToastOptions {
   variant?: ToastVariant
 }
 
-// Simple toast implementation
+// Global toast state
+let globalToasts: Toast[] = []
+let globalSetToasts: ((toasts: Toast[]) => void) | null = null
+
+// Register the global setter
+export const registerToastSetter = (setter: (toasts: Toast[]) => void) => {
+  globalSetToasts = setter
+}
+
+// Simple toast function
+export const toast = (options: ToastOptions) => {
+  const id = Math.random().toString(36).substring(2, 9)
+  const newToast: Toast = {
+    id,
+    title: options.title,
+    description: options.description,
+    variant: options.variant || "default",
+  }
+
+  globalToasts = [...globalToasts, newToast]
+  
+  if (globalSetToasts) {
+    globalSetToasts([...globalToasts])
+  } else {
+    // Fallback to console.log
+    console.log(`🔔 Toast [${options.variant || 'default'}]:`, options.title, options.description)
+  }
+
+  // Auto dismiss after 4 seconds
+  setTimeout(() => {
+    globalToasts = globalToasts.filter((t) => t.id !== id)
+    if (globalSetToasts) {
+      globalSetToasts([...globalToasts])
+    }
+  }, 4000)
+
+  return id
+}
+
+// Dismiss function
+export const dismissToast = (id: string) => {
+  globalToasts = globalToasts.filter((t) => t.id !== id)
+  if (globalSetToasts) {
+    globalSetToasts([...globalToasts])
+  }
+}
+
+// Hook for components that need toast state
 export function useToast() {
   const [toasts, setToasts] = useState<Toast[]>([])
 
-  const toast = (options: ToastOptions) => {
-    const id = Math.random().toString(36).substring(2, 9)
-    const newToast: Toast = {
-      id,
-      title: options.title,
-      description: options.description,
-      variant: options.variant || "default",
-    }
+  // Register this component's setter on mount
+  useState(() => {
+    registerToastSetter(setToasts)
+    setToasts([...globalToasts]) // Initialize with current toasts
+  })
 
-    setToasts((prev) => [...prev, newToast])
-
-    // Auto dismiss after 3 seconds
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id))
-    }, 3000)
-
-    return id
-  }
-
-  const dismiss = (id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id))
-  }
-
-  return { toast, dismiss, toasts }
-}
-
-// Export a singleton instance for direct import
-export const toast = (options: ToastOptions) => {
-  // In a real implementation, this would use a context or event system
-  // For now, we'll just log to console since this is a simplified version
-  console.log(`Toast: ${options.variant || 'default'}`, options.title, options.description)
-  
-  // In a real app, you'd show a toast notification
-  // For this example, we'll use alert for demonstration
-  if (typeof window !== 'undefined') {
-    const message = `${options.title || ''}${options.title && options.description ? ': ' : ''}${options.description || ''}`
-    alert(message)
-  }
+  return { toasts, toast, dismiss: dismissToast }
 }
