@@ -24,7 +24,8 @@ interface TokenData {
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
   headers: {
-    "Content-Type": "application/json",
+    // ✅ DON'T set Content-Type globally - let each request set it as needed
+    // "Content-Type": "application/json", // ❌ REMOVED - this was forcing all requests to be JSON
     ...(typeof window !== "undefined" &&
     window.localStorage &&
     window.localStorage.getItem("authToken")
@@ -272,6 +273,40 @@ export const clearAuthToken = () => {
   localStorage.removeItem("tokenData");
   localStorage.removeItem("refreshToken");
   delete api.defaults.headers.common["Authorization"];
+};
+
+// ✅ Generic API fetch function using the configured axios instance
+export const apiFetch = async (url: string, options: {
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+  body?: string;
+  headers?: Record<string, string>;
+} = {}) => {
+  try {
+    const {
+      method = 'GET',
+      body,
+      headers = {}
+    } = options;
+
+    const config: AxiosRequestConfig = {
+      method: method.toLowerCase() as 'get' | 'post' | 'put' | 'delete' | 'patch',
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers
+      }
+    };
+
+    if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+      config.data = body;
+    }
+
+    const response = await api(config);
+    return response.data;
+  } catch (error) {
+    console.error(`apiFetch error for ${options.method || 'GET'} ${url}:`, error);
+    throw error;
+  }
 };
 
 // ✅ Export resetPassword function for direct import
@@ -1132,8 +1167,24 @@ export const chatAPI = {
   getChatsBySession: async (sessionId: string) => {
     try {
       const response = await api.get(`/chats/session/${sessionId}/`);
-      // console.log("uchehe" , sessionId);
-      return response.data;
+      console.log("getChatsBySession response:", response.data);
+      
+      // Handle different response structures
+      let chats = response.data;
+      
+      // If response.data is an object with a 'results' or 'data' property, extract the array
+      if (chats && typeof chats === 'object' && !Array.isArray(chats)) {
+        if (Array.isArray(chats.results)) {
+          chats = chats.results;
+        } else if (Array.isArray(chats.data)) {
+          chats = chats.data;
+        } else if (Array.isArray(chats.chats)) {
+          chats = chats.chats;
+        }
+      }
+      
+      // Ensure we always return an array
+      return Array.isArray(chats) ? chats : [];
     } catch (error: any) {
       console.error("API: Fetch chats failed with detailed error:", {
         status: error.response?.status,
@@ -1160,170 +1211,569 @@ export const chatAPI = {
     }
   },
 
-  postNewChat: async (
-    message: string,
-    sessionId?: string,
-    options?: {
-      imageUrls?: string[];
-      image_url?: string;
-      file?: File | string;
-      properties?: string;
-      classification?: string;
-      signal?: AbortSignal;
-      config?: AxiosRequestConfig;
-    }
-  ): Promise<ChatMessageResponse> => {
-    try {
-      console.log(
-        "API: Posting new chat message to session:",
-        sessionId,
-        "with message:",
-        message
-      );
-      console.log("API: Received options:", options);
+  // postNewChat: async (
+  //   message: string,
+  //   sessionId?: string,
+  //   options?: {
+  //     imageUrls?: string[];
+  //     image_url?: string;
+  //     file?: File | string;
+  //     properties?: string;
+  //     classification?: string;
+  //     signal?: AbortSignal;
+  //     config?: AxiosRequestConfig;
+  //   }
+  // ): Promise<ChatMessageResponse> => {
+  //   try {
+  //     console.log(
+  //       "API: Posting new chat message to session:",
+  //       sessionId,
+  //       "with message:",
+  //       message
+  //     );
+  //     console.log("API: Received options:", options);
+  //     console.log("API: Type of options.file:", typeof options?.file);
+  //     console.log("API: options.file instanceof File:", options?.file instanceof File);
+  //     console.log("API: Full options.file object:", options?.file);
+      
+  //     // Additional debugging for file properties
+  //     if (options?.file) {
+  //       console.log("API: File details:", {
+  //         name: options.file instanceof File ? options.file.name : 'Not a File',
+  //         size: options.file instanceof File ? options.file.size : 'N/A',
+  //         type: options.file instanceof File ? options.file.type : 'N/A',
+  //         constructor: options.file.constructor.name,
+  //         toString: options.file.toString(),
+  //       });
+  //     }
 
-      // Ensure auth token is set
-      const token = getAuthToken();
-      if (!token) {
-        throw new Error("Authentication token is missing");
-      }
-      setAuthToken(token);
+  //     // Ensure auth token is set
+  //     const token = getAuthToken();
+  //     if (!token) {
+  //       throw new Error("Authentication token is missing");
+  //     }
+  //     setAuthToken(token);
 
-      // Use FormData for multipart/form-data when we have files
-      const hasFile = options?.file instanceof File;
-      let requestData: FormData | Record<string, unknown>;
-      let requestConfig: AxiosRequestConfig;
+  //     // Use FormData for multipart/form-data when we have files
+  //     const hasFile = options?.file instanceof File;
+  //     console.log("API: hasFile determined as:", hasFile);
+  //     console.log("API: File check - typeof:", typeof options?.file);
+  //     console.log("API: File check - instanceof File:", options?.file instanceof File);
+  //     console.log("API: File check - constructor:", options?.file?.constructor?.name);
+      
+  //     // Additional debugging: Check if it's a File-like object
+  //     if (options?.file && typeof options.file === 'object') {
+  //       console.log("API: File properties check:", {
+  //         hasName: 'name' in options.file,
+  //         hasSize: 'size' in options.file,
+  //         hasType: 'type' in options.file,
+  //         hasLastModified: 'lastModified' in options.file,
+  //         hasStream: 'stream' in options.file,
+  //         isFile: options.file instanceof File,
+  //         isBlob: options.file instanceof Blob,
+  //         toString: options.file.toString(),
+  //       });
+  //     }
+  //     let requestData: FormData | Record<string, unknown>;
+  //     let requestConfig: AxiosRequestConfig;
 
-      if (hasFile) {
-        // Use FormData for file uploads
-        requestData = new FormData();
-        requestData.append("prompt", message.trim());
-        requestData.append("original_prompt", message.trim());
+  //     if (hasFile) {
+  //       // Use FormData for file uploads
+  //       requestData = new FormData();
+  //       requestData.append("prompt", message.trim());
+  //       requestData.append("original_prompt", message.trim());
 
-        if (sessionId) {
-          requestData.append("session", sessionId);
-        }
+  //       if (sessionId) {
+  //         requestData.append("session", sessionId);
+  //       }
 
-        // Add image URL if provided
-        if (options?.image_url) {
-          requestData.append("image_url", options.image_url);
-        } else if (options?.imageUrls && options.imageUrls.length > 0) {
-          requestData.append("image_url", options.imageUrls[0]); // Use first image URL
-        }
+  //       // Add image URL if provided
+  //       if (options?.image_url) {
+  //         requestData.append("image_url", options.image_url);
+  //       } else if (options?.imageUrls && options.imageUrls.length > 0) {
+  //         requestData.append("image_url", options.imageUrls[0]); // Use first image URL
+  //       }
 
-        // Add file if provided
-        if (options?.file instanceof File) {
-          requestData.append("file", options.file);
-        }
+  //       // Add file if provided
+  //       if (options?.file instanceof File) {
+  //         console.log("API: Adding file to FormData:", {
+  //           name: options.file.name,
+  //           size: options.file.size,
+  //           type: options.file.type,
+  //           lastModified: options.file.lastModified
+  //         });
+  //         console.log("API: File object before append:", options.file);
+  //         requestData.append("file", options.file);
+  //         console.log("API: File added to FormData successfully");
+          
+  //         // Verify file was added to FormData
+  //         const fileFromFormData = requestData.get("file");
+  //         console.log("API: File retrieved from FormData:", fileFromFormData);
+  //         console.log("API: Retrieved file instanceof File:", fileFromFormData instanceof File);
+  //       } else {
+  //         console.log("API: No file provided or file is not a File instance:", options?.file);
+  //         console.log("API: Type of options.file:", typeof options?.file);
+  //       }
 
-        // Add other optional fields
-        if (options?.properties) {
-          requestData.append("properties", options.properties);
-        }
-        if (options?.classification) {
-          requestData.append("classification", options.classification);
-        }
+  //       // Add other optional fields
+  //       if (options?.properties) {
+  //         requestData.append("properties", options.properties);
+  //       }
+  //       if (options?.classification) {
+  //         requestData.append("classification", options.classification);
+  //       }
 
-        requestConfig = {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            // Don't set Content-Type, let browser set it with boundary for FormData
-          },
-          ...(options?.signal && { signal: options.signal }),
-          ...options?.config,
-        };
-      } else {
-        // Use JSON for regular requests without files
-        requestData = {
-          prompt: message.trim(),
-          original_prompt: message.trim(),
-          ...(sessionId && { session: sessionId }),
-        };
+  //       requestConfig = {
+  //         headers: {
+  //           Authorization: `Bearer ${token}`,
+  //           // Don't set Content-Type, let browser set it with boundary for FormData
+  //         },
+  //         ...(options?.signal && { signal: options.signal }),
+  //         ...options?.config,
+  //       };
+  //     } else {
+  //       // Use JSON for regular requests without files
+  //       requestData = {
+  //         prompt: message.trim(),
+  //         original_prompt: message.trim(),
+  //         ...(sessionId && { session: sessionId }),
+  //       };
 
-        // Add image URL if provided
-        if (options?.image_url) {
-          requestData.image_url = options.image_url;
-        } else if (options?.imageUrls && options.imageUrls.length > 0) {
-          requestData.image_url = options.imageUrls[0]; // Use first image URL
-        }
+  //       // Add image URL if provided
+  //       if (options?.image_url) {
+  //         requestData.image_url = options.image_url;
+  //       } else if (options?.imageUrls && options.imageUrls.length > 0) {
+  //         requestData.image_url = options.imageUrls[0]; // Use first image URL
+  //       }
 
-        // Add other optional fields
-        if (options?.properties) {
-          requestData.properties = options.properties;
-        }
-        if (options?.classification) {
-          requestData.classification = options.classification;
-        }
+  //       // Add other optional fields
+  //       if (options?.properties) {
+  //         requestData.properties = options.properties;
+  //       }
+  //       if (options?.classification) {
+  //         requestData.classification = options.classification;
+  //       }
 
-        requestConfig = {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          ...(options?.signal && { signal: options.signal }),
-          ...options?.config,
-        };
-      }
+  //       requestConfig = {
+  //         headers: {
+  //           "Content-Type": "application/json",
+  //           Authorization: `Bearer ${token}`,
+  //         },
+  //         ...(options?.signal && { signal: options.signal }),
+  //         ...options?.config,
+  //       };
+  //     }
 
-      console.log(
-        "API: Final request data:",
-        hasFile ? "FormData with file" : requestData
-      );
+  //     console.log(
+  //       "API: Final request data:",
+  //       hasFile ? "FormData with file" : requestData
+  //     );
 
-      const response = await api.post(
-        `/chats/ai-chat/`,
-        requestData,
-        requestConfig
-      );
+  //     // Debug FormData contents
+  //     if (hasFile && requestData instanceof FormData) {
+  //       console.log("API: FormData entries:");
+  //       for (const [key, value] of requestData.entries()) {
+  //         if (value instanceof File) {
+  //           console.log(`  ${key}: File(${value.name}, ${value.size} bytes, ${value.type})`);
+  //         } else {
+  //           console.log(`  ${key}: ${value}`);
+  //         }
+  //       }
+  //     }
 
-      console.log("API: Chat response received:", response.data);
+  //     const response = await api.post(
+  //       `/chats/ai-chat/`,
+  //       requestData,
+  //       requestConfig
+  //     );
 
-      // Create a complete message object with both prompt and response
-      const messageObj: ChatMessageResponse = {
-        id: response.data.id,
-        prompt: message.trim(), // Include the original prompt
-        original_prompt: response.data.original_prompt || message.trim(), // Include original prompt
-        response: response.data.response || response.data.message || "", // Handle different response formats
-        session: sessionId || response.data.session, // Use the original session ID if provided
-        context: response.data.context || [], // Include context if available
-        classification: response.data.classification || "", // Include classification if available
-        created_at: response.data.created_at || new Date().toISOString(),
-        updated_at: response.data.updated_at || new Date().toISOString(),
-        file: response.data.file || null, // Include file if available
-        image_url: response.data.image_url || null, // Include image URL if available
-        imageUrls:
-          options?.imageUrls ||
-          (response.data.image_url ? [response.data.image_url] : undefined), // Preserve imageUrls array
-        properties: response.data.properties || null, // Include properties if available
-        reaction: response.data.reaction || null, // Include reaction if available
-        embeddings: response.data.embeddings || null, // Include embeddings if available
-      };
+  //       console.log("API: Chat response received:", response.data);
+  //       console.log("API: Backend file field:", response.data.file);
+        
+  //       if (!response.data.file && hasFile) {
+  //         console.error("🚨 BACKEND ISSUE: File was sent but backend returned file: null");
+  //         console.error("📤 Request included file:", options?.file instanceof File ? options.file.name : 'unknown');
+  //         console.error("📥 Response file field:", response.data.file);
+  //         console.error("🔧 Fix needed: Backend is not processing the uploaded file correctly");
+  //       }      // Create a complete message object with both prompt and response
+  //     const messageObj: ChatMessageResponse = {
+  //       id: response.data.id,
+  //       prompt: message.trim(), // Include the original prompt
+  //       original_prompt: response.data.original_prompt || message.trim(), // Include original prompt
+  //       response: response.data.response || response.data.message || "", // Handle different response formats
+  //       session: sessionId || response.data.session, // Use the original session ID if provided
+  //       context: response.data.context || [], // Include context if available
+  //       classification: response.data.classification || "", // Include classification if available
+  //       created_at: response.data.created_at || new Date().toISOString(),
+  //       updated_at: response.data.updated_at || new Date().toISOString(),
+  //       file: response.data.file || null, // Include file if available
+  //       image_url: response.data.image_url || null, // Include image URL if available
+  //       imageUrls:
+  //         options?.imageUrls ||
+  //         (response.data.image_url ? [response.data.image_url] : undefined), // Preserve imageUrls array
+  //       properties: response.data.properties || null, // Include properties if available
+  //       reaction: response.data.reaction || null, // Include reaction if available
+  //       embeddings: response.data.embeddings || null, // Include embeddings if available
+  //     };
 
-      console.log("API: New chat message posted successfully:", messageObj);
+  //     console.log("API: New chat message posted successfully:", messageObj);
 
-      return messageObj;
-    } catch (error: unknown) {
-      const axiosError = error as AxiosError;
-      console.error("API: post new chats failed with detailed error:", {
-        status: axiosError.response?.status,
-        statusText: axiosError.response?.statusText,
-        data: axiosError.response?.data,
-        message: axiosError.message,
-        stack: axiosError.stack,
-      });
+  //     return messageObj;
+  //   } catch (error: unknown) {
+  //     const axiosError = error as AxiosError;
+  //     console.error("API: post new chats failed with detailed error:", {
+  //       status: axiosError.response?.status,
+  //       statusText: axiosError.response?.statusText,
+  //       data: axiosError.response?.data,
+  //       message: axiosError.message,
+  //       stack: axiosError.stack,
+  //     });
 
-      // Add more specific error handling
-      if (axiosError.response?.status === 401) {
-        throw new Error("Authentication failed. Please log in again.");
-      } else if (axiosError.response?.status === 500) {
-        throw new Error("Server error occurred. Please try again later.");
-      }
+  //     // Add more specific error handling
+  //     if (axiosError.response?.status === 401) {
+  //       throw new Error("Authentication failed. Please log in again.");
+  //     } else if (axiosError.response?.status === 500) {
+  //       throw new Error("Server error occurred. Please try again later.");
+  //     }
 
-      throw error;
-    }
-  },
+  //     throw error;
+  //   }
+  // },
 
   //chat ai edit the endpoint is /chat/ai-chat/{id}/ and it is put it accept prommpt and sessionid are compulsory
+
+
+
+  // Replace your chatAPI.postNewChat with this enhanced debugging version
+
+postNewChat: async (
+  message: string,
+  sessionId?: string,
+  options?: {
+    imageUrls?: string[];
+    image_url?: string;
+    file?: File | string;
+    properties?: string;
+    classification?: string;
+    signal?: AbortSignal;
+    config?: AxiosRequestConfig;
+  }
+): Promise<ChatMessageResponse> => {
+  try {
+
+    
+ 
+    
+    if (options?.file) {
+
+      
+      // Check if it has File properties
+      if (options.file && typeof options.file === 'object') {
+
+      }
+      
+      // Try to access File properties
+      
+      
+      // Check prototype chain
+      console.log("📎 Checking prototype chain:");
+      console.log("📎 Object.getPrototypeOf(options.file):", Object.getPrototypeOf(options.file));
+      console.log("📎 options.file.toString():", options.file.toString());
+      
+    } else {
+      console.log("📎 ❌ NO FILE in options");
+      console.log("📎 options?.file value:", options?.file);
+      console.log("📎 options?.file === undefined:", options?.file === undefined);
+      console.log("📎 options?.file === null:", options?.file === null);
+    }
+    
+    console.log("📎 ================================");
+    console.log("📎 FILE DEBUGGING END");
+    console.log("📎 ================================");
+
+    // Ensure auth token is set
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error("Authentication token is missing");
+    }
+    setAuthToken(token);
+
+
+    
+    // Additional check - maybe the file lost its prototype
+    const hasFileObject = options?.file && typeof options?.file === 'object' && 'name' in options.file;
+    console.log("🔍 hasFileObject (checking properties):", hasFileObject);
+    
+    // Force check if it quacks like a File
+    const looksLikeFile = options?.file && 
+                         typeof options?.file === 'object' && 
+                         'name' in options.file && 
+                         'size' in options.file && 
+                         'type' in options.file;
+    console.log("🔍 looksLikeFile (duck typing):", looksLikeFile);
+
+    // Declare hasFile using instanceof File
+    const hasFile = options?.file instanceof File;
+
+    let requestData: FormData | Record<string, unknown>;
+    let requestConfig: AxiosRequestConfig;
+
+    // 🚨 TRY USING looksLikeFile INSTEAD OF instanceof
+    const shouldUseFormData = hasFile || looksLikeFile;
+    console.log("🔍 shouldUseFormData (final decision):", shouldUseFormData);
+
+    if (shouldUseFormData) {
+      console.log("📤 ================================");
+      console.log("📤 USING FORMDATA PATH");
+      console.log("📤 ================================");
+      
+      // Use FormData for file uploads
+      requestData = new FormData();
+      requestData.append("prompt", message.trim());
+      requestData.append("original_prompt", message.trim());
+
+      if (sessionId) {
+        requestData.append("session", sessionId);
+      }
+
+      // Add image URL if provided
+      if (options?.image_url) {
+        requestData.append("image_url", options.image_url);
+      } else if (options?.imageUrls && options.imageUrls.length > 0) {
+        requestData.append("image_url", options.imageUrls[0]);
+      }
+
+      // Add file if provided
+      if (options?.file) {
+        console.log("📤 Attempting to add file to FormData");
+        
+        try {
+          // Try with instanceof first
+          if (options.file instanceof File) {
+            console.log("📤 ✅ Adding File via instanceof File");
+            requestData.append("file", options.file);
+          } 
+          // Fallback: try duck typing
+          else if (looksLikeFile) {
+            console.log("📤 ⚠️ Adding file via duck typing (not instanceof File)");
+            if (typeof options.file !== "string") {
+              requestData.append("file", options.file as File);
+            } else {
+              console.warn("📤 ⚠️ File is a string, skipping append to FormData.");
+            }
+          }
+          else {
+            console.log("📤 ❌ Cannot add file - not recognizable as File");
+          }
+          
+          console.log("📤 ✅ File addition completed");
+          
+          // Verify file was added to FormData
+          const fileFromFormData = requestData.get("file");
+          console.log("📤 File retrieved from FormData:", fileFromFormData);
+          console.log("📤 Retrieved file instanceof File:", fileFromFormData instanceof File);
+          
+          if (fileFromFormData instanceof File) {
+            console.log("📤 ✅ FormData contains valid File object");
+            console.log("📤 Retrieved file name:", fileFromFormData.name);
+            console.log("📤 Retrieved file size:", fileFromFormData.size);
+          } else {
+            console.error("📤 ❌ FormData does not contain valid File object!");
+            console.log("📤 Retrieved value type:", typeof fileFromFormData);
+            console.log("📤 Retrieved value:", fileFromFormData);
+          }
+        } catch (fileError) {
+          console.error("📤 ❌ Error adding file to FormData:", fileError);
+        }
+      }
+
+      // Add other optional fields
+      if (options?.properties) {
+        requestData.append("properties", options.properties);
+      }
+      if (options?.classification) {
+        requestData.append("classification", options.classification);
+      }
+
+      requestConfig = {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          // Don't set Content-Type, let browser set it with boundary for FormData
+        },
+        ...(options?.signal && { signal: options.signal }),
+        ...options?.config,
+      };
+
+      // Log FormData contents
+      console.log("📤 FormData contents:");
+      for (const [key, value] of requestData.entries()) {
+        if (value instanceof File) {
+          console.log(`📤   ${key}: File(${value.name}, ${value.size} bytes, ${value.type})`);
+        } else {
+          console.log(`📤   ${key}: ${value}`);
+        }
+      }
+      
+    } else {
+      console.log("📤 ================================");
+      console.log("📤 USING JSON PATH");
+      console.log("📤 ================================");
+      
+      // Use JSON for regular requests without files
+      requestData = {
+        prompt: message.trim(),
+        original_prompt: message.trim(),
+        ...(sessionId && { session: sessionId }),
+      };
+
+      // Add image URL if provided
+      if (options?.image_url) {
+        requestData.image_url = options.image_url;
+      } else if (options?.imageUrls && options.imageUrls.length > 0) {
+        requestData.image_url = options.imageUrls[0];
+      }
+
+      // ⚠️ This is where the problem happens - file gets serialized as {}
+      if (options?.file) {
+        console.log("📤 ⚠️ WARNING: File detected but using JSON path!");
+        console.log("📤 ⚠️ This will serialize the File as an empty object: {}");
+        console.log("📤 ⚠️ File will NOT be sent to backend properly");
+        // Don't add file to JSON payload as it will serialize as {}
+      }
+
+      // Add other optional fields
+      if (options?.properties) {
+        requestData.properties = options.properties;
+      }
+      if (options?.classification) {
+        requestData.classification = options.classification;
+      }
+
+      requestConfig = {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        ...(options?.signal && { signal: options.signal }),
+        ...options?.config,
+      };
+      
+      console.log("📤 JSON payload:", requestData);
+    }
+
+    console.log("🚀 ================================");
+    console.log("🚀 MAKING API REQUEST");
+    console.log("🚀 ================================");
+    console.log("🚀 Using FormData:", shouldUseFormData);
+    console.log("🚀 Request config headers:", requestConfig.headers);
+    
+    // NETWORK TAB DEBUGGING INFO
+    if (shouldUseFormData) {
+      console.log("🌐 ================================");
+      console.log("🌐 NETWORK TAB DEBUGGING GUIDE");
+      console.log("🌐 ================================");
+      console.log("🌐 IMPORTANT: Files in FormData appear 'empty' in Network tab payload!");
+      console.log("🌐 This is NORMAL browser behavior - files are sent correctly!");
+      console.log("🌐");
+      console.log("🌐 What to check in Network tab:");
+      console.log("🌐 1. Request Method: POST");
+      console.log("🌐 2. Content-Type header should be: multipart/form-data; boundary=...");
+      console.log("🌐 3. Request size should be > 0 bytes (check the 'Size' column)");
+      console.log("🌐 4. Payload may show multipart boundaries, NOT file content");
+      console.log("🌐 5. Look for '--boundary' strings in raw payload");
+      console.log("🌐");
+      
+      if (requestData instanceof FormData) {
+        let totalFileSize = 0;
+        for (const [key, value] of requestData.entries()) {
+          if (value instanceof File) {
+            totalFileSize += value.size;
+            console.log(`🌐 File '${key}': ${value.name} (${value.size} bytes)`);
+            
+            // 🔥 PROVE BINARY CONTENT IS BEING SENT
+            console.log("🔥 ================================");
+            console.log("🔥 BINARY TRANSMISSION PROOF");
+            console.log("🔥 ================================");
+            console.log(`🔥 File "${value.name}" contains ${value.size} bytes of binary data`);
+            console.log("🔥 FormData automatically encodes this as binary multipart data");
+            console.log("🔥 Content-Type will be: multipart/form-data; boundary=...");
+            console.log("🔥 File data is sent as raw binary bytes, NOT as text/JSON");
+            console.log("🔥 Backend receives: request.FILES['file'] with binary content");
+            console.log("🔥 ================================");
+          }
+        }
+        console.log(`🌐 Expected request size: ~${totalFileSize + 500} bytes (file + overhead)`);
+      }
+      console.log("🌐 ================================");
+    }
+    
+    const response = await api.post(
+      `/chats/ai-chat/`,
+      requestData,
+      requestConfig
+    );
+
+    console.log("📥 ================================");
+    console.log("📥 RESPONSE RECEIVED");
+    console.log("📥 ================================");
+    console.log("📥 Response status:", response.status);
+    console.log("📥 Response data:", response.data);
+    console.log("📥 File in response:", response.data.file);
+    
+    if (!response.data.file && shouldUseFormData) {
+      console.error("🚨 ================================");
+      console.error("🚨 BACKEND ISSUE DETECTED");
+      console.error("🚨 ================================");
+      console.error("🚨 File was sent via FormData but backend returned file: null");
+      console.error("🚨 Request method: FormData");
+      console.error("🚨 File sent:", options?.file instanceof File ? options.file.name : 'File-like object');
+      console.error("🚨 Response file field:", response.data.file);
+      console.error("🚨 This indicates a backend processing issue");
+    }
+
+    // Create response object...
+    const messageObj: ChatMessageResponse = {
+      id: response.data.id,
+      prompt: message.trim(),
+      original_prompt: response.data.original_prompt || message.trim(),
+      response: response.data.response || response.data.message || "",
+      session: sessionId || response.data.session,
+      context: response.data.context || [],
+      classification: response.data.classification || "",
+      created_at: response.data.created_at || new Date().toISOString(),
+      updated_at: response.data.updated_at || new Date().toISOString(),
+      file: response.data.file || null,
+      image_url: response.data.image_url || null,
+      imageUrls: options?.imageUrls || (response.data.image_url ? [response.data.image_url] : undefined),
+      properties: response.data.properties || null,
+      reaction: response.data.reaction || null,
+      embeddings: response.data.embeddings || null,
+    };
+
+    console.log("✅ ================================");
+    console.log("✅ API CALL COMPLETED SUCCESSFULLY");
+    console.log("✅ ================================");
+    return messageObj;
+    
+  } catch (error: unknown) {
+    const axiosError = error as AxiosError;
+    console.error("❌ ================================");
+    console.error("❌ API CALL FAILED");
+    console.error("❌ ================================");
+    console.error("❌ Status:", axiosError.response?.status);
+    console.error("❌ Status Text:", axiosError.response?.statusText);
+    console.error("❌ Response Data:", axiosError.response?.data);
+    console.error("❌ Message:", axiosError.message);
+
+    if (axiosError.response?.status === 401) {
+      throw new Error("Authentication failed. Please log in again.");
+    } else if (axiosError.response?.status === 500) {
+      throw new Error("Server error occurred. Please try again later.");
+    }
+
+    throw error;
+  }
+},
 
   editChat: async (
     chatId: string,
@@ -1610,6 +2060,355 @@ postAgentRequest: async (data: {
     throw error;
   }
 },
+};
+
+export const propertiesAPI = {
+  // Get all properties with pagination
+  getAll: async (page: number = 1, pageSize: number = 10) => {
+    console.log(`propertiesAPI.getAll: Starting request to property/?page=${page}&page_size=${pageSize}`)
+    const response = await apiFetch(`property/?page=${page}&page_size=${pageSize}`)
+    console.log('propertiesAPI.getAll: Response:', response)
+    return response
+  },
+
+  getByUserId: async (userId: string) => {
+    return apiFetch(`property/by-user/${userId}/`);
+  },
+
+  // Regular create method for non-agents
+  create: async (propertyData: unknown) => {
+    return apiFetch('/property/', {
+      method: 'POST',
+      body: JSON.stringify(propertyData),
+    });
+  },
+
+  // Create method specifically for agents - automatically sets is_added_by_agent to true
+  createByAgent: async (propertyData: Record<string, unknown>) => {
+    const agentPropertyData = {
+      ...propertyData,
+      is_added_by_agent: true
+    };
+    
+    console.log('propertiesAPI.createByAgent: Creating property with agent flag:', agentPropertyData);
+    
+    return apiFetch('/property/', {
+      method: 'POST',
+      body: JSON.stringify(agentPropertyData),
+    });
+  },
+
+  getById: async (id: string) => {
+    return apiFetch(`/property/${id}/`);
+  },
+
+  update: async (id: string, propertyData: unknown) => {
+    return apiFetch(`/property/${id}/`, {
+      method: 'PUT',
+      body: JSON.stringify(propertyData),
+    });
+  },
+
+  delete: async (id: string) => {
+    return apiFetch(`/property/${id}/`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+
+interface ReviewFilters {
+  status?: 'pending' | 'approved' | 'rejected'
+  rating?: number
+  property_id?: string
+  page?: number
+  page_size?: number
+}
+export const reviewsAPI = {
+  // Get all reviews (admin endpoint)
+  getAll: async () => {
+    console.log('reviewsAPI.getAll: Starting request to reviews/')
+    const response = await apiFetch('reviews/')
+    console.log('reviewsAPI.getAll: Response:', response)
+    return response
+  },
+
+  // Get reviews for user's properties
+  getByUserId: async (userId: string, filters?: ReviewFilters) => {
+    console.log('reviewsAPI.getByUserId: Starting request for userId:', userId, 'with filters:', filters)
+    
+    // Build query parameters
+    const queryParams = new URLSearchParams()
+    if (filters?.status) queryParams.append('status', filters.status)
+    if (filters?.rating) queryParams.append('rating', filters.rating.toString())
+    if (filters?.property_id) queryParams.append('property_id', filters.property_id)
+    if (filters?.page) queryParams.append('page', filters.page.toString())
+    if (filters?.page_size) queryParams.append('page_size', filters.page_size.toString())
+    
+    const queryString = queryParams.toString()
+    const url = `property/reviews-by-user/${userId}/${queryString ? `?${queryString}` : ''}`
+    
+    console.log('reviewsAPI.getByUserId: URL will be:', url)
+    
+    try {
+      const response = await apiFetch(url)
+      console.log('reviewsAPI.getByUserId: Success response:', response)
+      console.log('reviewsAPI.getByUserId: Response type:', typeof response)
+      console.log('reviewsAPI.getByUserId: Is array?', Array.isArray(response))
+      
+      if (response && typeof response === 'object') {
+        console.log('reviewsAPI.getByUserId: Response keys:', Object.keys(response))
+      }
+      
+      return response
+    } catch (error) {
+      console.error('reviewsAPI.getByUserId: Error occurred:', error)
+      throw error
+    }
+  },
+
+  // Get single review by ID
+  getById: async (id: string) => {
+    console.log('reviewsAPI.getById: Starting request for id:', id)
+    const response = await apiFetch(`reviews/${id}/`)
+    console.log('reviewsAPI.getById: Response:', response)
+    return response
+  },
+
+  // Approve a review
+  approve: async (id: string) => {
+    console.log('reviewsAPI.approve: Starting request for id:', id)
+    
+    try {
+      const response = await apiFetch(`reviews/${id}/approve/`, {
+        method: 'POST',
+      })
+      console.log('reviewsAPI.approve: Success response:', response)
+      return response
+    } catch (error) {
+      console.error('reviewsAPI.approve: Error occurred:', error)
+      throw error
+    }
+  },
+
+  // Reject a review
+  reject: async (id: string) => {
+    console.log('reviewsAPI.reject: Starting request for id:', id)
+    
+    try {
+      const response = await apiFetch(`reviews/${id}/reject/`, {
+        method: 'POST',
+      })
+      console.log('reviewsAPI.reject: Success response:', response)
+      return response
+    } catch (error) {
+      console.error('reviewsAPI.reject: Error occurred:', error)
+      throw error
+    }
+  },
+
+  // Delete a review
+  delete: async (id: string) => {
+    console.log('reviewsAPI.delete: Starting request for id:', id)
+    
+    try {
+      const response = await apiFetch(`reviews/${id}/`, {
+        method: 'DELETE',
+      })
+      console.log('reviewsAPI.delete: Success response:', response)
+      return response
+    } catch (error) {
+      console.error('reviewsAPI.delete: Error occurred:', error)
+      throw error
+    }
+  },
+
+  // Reply to a review
+  reply: async (id: string, message: string) => {
+    console.log('reviewsAPI.reply: Starting request for id:', id, 'with message:', message)
+    
+    try {
+      const response = await apiFetch(`reviews/${id}/reply/`, {
+        method: 'POST',
+        body: JSON.stringify({ message }),
+      })
+      console.log('reviewsAPI.reply: Success response:', response)
+      return response
+    } catch (error) {
+      console.error('reviewsAPI.reply: Error occurred:', error)
+      throw error
+    }
+  },
+
+  // Create a new review
+  create: async (reviewData: {
+    rating: number;
+    address: string;
+    embeddings?: string;
+    review_text: string;
+    status?: 'pending' | 'approved' | 'rejected';
+    evidence?: string;
+    property: string;
+  }) => {
+    console.log('reviewsAPI.create: Starting request with data:', reviewData)
+    
+    try {
+      const response = await apiFetch('reviews/', {
+        method: 'POST',
+        body: JSON.stringify(reviewData),
+      })
+      console.log('reviewsAPI.create: Success response:', response)
+      return response
+    } catch (error) {
+      console.error('reviewsAPI.create: Error occurred:', error)
+      throw error
+    }
+  },
+
+  // Get reviews for a property
+  getByProperty: async (propertyId: string) => {
+    console.log('reviewsAPI.getByProperty: Starting request for propertyId:', propertyId)
+    
+    try {
+      const response = await apiFetch(`reviews/?property=${propertyId}`)
+      console.log('reviewsAPI.getByProperty: Success response:', response)
+      return response
+    } catch (error) {
+      console.error('reviewsAPI.getByProperty: Error occurred:', error)
+      throw error
+    }
+  },
+};
+
+export const dashboardAPI = {
+  getStats: async () => {
+    return apiFetch('dashboard/stats/');
+  },
+
+  getAnalytics: async (period?: string) => {
+    const params = period ? `?period=${period}` : '';
+    return apiFetch(`dashboard/analytics/${params}`);
+  },
+};
+
+
+export const settingsAPI = {
+  getProfile: async () => {
+    return apiFetch('settings/profile/');
+  },
+
+  updateProfile: async (profileData: unknown) => {
+    return apiFetch('settings/profile/', {
+      method: 'PUT',
+      body: JSON.stringify(profileData),
+    });
+  },
+
+  changePassword: async (passwordData: {
+    old_password: string;
+    new_password: string;
+    confirm_password: string;
+  }) => {
+    return apiFetch('settings/change-password/', {
+      method: 'POST',
+      body: JSON.stringify(passwordData),
+    });
+  },
+};
+
+export const agentAPI = {
+  // Get agent dashboard stats
+  getDashboardStats: async () => {
+    return apiFetch('agent/dashboard/stats/');
+  },
+
+  // Get agent properties
+  getProperties: async (page: number = 1, pageSize: number = 10, filters?: {
+    status?: string;
+    type?: string;
+    search?: string;
+  }) => {
+    const queryParams = new URLSearchParams();
+    queryParams.append('page', page.toString());
+    queryParams.append('page_size', pageSize.toString());
+    
+    if (filters?.status) queryParams.append('status', filters.status);
+    if (filters?.type) queryParams.append('type', filters.type);
+    if (filters?.search) queryParams.append('search', filters.search);
+    
+    return apiFetch(`agent/properties/?${queryParams.toString()}`);
+  },
+
+  // Get agent reviews
+  getReviews: async (page: number = 1, pageSize: number = 10, filters?: {
+    status?: string;
+    rating?: number;
+    property_id?: string;
+  }) => {
+    const queryParams = new URLSearchParams();
+    queryParams.append('page', page.toString());
+    queryParams.append('page_size', pageSize.toString());
+    
+    if (filters?.status) queryParams.append('status', filters.status);
+    if (filters?.rating) queryParams.append('rating', filters.rating.toString());
+    if (filters?.property_id) queryParams.append('property_id', filters.property_id);
+    
+    return apiFetch(`agent/reviews/?${queryParams.toString()}`);
+  },
+
+  // Get agent analytics
+  getAnalytics: async (period: string = 'month') => {
+    return apiFetch(`agent/analytics/?period=${period}`);
+  },
+
+  // Get agent activities
+  getActivities: async (limit: number = 10) => {
+    return apiFetch(`agent/activities/?limit=${limit}`);
+  },
+
+  // Create a new property (agent-specific)
+  createProperty: async (propertyData: Record<string, unknown>) => {
+    const agentPropertyData = {
+      ...propertyData,
+      is_added_by_agent: true
+    };
+    
+    console.log('agentAPI.createProperty: Creating property with agent flag:', agentPropertyData);
+    
+    return apiFetch('property/', {
+      method: 'POST',
+      body: JSON.stringify(agentPropertyData),
+    });
+  },
+
+  // Update agent settings
+  updateSettings: async (settingsData: {
+    notification_preferences?: Record<string, boolean>;
+    business_hours?: {
+      monday?: { start: string; end: string; available: boolean };
+      tuesday?: { start: string; end: string; available: boolean };
+      wednesday?: { start: string; end: string; available: boolean };
+      thursday?: { start: string; end: string; available: boolean };
+      friday?: { start: string; end: string; available: boolean };
+      saturday?: { start: string; end: string; available: boolean };
+      sunday?: { start: string; end: string; available: boolean };
+    };
+    contact_preferences?: {
+      email?: boolean;
+      sms?: boolean;
+      whatsapp?: boolean;
+    };
+  }) => {
+    return apiFetch('agent/settings/', {
+      method: 'PUT',
+      body: JSON.stringify(settingsData),
+    });
+  },
+
+  // Get agent settings
+  getSettings: async () => {
+    return apiFetch('agent/settings/');
+  },
 };
 
 export default api;

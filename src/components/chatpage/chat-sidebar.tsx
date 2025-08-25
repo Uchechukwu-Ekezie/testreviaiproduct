@@ -3,8 +3,9 @@
 import React, { useEffect, useRef, useState } from "react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { Search, Plus, LogOut, X, Trash2, Pencil, PanelLeftClose, ChevronDown, ArrowDown } from "lucide-react"
+import { Search, Plus, LogOut, X, Trash2, Pencil, PanelLeftClose, ChevronDown } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { toast } from "@/components/ui/use-toast"
 import { chatAPI, searchAPI } from "@/lib/api"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -29,6 +30,8 @@ interface ChatSidebarProps {
   isLgScreen: boolean
   isMediumScreen: boolean
   isLoadingSessions: boolean
+  showDeleteConfirmation?: (sessionId: string, sessionTitle: string) => void
+  isDeleting?: string | null
 }
 
 const groupSessionsByDate = (sessions: any[]) => {
@@ -73,7 +76,7 @@ const groupSessionsByDate = (sessions: any[]) => {
   
   // Remove empty groups
   return Object.fromEntries(
-    Object.entries(grouped).filter(([_, items]) => items.length > 0)
+    Object.entries(grouped).filter(([, items]) => items.length > 0)
   );
 };
 
@@ -94,9 +97,10 @@ const ChatSidebar: React.FC<ChatSidebarProps> = React.memo(({
   isLgScreen,
   isMediumScreen,
   isLoadingSessions,
+  showDeleteConfirmation,
+  isDeleting,
 }) => {
   const [collapsed, setCollapsed] = useState(false)
-  const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [showSearchResults, setShowSearchResults] = useState(false)
@@ -131,34 +135,6 @@ const ChatSidebar: React.FC<ChatSidebarProps> = React.memo(({
     window.history.pushState({}, '', '/');
     if (isMobile) setSidebarOpen(false);
   }, [setMessages, setActiveSession, isMobile, setSidebarOpen]);
-
-  const deleteChatSession = async (sessionId: string) => {
-    if (isDeleting) return
-    setIsDeleting(sessionId)
-
-    try {
-      await chatAPI.deleteChatSession(sessionId)
-      setSessions((prev) => prev.filter((s) => s.id !== sessionId))
-
-      if (activeSession === sessionId) {
-        setActiveSession(null)
-        setMessages([])
-      }
-
-      toast({
-        description: "Chat deleted successfully",
-      })
-    } catch (error) {
-      console.error("Failed to delete chat session:", error)
-      toast({
-        title: "Error",
-        description: "Failed to delete chat",
-        variant: "destructive",
-      })
-    } finally {
-      setIsDeleting(null)
-    }
-  }
 
   const openRenameDialog = (sessionId: string, currentTitle: string) => {
     setSelectedSessionId(sessionId)
@@ -312,16 +288,16 @@ const ChatSidebar: React.FC<ChatSidebarProps> = React.memo(({
       </div>
 
       {/* Chat History - Scrollable area */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-[#171717]">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-[#171717] px-2">
         {!collapsed && (
-          <div className="px-4 py-2 text-xs font-medium text-gray-400">
+          <div className="px-2 py-2 text-xs font-medium text-gray-400">
             {showSearchResults ? "Search Results" : ""}
           </div>
         )}
 
         {isLoadingSessions ? (
           // Loading skeleton - simplified version
-          <div className="px-4 space-y-2">
+          <div className="px-2 space-y-2">
             {Array.from({ length: 5 }).map((_, i) => (
               <Skeleton key={i} className="w-full h-10 bg-gray-700 rounded-md" />
             ))}
@@ -334,9 +310,9 @@ const ChatSidebar: React.FC<ChatSidebarProps> = React.memo(({
             const hasMore = groupSessions.length > 3
 
             return (
-              <div key={groupName} className="mb-4">
+              <div key={groupName} className="mb-6">
                 {!collapsed && (
-                  <div className="flex items-center justify-between px-4 py-2">
+                  <div className="flex items-center justify-between px-2 py-2">
                     <span className="text-[13px] font-medium text-gray-500">
                       {groupName}
                     </span>
@@ -350,75 +326,77 @@ const ChatSidebar: React.FC<ChatSidebarProps> = React.memo(({
                     )}
                   </div>
                 )}
-                {sessionsToShow.map((session) => (
-                  <div
-                    key={session.id}
-                    className={cn(
-                      "flex items-center justify-between mx-2 p-2 rounded-md cursor-pointer group w-full transition-colors",
-                      activeSession === session.id ? "bg-[#212121] text-white" : "hover:bg-[#212121]"
-                    )}
-                    onClick={() => handleSessionClick(session.id)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault()
-                        handleSessionClick(session.id)
-                      }
-                    }}
-                  >
-                    <div className="flex items-center min-w-0 text-sm">
+                <div className="space-y-1">
+                  {sessionsToShow.map((session) => (
+                    <div
+                      key={session.id}
+                      className={cn(
+                        "flex items-center justify-between mx-1 p-2 rounded-md cursor-pointer group w-full transition-colors",
+                        activeSession === session.id ? "bg-[#212121] text-white" : "hover:bg-[#212121]"
+                      )}
+                      onClick={() => handleSessionClick(session.id)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault()
+                          handleSessionClick(session.id)
+                        }
+                      }}
+                    >
+                      <div className="flex items-center min-w-0 text-sm">
+                        {!collapsed && (
+                          <span
+                            className={cn(
+                              "truncate",
+                              activeSession === session.id
+                                ? "text-white"
+                                : "text-[#BEBEBE] group-hover:text-white"
+                            )}
+                          >
+                            {session.chat_title || "New chat"}
+                          </span>
+                        )}
+                      </div>
+
                       {!collapsed && (
-                        <span
+                        <div 
                           className={cn(
-                            "truncate",
-                            activeSession === session.id
-                              ? "text-white"
-                              : "text-[#BEBEBE] group-hover:text-white"
+                            "flex items-center space-x-1",
+                            activeSession === session.id ? "flex" : "hidden group-hover:flex"
                           )}
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          {session.chat_title || "New chat"}
-                        </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              e.preventDefault()
+                              openRenameDialog(session.id, session.chat_title)
+                            }}
+                            className="p-1 text-gray-400 transition-colors hover:text-gray-200"
+                            aria-label="Rename chat"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              e.preventDefault()
+                              showDeleteConfirmation?.(session.id, session.chat_title || "New chat")
+                            }}
+                            className="p-1 text-gray-400 transition-colors hover:text-red-500"
+                            disabled={isDeleting === session.id}
+                            aria-label="Delete chat"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       )}
                     </div>
-
-                    {!collapsed && (
-                      <div 
-                        className={cn(
-                          "flex items-center space-x-1",
-                          activeSession === session.id ? "flex" : "hidden group-hover:flex"
-                        )}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            e.preventDefault()
-                            openRenameDialog(session.id, session.chat_title)
-                          }}
-                          className="p-1 text-gray-400 hover:text-gray-200 transition-colors"
-                          aria-label="Rename chat"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            e.preventDefault()
-                            deleteChatSession(session.id)
-                          }}
-                          className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                          disabled={isDeleting === session.id}
-                          aria-label="Delete chat"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  ))}
+                </div>
                 {hasMore && isExpanded && (
-                  <div className="flex justify-center mt-1">
+                  <div className="flex justify-center mt-2">
                     <button
                       onClick={() => toggleGroupExpansion(groupName)}
                       className="flex items-center text-xs text-gray-400 hover:text-gray-200"
@@ -432,7 +410,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = React.memo(({
             )
           })
         ) : !collapsed && (
-          <div className="px-4 py-4 text-sm text-center text-gray-400">
+          <div className="px-2 py-4 text-sm text-center text-gray-400">
             {isAuthenticated
               ? "No chat sessions yet.\nStart a new chat to begin."
               : "Sign in to view and save\n your chat history."}
@@ -493,4 +471,102 @@ const ChatSidebar: React.FC<ChatSidebarProps> = React.memo(({
 
 ChatSidebar.displayName = 'ChatSidebar';
 
-export default ChatSidebar
+// Delete Confirmation Modal Component
+const DeleteConfirmationModal: React.FC<{
+  showDeleteModal: boolean;
+  setShowDeleteModal: (show: boolean) => void;
+  sessionToDelete: { id: string; title: string } | null;
+  deleteChatSession: () => void;
+  isDeleting: string | null;
+}> = ({ showDeleteModal, setShowDeleteModal, sessionToDelete, deleteChatSession, isDeleting }) => {
+  return (
+    <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+      <DialogContent className="text-white bg-gray-800 border-gray-700">
+        <DialogHeader>
+          <DialogTitle>Delete Chat</DialogTitle>
+          <DialogDescription className="text-gray-300">
+            Are you sure you want to delete &ldquo;{sessionToDelete?.title}&rdquo;? This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => setShowDeleteModal(false)}
+            className="text-gray-300 border-gray-600 hover:bg-gray-700"
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={deleteChatSession}
+            disabled={isDeleting === sessionToDelete?.id}
+            className="bg-red-600 hover:bg-red-700"
+          >
+            {isDeleting === sessionToDelete?.id ? "Deleting..." : "Delete"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// Enhanced ChatSidebar with Modal
+const ChatSidebarWithModal: React.FC<ChatSidebarProps> = (props) => {
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<{ id: string; title: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+
+  const showDeleteConfirmation = (sessionId: string, sessionTitle: string) => {
+    setSessionToDelete({ id: sessionId, title: sessionTitle });
+    setShowDeleteModal(true);
+  };
+
+  const deleteChatSession = async () => {
+    if (!sessionToDelete || isDeleting) return;
+    setIsDeleting(sessionToDelete.id);
+
+    try {
+      await chatAPI.deleteChatSession(sessionToDelete.id);
+      props.setSessions((prev) => prev.filter((s) => s.id !== sessionToDelete.id));
+
+      if (props.activeSession === sessionToDelete.id) {
+        props.setActiveSession(null);
+        props.setMessages([]);
+      }
+
+      toast({
+        description: "Chat deleted successfully",
+      });
+    } catch (error) {
+      console.error("Failed to delete chat session:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete chat",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(null);
+      setShowDeleteModal(false);
+      setSessionToDelete(null);
+    }
+  };
+
+  return (
+    <>
+      <ChatSidebar 
+        {...props} 
+        showDeleteConfirmation={showDeleteConfirmation}
+        isDeleting={isDeleting}
+      />
+      <DeleteConfirmationModal
+        showDeleteModal={showDeleteModal}
+        setShowDeleteModal={setShowDeleteModal}
+        sessionToDelete={sessionToDelete}
+        deleteChatSession={deleteChatSession}
+        isDeleting={isDeleting}
+      />
+    </>
+  );
+};
+
+export default ChatSidebarWithModal

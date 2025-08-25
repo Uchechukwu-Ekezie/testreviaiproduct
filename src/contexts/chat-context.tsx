@@ -1,319 +1,398 @@
+"use client";
 
-"use client"
-
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
-import { chatAPI } from "@/lib/api"
-import { toast } from "@/components/ui/use-toast"
-import { useAuth } from "./auth-context"
-import { Context } from "@/types/chatMessage"
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  type ReactNode,
+} from "react";
+import { chatAPI } from "@/lib/api";
+import { toast } from "@/components/ui/use-toast";
+import { useAuth } from "./auth-context";
+import { Context } from "@/types/chatMessage";
 
 // Define interfaces for chat data
 interface ChatSession {
-  id: string
-  chat_title: string
-  user: string
-  created_at?: string
-  updated_at?: string
-  unique_chat_id?: string
+  id: string;
+  chat_title: string;
+  user: string;
+  created_at?: string;
+  updated_at?: string;
+  unique_chat_id?: string;
 }
 
 interface ChatMessage {
-  id: string
-  prompt: string
-  response?: string
-  classification?: string
-  context?: Context[]
-  properties?: Property[] | string | null
-  session: string
-  created_at?: string
-  updated_at?: string
-  isLoading?: boolean
-  error?: string
+  id: string;
+  prompt: string;
+  response?: string;
+  classification?: string;
+  context?: Context[];
+  properties?: Property[] | string | null;
+  session: string;
+  created_at?: string;
+  updated_at?: string;
+  isLoading?: boolean;
+  error?: string;
+
+  file?: string | null; // Server file path/URL after upload
+  image_url?: string | null; // Server image URL
+  localFile?: File; // Local file for UI display during upload
+  imageUrls?: string[]; // Client-side image URLs
 }
 
 interface Property {
-  id: string
-  title: string
-  address: string
-  price: string
-  imageUrl: string
-  bedrooms?: number
-  bathrooms?: number
-  size?: string
-  listedBy?: string
-  yearBuilt?: string
-  lotSize?: string
-  squareFootage?: string
-  state?: string
-  city?: string
-  zipCode?: string
-  phone?: string
-  created_by?: string
-  location?: string
-  cordinates?: string
-  rentalGrade?: number | string
-  environmentalScore?: number | string
-  neighborhoodScore?: number | string
-  aiRefinedDescription?: string | null
-  environmentalReport?: string | null
+  id: string;
+  title: string;
+  address: string;
+  price: string;
+  imageUrl: string;
+  bedrooms?: number;
+  bathrooms?: number;
+  size?: string;
+  listedBy?: string;
+  yearBuilt?: string;
+  lotSize?: string;
+  squareFootage?: string;
+  state?: string;
+  city?: string;
+  zipCode?: string;
+  phone?: string;
+  created_by?: string;
+  location?: string;
+  cordinates?: string;
+  rentalGrade?: number | string;
+  environmentalScore?: number | string;
+  neighborhoodScore?: number | string;
+  aiRefinedDescription?: string | null;
+  environmentalReport?: string | null;
 }
 
 // Define types for our context
 interface ChatContextType {
-  sessions: ChatSession[]
-  activeSession: string | null
-  messages: ChatMessage[]
-  isLoading: boolean
-  error: string | null
-  createChatSession: (title: string) => Promise<ChatSession>
-  getChatSessions: () => Promise<void>
-  getChatsBySession: (sessionId: string) => Promise<ChatMessage[]>
-  postChat: (message: string, sessionId?: string) => Promise<ChatMessage>
-  editChat: (id: string, message: string, sessionId?: string) => Promise<ChatMessage>
-  deleteSession: (sessionId: string) => Promise<void>
-  setActiveSession: (sessionId: string | null) => void
-  deleteChat: (id: string) => Promise<void>
+  sessions: ChatSession[];
+  activeSession: string | null;
+  messages: ChatMessage[];
+  isLoading: boolean;
+  error: string | null;
+  createChatSession: (title: string) => Promise<ChatSession>;
+  getChatSessions: () => Promise<void>;
+  getChatsBySession: (sessionId: string) => Promise<ChatMessage[]>;
+  // postChat: (message: string, sessionId?: string) => Promise<ChatMessage>;
+  postChat: (
+    message: string,
+    sessionId?: string,
+    options?: {
+      file?: File;
+      imageUrls?: string[];
+      image_url?: string;
+    }
+  ) => Promise<ChatMessage>;
+  editChat: (
+    id: string,
+    message: string,
+    sessionId?: string
+  ) => Promise<ChatMessage>;
+  deleteSession: (sessionId: string) => Promise<void>;
+  setActiveSession: (sessionId: string | null) => void;
+  deleteChat: (id: string) => Promise<void>;
 }
 
 // Create the context
-const ChatContext = createContext<ChatContextType | undefined>(undefined)
+const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 // Chat Provider Props
 interface ChatProviderProps {
-  children: ReactNode
+  children: ReactNode;
 }
 
 // Create the provider component
 export function ChatProvider({ children }: ChatProviderProps) {
-  const [sessions, setSessions] = useState<ChatSession[]>([])
-  const [activeSession, setActiveSession] = useState<string | null>(null)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [isLoading, setIsLoading] = useState<boolean>(false)
-  const [error, setError] = useState<string | null>(null)
-  const { user, isAuthenticated } = useAuth()
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeSession, setActiveSession] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const { user, isAuthenticated } = useAuth();
 
   // Get all chat sessions for the user
   const getChatSessions = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
+    setIsLoading(true);
+    setError(null);
 
     try {
-      const response = await chatAPI.getChatSessions()
-      setSessions(response)
+      const response = await chatAPI.getChatSessions();
+      setSessions(response);
     } catch (error) {
-      console.error("Failed to fetch chat sessions:", error)
-      setError("Failed to fetch chat sessions")
+      console.error("Failed to fetch chat sessions:", error);
+      setError("Failed to fetch chat sessions");
       toast({
         title: "Error",
         description: "Failed to fetch chat sessions",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }, [])
+  }, []);
 
   // Get all chat messages for a specific session
   const getChatsBySession = useCallback(async (sessionId: string) => {
-    setIsLoading(true)
-    setError(null)
+    setIsLoading(true);
+    setError(null);
 
     try {
-      const response = await chatAPI.getChatsBySession(sessionId)
-      setMessages(response)
-      return response
+      const response = await chatAPI.getChatsBySession(sessionId);
+      setMessages(response);
+      return response;
     } catch (error) {
-      console.error("Failed to fetch chat messages:", error)
-      setError("Failed to fetch chat messages")
+      console.error("Failed to fetch chat messages:", error);
+      setError("Failed to fetch chat messages");
       toast({
         title: "Error",
         description: "Failed to fetch chat messages",
         variant: "destructive",
-      })
-      return []
+      });
+      return [];
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }, [])
+  }, []);
 
   // Create a new chat session
   const createChatSession = useCallback(
     async (title: string) => {
-      setIsLoading(true)
-      setError(null)
+      setIsLoading(true);
+      setError(null);
 
       try {
         if (!title.trim()) {
-          throw new Error("Chat title is required")
+          throw new Error("Chat title is required");
         }
 
-        let userId = user?.id
+        let userId = user?.id;
 
         if (!userId && !isAuthenticated) {
-          userId = "guest"
-          console.log("Warning: User not authenticated. Using guest ID.")
+          userId = "guest";
+          console.log("Warning: User not authenticated. Using guest ID.");
         }
 
         const sessionData = {
           chat_title: title,
           user: userId || "guest",
-        }
+        };
 
-        const response = await chatAPI.createChatSession(sessionData)
-        setSessions((prev) => [response, ...prev])
-        setActiveSession(response.id)
+        const response = await chatAPI.createChatSession(sessionData);
+        setSessions((prev) => [response, ...prev]);
+        setActiveSession(response.id);
 
-        return response
+        return response;
       } catch (error) {
-        console.error("Failed to create chat session:", error)
-        const errorMessage = error instanceof Error ? error.message : "Failed to create chat session"
-        setError(errorMessage)
+        console.error("Failed to create chat session:", error);
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : "Failed to create chat session";
+        setError(errorMessage);
         toast({
           title: "Error",
           description: errorMessage,
           variant: "destructive",
-        })
-        throw error
+        });
+        throw error;
       } finally {
-        setIsLoading(false)
+        setIsLoading(false);
       }
     },
     [user, isAuthenticated]
-  )
+  );
 
   // Post a chat message
- // Update the postChat function in your ChatProvider:
-const postChat = useCallback(
-  async (message: string, sessionId?: string) => {
-    setIsLoading(true);
-    setError(null);
+  // Update the postChat function in your ChatProvider:
+  const postChat = useCallback(
+    // async (message: string, sessionId?: string) => {
+    //   setIsLoading(true);
+    //   setError(null);
 
-    try {
-      if (!message.trim()) {
-        throw new Error("Message cannot be empty");
+    async (
+      message: string,
+      sessionId?: string,
+      options?: {
+        file?: File;
+        imageUrls?: string[];
+        image_url?: string;
       }
+    ) => {
+      setIsLoading(true);
+      setError(null);
 
-      if (!isAuthenticated) {
-        throw new Error("Please log in to send messages");
-      }
+      try {
+        if (!message.trim()) {
+          throw new Error("Message cannot be empty");
+        }
 
-      const targetSessionId = sessionId || activeSession;
+        if (!isAuthenticated) {
+          throw new Error("Please log in to send messages");
+        }
 
-      if (!targetSessionId) {
-        // Create new session flow
-        const newSession = await createChatSession(message.substring(0, 30));
-        const newSessionId = newSession.id;
+        const targetSessionId = sessionId || activeSession;
 
-        setActiveSession(newSessionId);
-        setSessions((prev) => [newSession, ...prev]);
+        if (!targetSessionId) {
+          // Create new session flow
+          const newSession = await createChatSession(message.substring(0, 30));
+          const newSessionId = newSession.id;
 
-        const tempMessage: ChatMessage = {
-          id: `temp-${Date.now()}`,
-          prompt: message.trim(),
-          session: newSessionId,
-          isLoading: true,
-        };
+          setActiveSession(newSessionId);
+          setSessions((prev) => [newSession, ...prev]);
 
-        setMessages([tempMessage]);
+          const tempMessage: ChatMessage = {
+            id: `temp-${Date.now()}`,
+            prompt: message.trim(),
+            session: newSessionId,
+            isLoading: true,
+            // Show local file in UI while uploading
+            localFile: options?.file,
+            imageUrls: options?.imageUrls,
+          };
 
-        // Make the API call
-        const response = await chatAPI.postNewChat(message, newSessionId);
-        
-        // Update the messages with the response
-        setMessages([{
-          ...response,
-          properties: response.properties ? (typeof response.properties === 'string' ? JSON.parse(response.properties) : response.properties) : undefined,
-          isLoading: false,
-        }]);
+          setMessages([tempMessage]);
 
-        setActiveSession(newSessionId);
-        return response;
-      } else {
-        // Existing session flow
-        const tempMessage: ChatMessage = {
-          id: `temp-${Date.now()}`,
-          prompt: message.trim(),
-          session: targetSessionId,
-          isLoading: true,
-        };
+          // Simply pass the options directly to the API
+          console.log("ChatProvider: Sending to API with options:", {
+            message,
+            sessionId: newSessionId,
+            hasFile: !!options?.file,
+            fileName: options?.file?.name,
+          });
 
-        setMessages((prev) => [...prev, tempMessage]);
+          // Make the API call
+          const response = await chatAPI.postNewChat(message, newSessionId, {
+            file: options?.file,
+            image_url: options?.image_url,
+            imageUrls: options?.imageUrls,
+          });
 
-        // Make the API call
-        const response = await chatAPI.postNewChat(message, targetSessionId);
-        
-        // Update the messages with the response
+          // Update the messages with the response
+          setMessages([
+            {
+              ...response,
+              properties: response.properties
+                ? typeof response.properties === "string"
+                  ? JSON.parse(response.properties)
+                  : response.properties
+                : undefined,
+              isLoading: false,
+            },
+          ]);
+
+          setActiveSession(newSessionId);
+          return response;
+        } else {
+          // Existing session flow
+          const tempMessage: ChatMessage = {
+            id: `temp-${Date.now()}`,
+            prompt: message.trim(),
+            session: targetSessionId,
+            isLoading: true,
+          };
+
+          setMessages((prev) => [...prev, tempMessage]);
+
+          // Make the API call
+          const response = await chatAPI.postNewChat(message, targetSessionId, {
+            file: options?.file,
+            image_url: options?.image_url,
+            imageUrls: options?.imageUrls,
+          });
+
+          // Update the messages with the response
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === tempMessage.id
+                ? {
+                    ...response,
+                    properties: response.properties
+                      ? typeof response.properties === "string"
+                        ? JSON.parse(response.properties)
+                        : response.properties
+                      : undefined,
+                    isLoading: false,
+                  }
+                : msg
+            )
+          );
+
+          return response;
+        }
+      } catch (error: any) {
+        console.error("Failed to post chat message:", error);
+        const errorMessage =
+          error.response?.data?.detail ||
+          error.message ||
+          "Failed to post chat message";
+        setError(errorMessage);
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+
+        // Update the message with error state
         setMessages((prev) =>
           prev.map((msg) =>
-            msg.id === tempMessage.id ? { 
-              ...response, 
-              properties: response.properties ? (typeof response.properties === 'string' ? JSON.parse(response.properties) : response.properties) : undefined,
-              isLoading: false 
-            } : msg
+            msg.id === `temp-${Date.now()}`
+              ? { ...msg, isLoading: false, error: errorMessage }
+              : msg
           )
         );
 
-        return response;
+        throw error;
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error: any) {
-      console.error("Failed to post chat message:", error);
-      const errorMessage = error.response?.data?.detail || error.message || "Failed to post chat message";
-      setError(errorMessage);
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
-      
-      // Update the message with error state
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === `temp-${Date.now()}` 
-            ? { ...msg, isLoading: false, error: errorMessage }
-            : msg
-        )
-      );
-      
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  },
-  [activeSession, createChatSession, isAuthenticated]
-);
+    },
+    [activeSession, createChatSession, isAuthenticated]
+  );
 
   // Edit a chat message
   const editChat = useCallback(
     async (messageId: string, newPrompt: string, sessionId?: string) => {
-      setIsLoading(true)
-      setError(null)
+      setIsLoading(true);
+      setError(null);
 
       try {
         if (!newPrompt.trim()) {
-          throw new Error("Message cannot be empty")
+          throw new Error("Message cannot be empty");
         }
 
         if (!isAuthenticated) {
-          throw new Error("Please log in to edit messages")
+          throw new Error("Please log in to edit messages");
         }
 
-        const targetSessionId = sessionId || activeSession
+        const targetSessionId = sessionId || activeSession;
         if (!targetSessionId) {
-          throw new Error("No active session to edit message in")
+          throw new Error("No active session to edit message in");
         }
 
-        const existingMessage = messages.find((m) => m.id === messageId)
+        const existingMessage = messages.find((m) => m.id === messageId);
         if (!existingMessage) {
-          throw new Error("Message not found")
+          throw new Error("Message not found");
         }
 
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === messageId ? { ...m, prompt: newPrompt.trim(), isLoading: true } : m
+            m.id === messageId
+              ? { ...m, prompt: newPrompt.trim(), isLoading: true }
+              : m
           )
-        )
+        );
 
-        const apiResponse = await chatAPI.editChat(messageId, newPrompt.trim(), targetSessionId)
+        const apiResponse = await chatAPI.editChat(
+          messageId,
+          newPrompt.trim(),
+          targetSessionId
+        );
 
         const updatedMessage: ChatMessage = {
           id: messageId,
@@ -323,116 +402,122 @@ const postChat = useCallback(
           created_at: existingMessage.created_at,
           updated_at: existingMessage.updated_at || new Date().toISOString(),
           context: apiResponse.context || existingMessage.context || [],
-          classification: apiResponse.classification || existingMessage.classification || "",
+          classification:
+            apiResponse.classification || existingMessage.classification || "",
           isLoading: false,
-        }
+        };
 
         setMessages((prev) =>
           prev.map((m) => (m.id === messageId ? updatedMessage : m))
-        )
+        );
 
         toast({
           title: "Success",
           description: "Message updated successfully",
-        })
+        });
 
-        return updatedMessage
-
-   
+        return updatedMessage;
       } catch (error: any) {
-        console.error("Failed to edit chat message:", error)
-        const errorMessage = error.response?.data?.message || error.message || "Failed to edit message"
-        setError(errorMessage)
+        console.error("Failed to edit chat message:", error);
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          "Failed to edit message";
+        setError(errorMessage);
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === messageId ? { ...m, isLoading: false, error: errorMessage } : m
+            m.id === messageId
+              ? { ...m, isLoading: false, error: errorMessage }
+              : m
           )
-        )
+        );
         toast({
           title: "Error",
           description: errorMessage,
           variant: "destructive",
-        })
-        throw error
+        });
+        throw error;
       } finally {
-        setIsLoading(false)
+        setIsLoading(false);
       }
     },
     [isAuthenticated, activeSession, messages]
-  )
+  );
 
   // Delete a chat session
   const deleteSession = useCallback(
     async (sessionId: string) => {
-      setIsLoading(true)
-      setError(null)
+      setIsLoading(true);
+      setError(null);
 
       try {
-        await chatAPI.deleteChatSession(sessionId)
-        setSessions((prev) => prev.filter((session) => session.id !== sessionId))
+        await chatAPI.deleteChatSession(sessionId);
+        setSessions((prev) =>
+          prev.filter((session) => session.id !== sessionId)
+        );
 
         if (activeSession === sessionId) {
-          setActiveSession(null)
-          setMessages([])
+          setActiveSession(null);
+          setMessages([]);
         }
 
         toast({
           title: "Success",
           description: "Chat session deleted successfully",
-        })
+        });
       } catch (error) {
-        console.error("Failed to delete chat session:", error)
-        const errorMessage = error instanceof Error ? error.message : "Failed to delete chat session"
-        setError(errorMessage)
+        console.error("Failed to delete chat session:", error);
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : "Failed to delete chat session";
+        setError(errorMessage);
         toast({
           title: "Error",
           description: errorMessage,
           variant: "destructive",
-        })
+        });
       } finally {
-        setIsLoading(false)
+        setIsLoading(false);
       }
     },
     [activeSession]
-  )
+  );
 
   // Delete a chat by ID
-  const deleteChat = useCallback(
-    async (chatId: string) => {
-      setIsLoading(true)
-      setError(null)
+  const deleteChat = useCallback(async (chatId: string) => {
+    setIsLoading(true);
+    setError(null);
 
-      try {
-        await chatAPI.deleteChat(chatId)
-        setMessages((prev) => prev.filter((msg) => msg.id !== chatId))
+    try {
+      await chatAPI.deleteChat(chatId);
+      setMessages((prev) => prev.filter((msg) => msg.id !== chatId));
 
-        toast({
-          title: "Success",
-          description: "Chat deleted successfully",
-        })
-      } catch (error) {
-        console.error("Failed to delete chat:", error)
-        const errorMessage = error instanceof Error ? error.message : "Failed to delete chat"
-        setError(errorMessage)
-        toast({
-          title: "Error",
-          description: errorMessage,
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoading(false)
-      }
-    },
-    []
-  )
-
+      toast({
+        title: "Success",
+        description: "Chat deleted successfully",
+      });
+    } catch (error) {
+      console.error("Failed to delete chat:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to delete chat";
+      setError(errorMessage);
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   // Load sessions on initial mount
   useEffect(() => {
     if (isAuthenticated) {
-      getChatSessions()
+      getChatSessions();
     }
-  }, [isAuthenticated, getChatSessions])
+  }, [isAuthenticated, getChatSessions]);
 
   // The context value
   const value = {
@@ -449,18 +534,18 @@ const postChat = useCallback(
     deleteChat,
     deleteSession,
     setActiveSession,
-  }
+  };
 
-  return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>
+  return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 }
 
 // Custom hook to use the chat context
 export function useChat() {
-  const context = useContext(ChatContext)
+  const context = useContext(ChatContext);
 
   if (context === undefined) {
-    throw new Error("useChat must be used within a ChatProvider")
+    throw new Error("useChat must be used within a ChatProvider");
   }
 
-  return context
+  return context;
 }

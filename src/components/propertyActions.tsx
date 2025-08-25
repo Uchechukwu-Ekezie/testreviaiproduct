@@ -7,7 +7,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-import { BathIcon, BedIcon, Flag, Phone, User, Star, Mail, Copy, Check } from "lucide-react";
+import {
+  BathIcon,
+  BedIcon,
+  Flag,
+  Phone,
+  User,
+  Mail,
+  Copy,
+  Check,
+} from "lucide-react";
 import { Context } from "@/types/chatMessage";
 
 interface Property {
@@ -70,68 +79,53 @@ interface PropertyActionsProps {
   ai_refined_description?: string;
 }
 
-const StarRating: React.FC<{ 
-  rating: number; 
-  maxRating?: number; 
-  size?: 'sm' | 'md' | 'lg';
+const TextRating: React.FC<{
+  rating: number;
+  size?: "sm" | "md" | "lg";
   showNumber?: boolean;
-}> = ({ 
-  rating, 
-  maxRating = 5, 
-  size = 'md',
-  showNumber = true 
-}) => {
-  const sizeClasses = {
-    sm: 'w-4 h-4',
-    md: 'w-5 h-5',
-    lg: 'w-6 h-6'
+}> = ({ rating, size = "md", showNumber = true }) => {
+  const getRatingText = (rating: number): string => {
+    if (rating >= 4.5) return "Excellent";
+    if (rating >= 3.5) return "Very Good";
+    if (rating >= 2.5) return "Good";
+    if (rating >= 1.5) return "Average";
+    if (rating >= 0.5) return "Fair";
+    return "Poor";
   };
 
-  const starClass = sizeClasses[size];
+  const getRatingColor = (rating: number): string => {
+    if (rating >= 4.5) return "text-green-400";
+    if (rating >= 3.5) return "text-blue-400";
+    if (rating >= 2.5) return "text-yellow-400";
+    if (rating >= 1.5) return "text-orange-400";
+    if (rating >= 0.5) return "text-red-400";
+    return "text-gray-400";
+  };
+
+  const sizeClasses = {
+    sm: "text-xs",
+    md: "text-sm",
+    lg: "text-base",
+  };
+
+  const textClass = sizeClasses[size];
+  const ratingText = getRatingText(rating);
+  const colorClass = getRatingColor(rating);
 
   return (
-    <div className="flex items-center gap-1">
-      <div className="flex">
-        {[...Array(maxRating)].map((_, index) => {
-          const starValue = index + 1;
-          const isFilled = starValue <= rating;
-          const isPartial = starValue > rating && starValue - 1 < rating;
-          
-          return (
-            <div key={index} className="relative">
-              <Star 
-                className={`${starClass} text-gray-600`}
-                fill="currentColor"
-              />
-              {isFilled && (
-                <Star 
-                  className={`absolute top-0 left-0 ${starClass} text-yellow-400`}
-                  fill="currentColor"
-                />
-              )}
-              {isPartial && (
-                <div className="absolute top-0 left-0 overflow-hidden" style={{ width: `${(rating - Math.floor(rating)) * 100}%` }}>
-                  <Star 
-                    className={`${starClass} text-yellow-400`}
-                    fill="currentColor"
-                  />
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+    <div className="flex items-center gap-2">
+      <span className={`${textClass} font-medium ${colorClass}`}>
+        {ratingText}
+      </span>
       {showNumber && (
-        <span className="ml-1 text-sm font-medium text-gray-300">
-          {rating.toFixed(1)}/5
-        </span>
+        <span className="text-xs text-gray-400">({rating.toFixed(1)}/5)</span>
       )}
     </div>
   );
 };
 
-const CopyButton: React.FC<{ 
-  text: string; 
+const CopyButton: React.FC<{
+  text: string;
   label: string;
 }> = ({ text, label }) => {
   const [copied, setCopied] = useState(false);
@@ -142,7 +136,7 @@ const CopyButton: React.FC<{
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy text: ', err);
+      console.error("Failed to copy text: ", err);
     }
   };
 
@@ -161,25 +155,25 @@ const CopyButton: React.FC<{
   );
 };
 
-const convertToStarRating = (score: number): number => {
+const convertToRating = (score: number): number => {
   return Math.min(Math.max(score * 5, 0), 5);
 };
 
 const getScoreDescription = (score: number): string => {
   if (score >= 0.9) return "Excellent";
-  if (score >= 0.8) return "Very Good";
-  if (score >= 0.7) return "Good";
-  if (score >= 0.6) return "Average";
-  if (score >= 0.4) return "Fair";
+  if (score >= 0.7) return "Very Good";
+  if (score >= 0.5) return "Good";
+  if (score >= 0.3) return "Average";
+  if (score >= 0.1) return "Fair";
   return "Poor";
 };
 
 const getRatingDescription = (rating: number): string => {
   if (rating >= 4.5) return "Excellent";
-  if (rating >= 4.0) return "Very Good";
-  if (rating >= 3.5) return "Good";
-  if (rating >= 3.0) return "Average";
-  if (rating >= 2.0) return "Fair";
+  if (rating >= 3.5) return "Very Good";
+  if (rating >= 2.5) return "Good";
+  if (rating >= 1.5) return "Average";
+  if (rating >= 0.5) return "Fair";
   return "Poor";
 };
 
@@ -200,9 +194,9 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
   // Helper function to safely get location
   const getLocation = (): string => {
     return (
-      property.location || 
-      property.address || 
-      locationProp || 
+      property.location ||
+      property.address ||
+      locationProp ||
       property.coordinate ||
       "Location not available"
     );
@@ -211,8 +205,8 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
   // Helper function to safely get description
   const getDescription = (): string => {
     return (
-      property.ai_refined_description || 
-      ai_refined_description || 
+      property.ai_refined_description ||
+      ai_refined_description ||
       property.description ||
       ""
     );
@@ -220,17 +214,16 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
 
   // Helper function to safely get status
   const getStatus = (): string => {
-    return (
-      property.status ||
-      statusProp ||
-      "Status not available"
-    );
+    return property.status || statusProp || "Status not available";
   };
 
   // Helper function to safely parse numeric values
-  const safeParseNumber = (value: number | string | undefined, defaultValue: number = 0): number => {
-    if (typeof value === 'number') return value;
-    if (typeof value === 'string') {
+  const safeParseNumber = (
+    value: number | string | undefined,
+    defaultValue: number = 0
+  ): number => {
+    if (typeof value === "number") return value;
+    if (typeof value === "string") {
       const parsed = parseFloat(value);
       return isNaN(parsed) ? defaultValue : parsed;
     }
@@ -240,10 +233,10 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
   // Helper function to safely format price
   const formatPrice = (price: number | string | undefined): string => {
     if (!price) return "Price on request";
-    
-    if (typeof price === 'string') {
+
+    if (typeof price === "string") {
       // If it's already formatted, return as is
-      if (price.toLowerCase().includes('request') || price.includes('$')) {
+      if (price.toLowerCase().includes("request") || price.includes("$")) {
         return price;
       }
       // Try to parse as number
@@ -251,11 +244,11 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
       if (isNaN(numPrice)) return price;
       return `$${numPrice.toLocaleString()}`;
     }
-    
-    if (typeof price === 'number') {
+
+    if (typeof price === "number") {
       return `$${price.toLocaleString()}`;
     }
-    
+
     return "Price on request";
   };
 
@@ -270,37 +263,37 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
   // Parse contact info from JSON string or use direct values
   const parseContactInfo = (contactData: string | undefined) => {
     if (!contactData) return { phone_numbers: [], emails: [] };
-    
+
     try {
       // Try to parse as JSON string first
       const parsed = JSON.parse(contactData);
-      
+
       // Check if it's an array (simple phone numbers array)
       if (Array.isArray(parsed)) {
         return {
           phone_numbers: parsed,
-          emails: []
+          emails: [],
         };
       }
-      
+
       // Check if it's an object with phone_numbers and emails
-      if (typeof parsed === 'object' && parsed !== null) {
+      if (typeof parsed === "object" && parsed !== null) {
         return {
           phone_numbers: parsed.phone_numbers || [],
-          emails: parsed.emails || []
+          emails: parsed.emails || [],
         };
       }
-      
+
       // If it's neither array nor object, treat as single phone
       return {
         phone_numbers: [parsed],
-        emails: []
+        emails: [],
       };
     } catch (error) {
       // If parsing fails, treat as single phone number
       return {
         phone_numbers: contactData ? [contactData] : [],
-        emails: []
+        emails: [],
       };
     }
   };
@@ -308,7 +301,7 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
   const contactData = parseContactInfo(property.phone || phoneProp);
   const phoneNumbers = contactData.phone_numbers;
   const emailAddresses = contactData.emails;
-  
+
   // Also include any direct email prop
   const allEmails = [...emailAddresses];
   const directEmail = (property as any).email || emailProp;
@@ -325,12 +318,12 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
             <h3 className="text-lg font-medium">
               {property.property_type || "Property"} at {location}
             </h3>
-            
+
             {rentalGrade > 0 && (
               <div className="p-4 rounded-lg bg-gray-800/50">
                 <h4 className="mb-3 font-semibold">Rental Grade:</h4>
                 <div className="flex items-center gap-3">
-                  <StarRating rating={rentalGrade} size="md" />
+                  <TextRating rating={rentalGrade} size="md" />
                   <span className="text-sm text-gray-400">
                     ({getRatingDescription(rentalGrade)})
                   </span>
@@ -344,7 +337,7 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
                 <p className="whitespace-pre-line">{description}</p>
               </div>
             )}
-            
+
             <div className="flex flex-col gap-2 p-4 rounded-lg bg-gray-800/50">
               <span className="flex gap-1 text-lg">
                 <div className="flex gap-1">
@@ -355,7 +348,7 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
                 </div>
                 <p>{status}</p>
               </span>
-              
+
               {property.bedrooms && (
                 <span className="flex gap-1 text-lg">
                   <div className="flex gap-1">
@@ -367,7 +360,7 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
                   <p>{property.bedrooms}</p>
                 </span>
               )}
-              
+
               {property.bathrooms && (
                 <span className="flex gap-1 text-lg">
                   <div className="flex gap-1">
@@ -379,13 +372,13 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
                   <p>{property.bathrooms}</p>
                 </span>
               )}
-              
+
               {property.size && (
                 <p className="text-lg">
                   <span className="font-semibold">Size:</span> {property.size}
                 </p>
               )}
-              
+
               {property.listed_by && (
                 <span className="flex gap-1 text-lg">
                   <div className="flex gap-1">
@@ -397,7 +390,7 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
                   <p>{property.listed_by}</p>
                 </span>
               )}
-              
+
               {property.year_built && (
                 <span className="flex gap-1 text-lg">
                   <div className="flex gap-1">
@@ -410,9 +403,9 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
                 </span>
               )}
             </div>
-            
+
             <p className="text-lg">
-              <span className="font-semibold">Price:</span> 
+              <span className="font-semibold">Price:</span>
               {formatPrice(property.price)}
             </p>
           </div>
@@ -425,8 +418,8 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
             <h3 className="text-lg font-medium">
               {property.property_type || "Property"} at {location}
             </h3>
-            
-            {(phoneNumbers.length > 0 || allEmails.length > 0) ? (
+
+            {phoneNumbers.length > 0 || allEmails.length > 0 ? (
               <div className="space-y-3">
                 {/* Phone Numbers */}
                 {phoneNumbers.length > 0 && (
@@ -434,13 +427,16 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
                     <div className="flex items-center gap-2 mb-3">
                       <Phone className="w-5 h-5 text-blue-400" />
                       <span className="font-semibold">
-                        Phone Number{phoneNumbers.length > 1 ? 's' : ''}:
+                        Phone Number{phoneNumbers.length > 1 ? "s" : ""}:
                       </span>
                     </div>
                     <div className="space-y-2">
                       {phoneNumbers.map((phoneNum: string, index: number) => (
-                        <div key={index} className="flex items-center justify-between p-2 rounded-md bg-gray-700/30">
-                          <a 
+                        <div
+                          key={index}
+                          className="flex items-center justify-between p-2 rounded-md bg-gray-700/30"
+                        >
+                          <a
                             href={`tel:${phoneNum}`}
                             className="text-blue-400 transition-colors hover:text-blue-300"
                           >
@@ -459,13 +455,16 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
                     <div className="flex items-center gap-2 mb-3">
                       <Mail className="w-5 h-5 text-green-400" />
                       <span className="font-semibold">
-                        Email Address{allEmails.length > 1 ? 'es' : ''}:
+                        Email Address{allEmails.length > 1 ? "es" : ""}:
                       </span>
                     </div>
                     <div className="space-y-2">
                       {allEmails.map((emailAddr: string, index: number) => (
-                        <div key={index} className="flex items-center justify-between p-2 rounded-md bg-gray-700/30">
-                          <a 
+                        <div
+                          key={index}
+                          className="flex items-center justify-between p-2 rounded-md bg-gray-700/30"
+                        >
+                          <a
                             href={`mailto:${emailAddr}`}
                             className="text-green-400 break-all transition-colors hover:text-green-300"
                           >
@@ -481,7 +480,9 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
                 {/* Contact Instructions */}
                 <div className="p-3 border rounded-lg bg-blue-900/20 border-blue-700/30">
                   <p className="text-sm text-blue-300">
-                    💡 <strong>Tip:</strong> Click on any contact detail to call or email directly, or use the copy button to save the information.
+                    💡 <strong>Tip:</strong> Click on any contact detail to call
+                    or email directly, or use the copy button to save the
+                    information.
                   </p>
                 </div>
               </div>
@@ -489,7 +490,9 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
               <div className="p-4 rounded-lg bg-gray-800/50">
                 <div className="flex flex-col items-center justify-center py-8 text-gray-400">
                   <Phone className="w-12 h-12 mb-3 text-gray-500" />
-                  <p className="text-lg font-medium">No contact information available</p>
+                  <p className="text-lg font-medium">
+                    No contact information available
+                  </p>
                   <p className="text-sm text-center">
                     Contact details will be provided by the agent soon
                   </p>
@@ -507,7 +510,7 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
               {property.property_type || "Property"} at {location}
             </h3>
             <div className="flex flex-col gap-2 p-4 rounded-lg bg-gray-800/50">
-              {(property.photos && property.photos.length > 0) ? (
+              {property.photos && property.photos.length > 0 ? (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   {property.photos.map((photo: string, index: number) => (
                     <div key={index} className="relative group">
@@ -515,7 +518,7 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
                         src={photo}
                         alt={`Property Photo ${index + 1}`}
                         className="object-cover w-full h-48 transition-opacity rounded-lg cursor-pointer hover:opacity-90"
-                        onClick={() => window.open(photo, '_blank')}
+                        onClick={() => window.open(photo, "_blank")}
                       />
                       <div className="absolute px-2 py-1 text-sm text-white rounded bottom-2 right-2 bg-black/50">
                         {index + 1} of {(property.photos as string[]).length}
@@ -529,7 +532,7 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
                     src={property.image_url}
                     alt="Property Image"
                     className="object-cover w-full h-64 transition-opacity rounded-lg cursor-pointer hover:opacity-90"
-                    onClick={() => window.open(property.image_url!, '_blank')}
+                    onClick={() => window.open(property.image_url!, "_blank")}
                   />
                 </div>
               ) : (
@@ -550,18 +553,19 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
             <h3 className="text-lg font-medium">
               Rating for {property.property_type || "Property"} at {location}
             </h3>
-            
+
             {rentalGrade > 0 ? (
               <div className="p-4 rounded-lg bg-gray-800/50">
                 <h4 className="mb-3 font-semibold">Overall Rental Grade:</h4>
                 <div className="flex items-center gap-3 mb-3">
-                  <StarRating rating={rentalGrade} size="lg" />
-                  <span className="text-lg font-medium text-white">
+                  <TextRating rating={rentalGrade} size="lg" />
+                  {/* <span className="text-lg font-medium text-white">
                     {getRatingDescription(rentalGrade)}
-                  </span>
+                  </span> */}
                 </div>
                 <p className="text-sm text-gray-400">
-                  Based on environmental factors, neighborhood quality, and property data
+                  Based on environmental factors, neighborhood quality, and
+                  property data
                 </p>
               </div>
             ) : (
@@ -571,51 +575,94 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
                 </p>
               </div>
             )}
-            
+
             {rentalGrade > 0 && (
               <div className="p-4 rounded-lg bg-gray-800/50">
                 <h4 className="mb-3 font-semibold">Rating Breakdown:</h4>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col">
-                      <span className="text-sm font-medium">Overall Rental Grade</span>
-                      <span className="text-xs text-gray-400">Based on all available data</span>
+                      <span className="text-sm font-medium">
+                        Overall Rental Grade
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        Based on all available data
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <StarRating rating={rentalGrade} size="sm" showNumber={false} />
-                      <span className="text-xs text-gray-400">{rentalGrade.toFixed(1)}/5</span>
+                      <TextRating
+                        rating={rentalGrade}
+                        size="sm"
+                        showNumber={false}
+                      />
+                      <span className="text-xs text-gray-400">
+                        {rentalGrade.toFixed(1)}/5
+                      </span>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col">
-                      <span className="text-sm font-medium">Environmental Score</span>
-                      <span className="text-xs text-gray-400">Air quality, noise, green spaces</span>
+                      <span className="text-sm font-medium">
+                        Environmental Score
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        Air quality, noise, green spaces
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <StarRating rating={convertToStarRating(environmentalScore)} size="sm" showNumber={false} />
-                      <span className="text-xs text-gray-400">{environmentalScore.toFixed(1)}/1.0</span>
+                      <TextRating
+                        rating={convertToRating(environmentalScore)}
+                        size="sm"
+                        showNumber={false}
+                      />
+                      <span className="text-xs text-gray-400">
+                        {environmentalScore.toFixed(1)}/1.0
+                      </span>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col">
-                      <span className="text-sm font-medium">Neighborhood Score</span>
-                      <span className="text-xs text-gray-400">Safety, amenities, accessibility</span>
+                      <span className="text-sm font-medium">
+                        Neighborhood Score
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        Safety, amenities, accessibility
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <StarRating rating={convertToStarRating(neighborhoodScore)} size="sm" showNumber={false} />
-                      <span className="text-xs text-gray-400">{neighborhoodScore.toFixed(1)}/1.0</span>
+                      <TextRating
+                        rating={convertToRating(neighborhoodScore)}
+                        size="sm"
+                        showNumber={false}
+                      />
+                      <span className="text-xs text-gray-400">
+                        {neighborhoodScore.toFixed(1)}/1.0
+                      </span>
                     </div>
                   </div>
                 </div>
 
                 <div className="p-3 mt-4 rounded-lg bg-gray-700/30">
-                  <h5 className="mb-2 text-xs font-medium text-gray-300">Score Details:</h5>
+                  <h5 className="mb-2 text-xs font-medium text-gray-300">
+                    Score Details:
+                  </h5>
                   <div className="space-y-1 text-xs text-gray-400">
-                    <p><strong>Environmental:</strong> {getScoreDescription(environmentalScore)} ({(environmentalScore * 100).toFixed(0)}%)</p>
-                    <p><strong>Neighborhood:</strong> {getScoreDescription(neighborhoodScore)} ({(neighborhoodScore * 100).toFixed(0)}%)</p>
-                    <p className="mt-2 text-gray-500">★ Environmental & Neighborhood scores: 0.0-1.0 scale (every 0.2 = 1 star)</p>
+                    <p>
+                      <strong>Environmental:</strong>{" "}
+                      {getScoreDescription(environmentalScore)} (
+                      {(environmentalScore * 100).toFixed(0)}%)
+                    </p>
+                    <p>
+                      <strong>Neighborhood:</strong>{" "}
+                      {getScoreDescription(neighborhoodScore)} (
+                      {(neighborhoodScore * 100).toFixed(0)}%)
+                    </p>
+                    <p className="mt-2 text-gray-500">
+                      📊 Environmental & Neighborhood scores: 0.0-1.0 scale
+                      converted to text ratings
+                    </p>
                   </div>
                 </div>
               </div>
@@ -630,7 +677,7 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
             <h3 className="text-lg font-medium">
               Reviews for {property.property_type || "property"} at {location}
             </h3>
-            
+
             <div className="p-4 rounded-lg bg-gray-800/50">
               <p className="text-gray-400">
                 Detailed reviews and tenant feedback will be displayed here.
@@ -651,14 +698,17 @@ const PropertyActions: React.FC<PropertyActionsProps> = ({
 
   const handleMapClick = () => {
     // Try different location sources in order of preference
-    const mapLocation = (
-      property.coordinate || 
-      property.address || 
+    const mapLocation =
+      property.coordinate ||
+      property.address ||
       property.location ||
-      locationProp
-    );
-    
-    if (mapLocation && mapLocation.trim() !== '' && mapLocation !== 'Location not available') {
+      locationProp;
+
+    if (
+      mapLocation &&
+      mapLocation.trim() !== "" &&
+      mapLocation !== "Location not available"
+    ) {
       const encodedAddress = encodeURIComponent(mapLocation);
       window.open(
         `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`,

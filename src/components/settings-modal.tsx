@@ -1,66 +1,91 @@
-"use client"
+"use client";
 
-import React, { useState, useEffect, useCallback } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 // import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { cn } from "@/lib/utils"
-import { Settings, User, Lock, Trash2, Eye, EyeOff, Check, Copy, UserPlus } from "lucide-react"
-import { toast } from "@/hooks/use-toast"
-import { DeleteAccountModal } from "./delete-account-modal"
-import { FilteredResponseModal } from "./filtered-response-modal"
-import { AgentVerificationModal } from "./agent-verification-modal"
-import { useIsMobile } from "../hooks/use-mobile"
-import { authAPI, chatAPI, userAPI } from "@/lib/api"
-import { useAuth } from "@/contexts/auth-context"
-import graph from "../../public/Image/graph.svg"
-import Image from "next/image"
+import { cn } from "@/lib/utils";
+import {
+  Settings,
+  User,
+  Lock,
+  Trash2,
+  Eye,
+  EyeOff,
+  Check,
+  Copy,
+  UserPlus,
+} from "lucide-react";
+import { toast } from "@/hooks/use-toast";
+import { DeleteAccountModal } from "./delete-account-modal";
+import { FilteredResponseModal } from "./filtered-response-modal";
+import { AgentVerificationModal } from "./agent-verification-modal";
+import { useIsMobile } from "../hooks/use-mobile";
+import { authAPI, chatAPI, userAPI } from "@/lib/api";
+import { useAuth } from "@/contexts/auth-context";
+import graph from "../../public/Image/graph.svg";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 interface SettingsModalProps {
-  isOpen: boolean
-  onClose: () => void
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-type SettingsTab = "general" | "personalization" | "password" | "delete" | "invite" | "Landlord/agent"
-
+type SettingsTab =
+  | "general"
+  | "personalization"
+  | "password"
+  | "delete"
+  | "invite"
+  | "Landlord/agent";
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const isMobile = useIsMobile()
-  const [activeTab, setActiveTab] = useState<SettingsTab>("general")
+  const router = useRouter();
+  const isMobile = useIsMobile();
+  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+
   // const [theme, setTheme] = useState("system")
   // const [language, setLanguage] = useState("auto-english")
-  const [isChangingPassword, setIsChangingPassword] = useState(false)
-  const [showNewPassword, setShowNewPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     new_password1: "",
     new_password2: "",
-  })
-  const [showDeleteAccount, setShowDeleteAccount] = useState(false)
-  const [showFilteredResponse, setShowFilteredResponse] = useState(false)
-  const [filteredResponseEnabled, setFilteredResponseEnabled] = useState(false)
-  const [selectedRole, setSelectedRole] = useState<string | null>(null)
-  const [referralCode] = useState("FL3598KJ")
-  const [referralPoints] = useState(5)
-  const [referralUsers] = useState(5)
-  const [copied, setCopied] = useState(false)
-  const [isDeletingAllChats, setIsDeletingAllChats] = useState(false)
-  const [memoryEnabled, setMemoryEnabled] = useState(false)
-  const [verificationStatus, setVerificationStatus] = useState<'none' | 'pending' | 'verified' | 'rejected'>('none')
-  const [showVerificationModal, setShowVerificationModal] = useState(false)
-  const { logout, user, submitAgentRequest } = useAuth()
+  });
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  const [showFilteredResponse, setShowFilteredResponse] = useState(false);
+  const [filteredResponseEnabled, setFilteredResponseEnabled] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<string | null>(null);
+  const [referralCode] = useState("FL3598KJ");
+  const [referralPoints] = useState(5);
+  const [referralUsers] = useState(5);
+  const [copied, setCopied] = useState(false);
+  const [isDeletingAllChats, setIsDeletingAllChats] = useState(false);
+  const [memoryEnabled, setMemoryEnabled] = useState(false);
+  const [verificationStatus, setVerificationStatus] = useState<
+    "none" | "pending" | "verified" | "rejected"
+  >("none");
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const { logout, user, submitAgentRequest } = useAuth();
 
   // Get verification status from user object and server
   const fetchVerificationStatus = useCallback(async () => {
     if (!user?.id) {
-      setVerificationStatus("none")
-      return
+      setVerificationStatus("none");
+      return;
     }
-    
+
     try {
       // Fetch latest data from server using /auth/me endpoint
       const userData = await userAPI.getProfile();
-      
+
       // Check agent_info.status from the backend response
       if (userData?.agent_info?.status) {
         const agentStatus = userData.agent_info.status;
@@ -108,14 +133,14 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         setVerificationStatus("none");
       }
     }
-  }, [user?.id, user?.agent_request])
+  }, [user?.id, user?.agent_request]);
 
   // Fetch verification status when modal opens or when switching to landlord/agent tab
   useEffect(() => {
     if (isOpen && activeTab === "Landlord/agent" && user?.id) {
       fetchVerificationStatus();
     }
-  }, [isOpen, activeTab, user?.id, fetchVerificationStatus])
+  }, [isOpen, activeTab, user?.id, fetchVerificationStatus]);
 
   // Also fetch when user data is updated
   useEffect(() => {
@@ -149,7 +174,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     } else {
       setVerificationStatus("none");
     }
-  }, [user?.verification_status, user?.agent_request, user?.agent_info])
+  }, [user?.verification_status, user?.agent_request, user?.agent_info]);
 
   // const handleFilteredResponseToggle = (checked: boolean) => {
   //   if (checked) {
@@ -162,34 +187,34 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleRoleSelect = (role: string, preferences: unknown) => {
-    setSelectedRole(role)
-    setFilteredResponseEnabled(true)
-  }
+    setSelectedRole(role);
+    setFilteredResponseEnabled(true);
+  };
 
   const copyReferralCode = () => {
-    navigator.clipboard.writeText(referralCode)
-    setCopied(true)
+    navigator.clipboard.writeText(referralCode);
+    setCopied(true);
     toast({
       title: "Copied!",
       description: "Referral code copied to clipboard",
-    })
-    setTimeout(() => setCopied(false), 2000)
-  }
+    });
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   // delete all chats sessions
   const deleteAllSessions = async () => {
-    setIsDeletingAllChats(true)
+    setIsDeletingAllChats(true);
     try {
-      await chatAPI.deleteAllChatSessions()
+      await chatAPI.deleteAllChatSessions();
       toast({
         title: "Success",
         description: "All chat sessions have been deleted successfully",
       });
     } catch (error: unknown) {
       console.error("Delete all chat sessions error:", error);
-      let errorMessage = "Failed to delete all chat sessions"
-      if (error && typeof error === 'object' && 'detail' in error) {
-        errorMessage = (error as { detail?: string }).detail || errorMessage
+      let errorMessage = "Failed to delete all chat sessions";
+      if (error && typeof error === "object" && "detail" in error) {
+        errorMessage = (error as { detail?: string }).detail || errorMessage;
       }
       toast({
         title: "Error",
@@ -197,39 +222,42 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         variant: "destructive",
       });
     } finally {
-      setIsDeletingAllChats(false)
+      setIsDeletingAllChats(false);
     }
-  }
+  };
 
   const handleLogout = () => {
-    logout()
+    logout();
     toast({
       title: "Logged out",
       description: "You have been successfully logged out",
-    })
-    onClose() // Close settings modal after logout
-  }
+    });
+    onClose(); // Close settings modal after logout
+  };
 
   const handleMemoryToggle = () => {
-    setMemoryEnabled(!memoryEnabled)
+    setMemoryEnabled(!memoryEnabled);
     toast({
       title: "Memory setting updated",
-      description: `Memory has been turned ${!memoryEnabled ? 'on' : 'off'}`,
-    })
-  }
+      description: `Memory has been turned ${!memoryEnabled ? "on" : "off"}`,
+    });
+  };
 
   const handleRequestVerification = () => {
-    setShowVerificationModal(true)
-  }
+    setShowVerificationModal(true);
+  };
 
-  const handleVerificationSuccess = async (data?: { phone?: string; verification_document?: File | string }) => {
+  const handleVerificationSuccess = async (data?: {
+    phone?: string;
+    verification_document?: File | string;
+  }) => {
     try {
       // Submit the agent request using the auth context
       await submitAgentRequest(data || {});
-      
+
       // Update the local verification status
-      setVerificationStatus('pending');
-      
+      setVerificationStatus("pending");
+
       toast({
         title: "Success",
         description: "Agent verification request submitted successfully",
@@ -237,8 +265,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     } catch (error: unknown) {
       console.error("Failed to submit agent request:", error);
       let errorMessage = "Failed to submit verification request";
-      if (error && typeof error === 'object' && 'response' in error) {
-        const responseError = error as { response?: { data?: { detail?: string } } };
+      if (error && typeof error === "object" && "response" in error) {
+        const responseError = error as {
+          response?: { data?: { detail?: string } };
+        };
         errorMessage = responseError.response?.data?.detail || errorMessage;
       }
       toast({
@@ -287,9 +317,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       });
     } catch (error: unknown) {
       console.error("Password change error:", error);
-      let errorMessage = "Failed to change password"
-      if (error && typeof error === 'object' && 'detail' in error) {
-        errorMessage = (error as { detail?: string }).detail || errorMessage
+      let errorMessage = "Failed to change password";
+      if (error && typeof error === "object" && "detail" in error) {
+        errorMessage = (error as { detail?: string }).detail || errorMessage;
       }
       toast({
         title: "Error",
@@ -305,7 +335,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     { id: "Landlord/agent" as const, label: "Landlord/agent", icon: UserPlus },
     { id: "password" as const, label: "Password", icon: Lock },
     { id: "delete" as const, label: "Delete Account", icon: Trash2 },
-  ]
+  ];
 
   return (
     <>
@@ -321,43 +351,49 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           {isMobile && !isChangingPassword && (
             <div className="grid items-center grid-cols-2 px-2 border-b border-zinc-800">
               {tabs.map((tab) => {
-                const Icon = tab.icon
+                const Icon = tab.icon;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
                     className={cn(
                       "flex items-center gap-1 px-3 py-3 text-xs whitespace-nowrap text-zinc-400 hover:bg-zinc-800/50",
-                      activeTab === tab.id && "bg-[#3B3B3B] text-white rounded-[10px]",
+                      activeTab === tab.id &&
+                        "bg-[#3B3B3B] text-white rounded-[10px]"
                     )}
                   >
                     <Icon className="w-3 h-3 sm:w-4 sm:h-4" />
                     <span className="text-[15px]">{tab.label}</span>
                   </button>
-                )
+                );
               })}
             </div>
           )}
 
-          <div className={cn("flex", isMobile ? "flex-col" : "h-[400px] sm:h-[450px] md:h-[500px]")}>
+          <div
+            className={cn(
+              "flex",
+              isMobile ? "flex-col" : "h-[400px] sm:h-[450px] md:h-[500px]"
+            )}
+          >
             {/* Sidebar - Hide on mobile and when changing password */}
             {!isMobile && !isChangingPassword && (
               <div className="border-r w-36 sm:w-40 md:w-48 border-zinc-800">
                 {tabs.map((tab) => {
-                  const Icon = tab.icon
+                  const Icon = tab.icon;
                   return (
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
                       className={cn(
                         "flex items-center gap-2 w-full px-3 sm:px-4 py-2 text-xs sm:text-sm text-zinc-400 hover:bg-zinc-800/50",
-                        activeTab === tab.id && "bg-zinc-800/50 text-white",
+                        activeTab === tab.id && "bg-zinc-800/50 text-white"
                       )}
                     >
                       <Icon className="w-3 h-3 sm:w-4 sm:h-4" />
                       {tab.label}
                     </button>
-                  )
+                  );
                 })}
               </div>
             )}
@@ -367,17 +403,24 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               {activeTab === "delete" && (
                 <div className="space-y-4 sm:space-y-6">
                   <div className="space-y-2 sm:space-y-4">
-                    <h3 className="text-base font-medium text-white sm:text-lg">Delete Account</h3>
+                    <h3 className="text-base font-medium text-white sm:text-lg">
+                      Delete Account
+                    </h3>
                     <p className="text-xs sm:text-sm text-zinc-400">
-                      Once you delete your account, there is no going back. Please be certain.
+                      Once you delete your account, there is no going back.
+                      Please be certain.
                     </p>
                   </div>
 
                   <div className="space-y-3 sm:space-y-4">
                     <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center sm:gap-0">
                       <div>
-                        <h4 className="text-xs font-medium text-white sm:text-sm">Delete all chats</h4>
-                        <p className="text-xs text-zinc-400">This will permanently delete all your conversations</p>
+                        <h4 className="text-xs font-medium text-white sm:text-sm">
+                          Delete all chats
+                        </h4>
+                        <p className="text-xs text-zinc-400">
+                          This will permanently delete all your conversations
+                        </p>
                       </div>
                       <Button
                         variant="destructive"
@@ -394,8 +437,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                     <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center sm:gap-0">
                       <div className="max-w-[50vw]">
-                        <h4 className="text-xs font-medium text-white sm:text-sm">Delete account</h4>
-                        <p className="text-xs text-zinc-400 ">Permanently delete your account and all <br /> associated data</p>
+                        <h4 className="text-xs font-medium text-white sm:text-sm">
+                          Delete account
+                        </h4>
+                        <p className="text-xs text-zinc-400 ">
+                          Permanently delete your account and all <br />{" "}
+                          associated data
+                        </p>
                       </div>
                       <Button
                         variant="destructive"
@@ -411,14 +459,24 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               )}
 
               {isChangingPassword ? (
-                <form onSubmit={handlePasswordChange} className="space-y-3 sm:space-y-4">
+                <form
+                  onSubmit={handlePasswordChange}
+                  className="space-y-3 sm:space-y-4"
+                >
                   <div className="space-y-1 sm:space-y-2">
-                    <label className="text-xs sm:text-sm text-zinc-400">New Password</label>
+                    <label className="text-xs sm:text-sm text-zinc-400">
+                      New Password
+                    </label>
                     <div className="relative">
                       <Input
                         type={showNewPassword ? "text" : "password"}
                         value={passwordForm.new_password1}
-                        onChange={(e) => setPasswordForm((prev) => ({ ...prev, new_password1: e.target.value }))}
+                        onChange={(e) =>
+                          setPasswordForm((prev) => ({
+                            ...prev,
+                            new_password1: e.target.value,
+                          }))
+                        }
                         className="pr-10 text-xs text-white bg-zinc-800/50 border-zinc-700 sm:text-sm"
                         placeholder="Enter new password"
                         required
@@ -436,16 +494,25 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         )}
                       </button>
                     </div>
-                    <p className="text-xs text-zinc-500">Password must be at least 8 characters long</p>
+                    <p className="text-xs text-zinc-500">
+                      Password must be at least 8 characters long
+                    </p>
                   </div>
 
                   <div className="space-y-1 sm:space-y-2">
-                    <label className="text-xs sm:text-sm text-zinc-400">Confirm Password</label>
+                    <label className="text-xs sm:text-sm text-zinc-400">
+                      Confirm Password
+                    </label>
                     <div className="relative">
                       <Input
                         type={showConfirmPassword ? "text" : "password"}
                         value={passwordForm.new_password2}
-                        onChange={(e) => setPasswordForm((prev) => ({ ...prev, new_password2: e.target.value }))}
+                        onChange={(e) =>
+                          setPasswordForm((prev) => ({
+                            ...prev,
+                            new_password2: e.target.value,
+                          }))
+                        }
                         className="pr-10 text-xs text-white bg-zinc-800/50 border-zinc-700 sm:text-sm"
                         placeholder="Confirm new password"
                         required
@@ -453,7 +520,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       />
                       <button
                         type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        onClick={() =>
+                          setShowConfirmPassword(!showConfirmPassword)
+                        }
                         className="absolute -translate-y-1/2 right-3 top-1/2 text-zinc-400 hover:text-zinc-300"
                       >
                         {showConfirmPassword ? (
@@ -469,7 +538,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     <Button
                       type="submit"
                       className="flex-1 bg-gradient-to-r from-yellow-500 to-pink-500 hover:from-yellow-600 hover:to-pink-600 text-white rounded-[10px] text-xs sm:text-sm"
-                      disabled={!passwordForm.new_password1 || !passwordForm.new_password2}
+                      disabled={
+                        !passwordForm.new_password1 ||
+                        !passwordForm.new_password2
+                      }
                     >
                       Change Password
                     </Button>
@@ -477,13 +549,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       type="button"
                       variant="outline"
                       onClick={() => {
-                        setIsChangingPassword(false)
+                        setIsChangingPassword(false);
                         setPasswordForm({
                           new_password1: "",
                           new_password2: "",
-                        })
-                        setShowNewPassword(false)
-                        setShowConfirmPassword(false)
+                        });
+                        setShowNewPassword(false);
+                        setShowConfirmPassword(false);
                       }}
                       className="flex-1 border-zinc-700 hover:bg-zinc-800 text-zinc-400 rounded-[10px] text-xs sm:text-sm"
                     >
@@ -528,7 +600,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                       <div className="space-y-4">
                         <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center sm:gap-0">
-                          <span className="text-xs sm:text-sm text-zinc-400">Delete all chats</span>
+                          <span className="text-xs sm:text-sm text-zinc-400">
+                            Delete all chats
+                          </span>
                           <Button
                             onClick={deleteAllSessions}
                             disabled={isDeletingAllChats}
@@ -540,7 +614,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         <div className="border-b-[0.1px]"></div>
 
                         <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center sm:gap-0">
-                          <span className="text-xs sm:text-sm text-zinc-400">Log out on this device</span>
+                          <span className="text-xs sm:text-sm text-zinc-400">
+                            Log out on this device
+                          </span>
                           <Button
                             onClick={handleLogout}
                             className="p-1 sm:p-2 rounded-[10px] bg-transparent border border-zinc-600 hover:bg-zinc-800 text-white/90 text-xs sm:text-sm h-8 sm:h-auto self-end sm:self-auto"
@@ -561,18 +637,25 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         className="flex items-center justify-between w-full px-3 py-2 text-left transition rounded-lg sm:px-4 sm:py-3 bg-zinc-800/50 hover:bg-zinc-700"
                       >
                         <div className="space-y-1">
-                          <span className="text-xs sm:text-sm text-zinc-300">Filtered response</span>
+                          <span className="text-xs sm:text-sm text-zinc-300">
+                            Filtered response
+                          </span>
                           {selectedRole ? (
-                            <p className="text-xs capitalize text-zinc-500">Role: {selectedRole}</p>
+                            <p className="text-xs capitalize text-zinc-500">
+                              Role: {selectedRole}
+                            </p>
                           ) : (
-                            <p className="text-xs text-zinc-500">Select your role</p>
+                            <p className="text-xs text-zinc-500">
+                              Select your role
+                            </p>
                           )}
                         </div>
                         <div
-                          className={`px-2 sm:px-3 py-1 rounded-full text-xs ${filteredResponseEnabled
+                          className={`px-2 sm:px-3 py-1 rounded-full text-xs ${
+                            filteredResponseEnabled
                               ? "bg-gradient-to-r from-yellow-500 to-pink-500 text-white"
                               : "bg-zinc-700 text-zinc-400"
-                            }`}
+                          }`}
                         >
                           {filteredResponseEnabled ? "On" : "Off"}
                         </div>
@@ -584,13 +667,20 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         className="flex items-center justify-between w-full px-3 py-2 text-left transition rounded-lg sm:px-4 sm:py-3 bg-zinc-800/50 hover:bg-zinc-700"
                       >
                         <div className="space-y-1">
-                          <span className="text-xs sm:text-sm text-zinc-300">Memory</span>
-                          <p className="text-xs text-zinc-500">Remember preferences and history</p>
+                          <span className="text-xs sm:text-sm text-zinc-300">
+                            Memory
+                          </span>
+                          <p className="text-xs text-zinc-500">
+                            Remember preferences and history
+                          </p>
                         </div>
-                        <div className={`px-2 py-1 text-xs rounded-full sm:px-3 ${memoryEnabled
-                            ? "bg-gradient-to-r from-yellow-500 to-pink-500 text-white"
-                            : "bg-zinc-700 text-zinc-400"
-                          }`}>
+                        <div
+                          className={`px-2 py-1 text-xs rounded-full sm:px-3 ${
+                            memoryEnabled
+                              ? "bg-gradient-to-r from-yellow-500 to-pink-500 text-white"
+                              : "bg-zinc-700 text-zinc-400"
+                          }`}
+                        >
                           {memoryEnabled ? "On" : "Off"}
                         </div>
                       </button>
@@ -598,19 +688,22 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       {/* Information Box */}
                       <div className="p-3 border rounded-lg sm:p-4 border-blue-600/30 bg-blue-600/10">
                         <p className="mb-2 text-xs text-blue-400 sm:mb-3">
-                          I understand your preferences, typing style, and interests to provide more accurate and
-                          personalized insights.
+                          I understand your preferences, typing style, and
+                          interests to provide more accurate and personalized
+                          insights.
                         </p>
                         <p className="mb-2 text-xs text-blue-400 sm:mb-3">
-                          Remember key Preferences, typing style, and what a property means to you. Understand your
-                          requirements better.
+                          Remember key Preferences, typing style, and what a
+                          property means to you. Understand your requirements
+                          better.
                         </p>
                         <p className="mb-2 text-xs text-blue-400 sm:mb-3">
-                          Understand key factors based on feedback, reviews, and past interactions.
+                          Understand key factors based on feedback, reviews, and
+                          past interactions.
                         </p>
                         <p className="text-xs text-blue-400">
-                          You can change or clear your memory settings anytime in your settings. Your data is private
-                          and secure.
+                          You can change or clear your memory settings anytime
+                          in your settings. Your data is private and secure.
                         </p>
                       </div>
                     </div>
@@ -619,33 +712,43 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   {activeTab === "Landlord/agent" && (
                     <div className="space-y-4 sm:space-y-6">
                       <div className="space-y-4">
-                        <h3 className="text-base font-medium text-white sm:text-lg">Landlord/Agent Verification</h3>
+                        <h3 className="text-base font-medium text-white sm:text-lg">
+                          Landlord/Agent Verification
+                        </h3>
                         <p className="text-xs sm:text-sm text-zinc-400">
-                          Become a verified landlord or agent to list your properties and gain access to advanced features.
+                          Become a verified landlord or agent to list your
+                          properties and gain access to advanced features.
                         </p>
 
                         {/* Verification Status & Request Button */}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span className="text-[16px] text-white">Verification Status:</span>
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              verificationStatus === 'pending' 
-                                ? 'bg-yellow-600/20 text-yellow-400 border border-yellow-600/30'
-                                : verificationStatus === 'verified'
-                                ? 'bg-green-600/20 text-green-400 border border-green-600/30'
-                                : verificationStatus === 'rejected'
-                                ? 'bg-red-600/20 text-red-400 border border-red-600/30'
-                                : 'bg-zinc-600/20 text-zinc-400 border border-zinc-600/30'
-                            }`}>
-                              {verificationStatus === 'pending' ? 'Pending Review' 
-                               : verificationStatus === 'verified' ? 'Verified'
-                               : verificationStatus === 'rejected' ? 'Rejected'
-                               : 'Not Submitted'}
+                            <span className="text-[16px] text-white">
+                              Verification Status:
+                            </span>
+                            <span
+                              className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                verificationStatus === "pending"
+                                  ? "bg-yellow-600/20 text-yellow-400 border border-yellow-600/30"
+                                  : verificationStatus === "verified"
+                                  ? "bg-green-600/20 text-green-400 border border-green-600/30"
+                                  : verificationStatus === "rejected"
+                                  ? "bg-red-600/20 text-red-400 border border-red-600/30"
+                                  : "bg-zinc-600/20 text-zinc-400 border border-zinc-600/30"
+                              }`}
+                            >
+                              {verificationStatus === "pending"
+                                ? "Pending Review"
+                                : verificationStatus === "verified"
+                                ? "Verified"
+                                : verificationStatus === "rejected"
+                                ? "Rejected"
+                                : "Not Submitted"}
                             </span>
                           </div>
-                          
-                          {verificationStatus === 'none' && (
-                            <button 
+
+                          {verificationStatus === "none" && (
+                            <button
                               onClick={handleRequestVerification}
                               className="underline text-[16px] text-white hover:text-zinc-300"
                             >
@@ -653,8 +756,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                             </button>
                           )}
 
-                          {verificationStatus === 'rejected' && (
-                            <button 
+                          {verificationStatus === "rejected" && (
+                            <button
                               onClick={handleRequestVerification}
                               className="underline text-[16px] text-white hover:text-zinc-300"
                             >
@@ -666,27 +769,71 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         {/* Show agent request details if exists */}
                         {(user?.agent_info || user?.agent_request) && (
                           <div className="p-3 border rounded-[10px] sm:p-4 border-[#383838] bg-[#303030]">
-                            <h4 className="mb-2 text-sm font-medium text-white">Request Details:</h4>
+                            <h4 className="mb-2 text-sm font-medium text-white">
+                              Request Details:
+                            </h4>
                             <div className="space-y-1 text-xs text-zinc-300">
                               {user?.agent_info ? (
                                 // Use new agent_info structure
                                 <>
-                                  <p><span className="text-zinc-400">Submitted:</span> {new Date(user.agent_info.request_date).toLocaleDateString()}</p>
+                                  <p>
+                                    <span className="text-zinc-400">
+                                      Submitted:
+                                    </span>{" "}
+                                    {new Date(
+                                      user.agent_info.request_date
+                                    ).toLocaleDateString()}
+                                  </p>
                                   {user.agent_info.phone && (
-                                    <p><span className="text-zinc-400">Phone:</span> {user.agent_info.phone}</p>
+                                    <p>
+                                      <span className="text-zinc-400">
+                                        Phone:
+                                      </span>{" "}
+                                      {user.agent_info.phone}
+                                    </p>
                                   )}
-                                  <p><span className="text-zinc-400">Status:</span> {user.agent_info.status}</p>
+                                  <p>
+                                    <span className="text-zinc-400">
+                                      Status:
+                                    </span>{" "}
+                                    {user.agent_info.status}
+                                  </p>
                                 </>
                               ) : (
                                 // Fallback to legacy agent_request structure
                                 <>
-                                  <p><span className="text-zinc-400">Submitted:</span> {new Date(user.agent_request!.created_at).toLocaleDateString()}</p>
+                                  <p>
+                                    <span className="text-zinc-400">
+                                      Submitted:
+                                    </span>{" "}
+                                    {new Date(
+                                      user.agent_request!.created_at
+                                    ).toLocaleDateString()}
+                                  </p>
                                   {user.agent_request!.phone && (
-                                    <p><span className="text-zinc-400">Phone:</span> {user.agent_request!.phone}</p>
+                                    <p>
+                                      <span className="text-zinc-400">
+                                        Phone:
+                                      </span>{" "}
+                                      {user.agent_request!.phone}
+                                    </p>
                                   )}
-                                  <p><span className="text-zinc-400">Status:</span> {user.agent_request!.status}</p>
-                                  {user.agent_request!.updated_at !== user.agent_request!.created_at && (
-                                    <p><span className="text-zinc-400">Last Updated:</span> {new Date(user.agent_request!.updated_at).toLocaleDateString()}</p>
+                                  <p>
+                                    <span className="text-zinc-400">
+                                      Status:
+                                    </span>{" "}
+                                    {user.agent_request!.status}
+                                  </p>
+                                  {user.agent_request!.updated_at !==
+                                    user.agent_request!.created_at && (
+                                    <p>
+                                      <span className="text-zinc-400">
+                                        Last Updated:
+                                      </span>{" "}
+                                      {new Date(
+                                        user.agent_request!.updated_at
+                                      ).toLocaleDateString()}
+                                    </p>
                                   )}
                                 </>
                               )}
@@ -696,51 +843,81 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                         {/* Benefits Section */}
                         <div className="flex flex-col gap-3 p-3 border rounded-[10px] sm:p-4 border-[#383838] bg-[#303030] text-[14px]">
-                          <h4 className="mb-2 text-sm font-medium text-white">Verification Benefits:</h4>
-                          
+                          <h4 className="mb-2 text-sm font-medium text-white">
+                            Verification Benefits:
+                          </h4>
+
                           <div className="flex items-start gap-2">
-                            <Image src={graph} alt="Graph" className="w-[16px] h-[16px] mt-0.5" />
-                            <p className="text-zinc-300">Priority listing placement</p>
-                          </div>
-                          
-                          <div className="flex items-start gap-2">
-                            <Image src={graph} alt="Graph" className="w-[16px] h-[16px] mt-0.5" />
-                            <p className="text-zinc-300">Verified badge for trust building</p>
+                            <Image
+                              src={graph}
+                              alt="Graph"
+                              className="w-[16px] h-[16px] mt-0.5"
+                            />
+                            <p className="text-zinc-300">
+                              Priority listing placement
+                            </p>
                           </div>
 
                           <div className="flex items-start gap-2">
-                            <Image src={graph} alt="Graph" className="w-[16px] h-[16px] mt-0.5" />
-                            <p className="text-zinc-300">Advanced analytics and insights</p>
+                            <Image
+                              src={graph}
+                              alt="Graph"
+                              className="w-[16px] h-[16px] mt-0.5"
+                            />
+                            <p className="text-zinc-300">
+                              Verified badge for trust building
+                            </p>
                           </div>
 
                           <div className="flex items-start gap-2">
-                            <Image src={graph} alt="Graph" className="w-[16px] h-[16px] mt-0.5" />
-                            <p className="text-zinc-300">Reduced platform fees</p>
+                            <Image
+                              src={graph}
+                              alt="Graph"
+                              className="w-[16px] h-[16px] mt-0.5"
+                            />
+                            <p className="text-zinc-300">
+                              Advanced analytics and insights
+                            </p>
+                          </div>
+
+                          <div className="flex items-start gap-2">
+                            <Image
+                              src={graph}
+                              alt="Graph"
+                              className="w-[16px] h-[16px] mt-0.5"
+                            />
+                            <p className="text-zinc-300">
+                              Reduced platform fees
+                            </p>
                           </div>
                         </div>
 
                         {/* Status Information */}
-                        {verificationStatus === 'pending' && (
+                        {verificationStatus === "pending" && (
                           <div className="p-3 border rounded-lg sm:p-4 border-yellow-600/30 bg-yellow-600/10">
                             <p className="text-xs text-yellow-400">
-                              Your verification request is being reviewed. We&apos;ll notify you within 2-3 business days. 
-                              You&apos;ll receive an email once the review is complete.
+                              Your verification request is being reviewed.
+                              We&apos;ll notify you within 2-3 business days.
+                              You&apos;ll receive an email once the review is
+                              complete.
                             </p>
                           </div>
                         )}
 
-                        {verificationStatus === 'verified' && (
+                        {verificationStatus === "verified" && (
                           <div className="p-3 border rounded-lg sm:p-4 border-green-600/30 bg-green-600/10">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                               <div>
                                 <p className="mb-2 text-xs text-green-400">
-                                  Congratulations! You are now a verified landlord/agent. You can now list properties 
+                                  Congratulations! You are now a verified
+                                  landlord/agent. You can now list properties
                                   and access all premium features.
                                 </p>
                               </div>
                               <Button
                                 onClick={() => {
-                                  window.open('https://www.reviai.tech/login', '_blank');
+                                  onClose();
+                                  router.push("/dashboard");
                                 }}
                                 className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-[10px] text-xs sm:text-sm px-4 py-2 whitespace-nowrap"
                               >
@@ -750,11 +927,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                           </div>
                         )}
 
-                        {verificationStatus === 'rejected' && (
+                        {verificationStatus === "rejected" && (
                           <div className="p-3 border rounded-lg sm:p-4 border-red-600/30 bg-red-600/10">
                             <p className="text-xs text-red-400">
-                              Your verification request was not approved. Please contact support for more information 
-                              or to submit additional documentation.
+                              Your verification request was not approved. Please
+                              contact support for more information or to submit
+                              additional documentation.
                             </p>
                           </div>
                         )}
@@ -768,11 +946,15 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         <div className="mb-1 text-4xl font-bold text-white">
                           {referralPoints.toString().padStart(2, "0")}
                         </div>
-                        <div className="text-sm text-zinc-400">Referral Points Earned</div>
+                        <div className="text-sm text-zinc-400">
+                          Referral Points Earned
+                        </div>
                       </div>
 
                       <div className="space-y-2">
-                        <label className="text-sm text-zinc-400">Share your referral link</label>
+                        <label className="text-sm text-zinc-400">
+                          Share your referral link
+                        </label>
                         <div className="relative">
                           <Input
                             value={referralCode}
@@ -784,18 +966,26 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                             onClick={copyReferralCode}
                             className="absolute -translate-y-1/2 right-3 top-1/2 text-zinc-400 hover:text-zinc-300"
                           >
-                            {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                            {copied ? (
+                              <Check className="w-4 h-4 text-green-400" />
+                            ) : (
+                              <Copy className="w-4 h-4" />
+                            )}
                           </button>
                         </div>
                       </div>
 
                       <div className="text-sm text-zinc-400">
-                        Invite your friends and earn rewards! For every friend that signs up and purchases tokens using
-                        your referral link, you both get 5 free tokens. The more you share, the more you earn!
+                        Invite your friends and earn rewards! For every friend
+                        that signs up and purchases tokens using your referral
+                        link, you both get 5 free tokens. The more you share,
+                        the more you earn!
                       </div>
 
                       <div className="mt-6 space-y-2">
-                        <label className="text-sm text-zinc-400">Number of People Who Used the Link</label>
+                        <label className="text-sm text-zinc-400">
+                          Number of People Who Used the Link
+                        </label>
                         <div className="flex items-center justify-center w-16 h-10 text-white border rounded-md bg-zinc-800/50 border-zinc-700">
                           {referralUsers.toString().padStart(2, "0")}
                         </div>
@@ -803,8 +993,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                       <div className="p-4 mt-6 border rounded-lg border-yellow-600/30 bg-yellow-600/10">
                         <p className="text-xs text-yellow-400">
-                          Share your referral link on social media or directly with friends to maximize your rewards.
-                          Each successful referral helps both you and your friend!
+                          Share your referral link on social media or directly
+                          with friends to maximize your rewards. Each successful
+                          referral helps both you and your friend!
                         </p>
                       </div>
                     </div>
@@ -812,7 +1003,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                   {activeTab === "password" && (
                     <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center sm:gap-0">
-                      <span className="text-xs sm:text-sm text-zinc-400">Change Password</span>
+                      <span className="text-xs sm:text-sm text-zinc-400">
+                        Change Password
+                      </span>
                       <Button
                         onClick={() => setIsChangingPassword(true)}
                         className="p-1 sm:p-2 rounded-[10px] bg-transparent border border-zinc-600 hover:bg-zinc-800 text-white/90 text-xs sm:text-sm h-8 sm:h-auto self-end sm:self-auto"
@@ -828,7 +1021,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         </DialogContent>
       </Dialog>
 
-      <DeleteAccountModal isOpen={showDeleteAccount} onClose={() => setShowDeleteAccount(false)} />
+      <DeleteAccountModal
+        isOpen={showDeleteAccount}
+        onClose={() => setShowDeleteAccount(false)}
+      />
       <FilteredResponseModal
         isOpen={showFilteredResponse}
         onClose={() => setShowFilteredResponse(false)}
@@ -840,5 +1036,5 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         onSuccess={handleVerificationSuccess}
       />
     </>
-  )
+  );
 }

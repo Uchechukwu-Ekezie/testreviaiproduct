@@ -17,17 +17,7 @@ import ChatMessages from "@/components/chatpage/chat-message";
 import RenameDialog from "@/components/chatpage/rename-dialog";
 import ChatInput from "@/components/chatpage/chat-input";
 
-// Add interface for Message type with image support
-interface Message {
-  id: string;
-  prompt?: string;
-  response?: string;
-  session?: string | null | undefined;
-  error?: boolean;
-  retrying?: boolean;
-  isNewSession?: boolean;
-  imageUrls?: string[]; // Add image URLs support
-}
+import { Message } from "@/types/chatMessage";
 
 interface ChatSession {
   id: string;
@@ -59,28 +49,37 @@ function ChatContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSessionLoading, setIsSessionLoading] = useState(false);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
-  
+
   // FIXED: Ensure messages is always initialized as an array
   const [messagesState, setMessagesState] = useState<Message[]>([]);
-  
-  // FIXED: Create a safe getter for messages that always returns an array
-  const messages = Array.isArray(messagesState) ? messagesState : [];
-  
+
+  // FIXED: Use useMemo for messages to avoid dependency issues
+  const messages = useMemo(
+    () => (Array.isArray(messagesState) ? messagesState : []),
+    [messagesState]
+  );
+
   // FIXED: Create a safe setter that only accepts arrays
-  const setMessages = useCallback((value: Message[] | ((prev: Message[]) => Message[])) => {
-    if (typeof value === 'function') {
-      setMessagesState(prev => {
-        const currentMessages = Array.isArray(prev) ? prev : [];
-        const newMessages = value(currentMessages);
-        return Array.isArray(newMessages) ? newMessages : [];
-      });
-    } else {
-      setMessagesState(Array.isArray(value) ? value : []);
-    }
-  }, []);
-  
+  const setMessages = useCallback(
+    (value: Message[] | ((prev: Message[]) => Message[])) => {
+      if (typeof value === "function") {
+        setMessagesState((prev) => {
+          const currentMessages = Array.isArray(prev) ? prev : [];
+          const newMessages = value(currentMessages);
+          return Array.isArray(newMessages) ? newMessages : [];
+        });
+      } else {
+        setMessagesState(Array.isArray(value) ? value : []);
+      }
+    },
+    []
+  );
+
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSession, setActiveSession] = useState<string | null>(null);
+  const [previousActiveSession, setPreviousActiveSession] = useState<
+    string | null
+  >(null);
   const [newTitle, setNewTitle] = useState("");
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
@@ -123,7 +122,7 @@ function ChatContent() {
       message: "Tell me about my neighborhood.",
     },
   ];
-  
+
   const getSessions = async () => {
     try {
       if (!isAuthenticated) {
@@ -186,74 +185,91 @@ function ChatContent() {
     }
   };
 
-  const getChats = async (sessionId: string) => {
-    if (isCreatingNewSession.current) {
-      return [];
-    }
-
-    const hasPendingMessage = messages.some(
-      (msg) => msg && msg.session === sessionId && !msg.response && !msg.error
-    );
-
-    if (hasPendingMessage) {
-      return [];
-    }
-
-    try {
-      const data = await chatAPI.getChatsBySession(sessionId);
-
-      // FIXED: Better validation of API response
-      if (!data || !data.results || !Array.isArray(data.results)) {
-        console.warn("Invalid response from getChatsBySession:", data);
+  const getChats = useCallback(
+    async (sessionId: string) => {
+      if (isCreatingNewSession.current) {
         return [];
       }
 
-      const sortedMessages = [...data.results].sort((a, b) => {
-        if (a.created_at && b.created_at) {
-          return (
-            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-          );
-        }
-        return 0;
-      });
-
-      // FIXED: Ensure we're working with valid message objects
-      const validMessages = sortedMessages.filter(msg => msg && typeof msg === 'object' && msg.id);
-
-      const existingMessageIds = new Set(messages.map((msg) => msg && msg.id).filter(Boolean));
-      const uniqueNewMessages = validMessages.filter(
-        (msg) => msg && !existingMessageIds.has(msg.id)
+      const hasPendingMessage = messages.some(
+        (msg) => msg && msg.session === sessionId && !msg.response && !msg.error
       );
 
       if (hasPendingMessage) {
-        const pendingMessages = messages.filter(
-          (msg) => msg && !msg.response && !msg.error
-        );
-        const nonPendingFetchedMessages = validMessages.filter(
-          (msg) => msg && !pendingMessages.some((pending) => pending && pending.id === msg.id)
-        );
-        setMessages([...nonPendingFetchedMessages, ...pendingMessages]);
-      } else {
-        if (messages.length === 0 || uniqueNewMessages.length > 0) {
-          setMessages(validMessages);
-        }
+        return [];
       }
 
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      }, 100);
+      try {
+        const data: any = await chatAPI.getChatsBySession(sessionId);
 
-      return validMessages;
-    } catch (error: unknown) {
-      console.error("Error fetching chats for session:", sessionId, error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch chat messages",
-        variant: "destructive",
-      });
-      return [];
-    }
-  };
+        // FIXED: Better validation of API response - handle both array and object responses
+        let results: any[];
+        if (Array.isArray(data)) {
+          results = data;
+        } else if (data && data.results && Array.isArray(data.results)) {
+          results = data.results;
+        } else {
+          console.warn("Invalid response from getChatsBySession:", data);
+          return [];
+        }
+
+        const sortedMessages = [...results].sort((a, b) => {
+          if (a.created_at && b.created_at) {
+            return (
+              new Date(a.created_at).getTime() -
+              new Date(b.created_at).getTime()
+            );
+          }
+          return 0;
+        });
+
+        // FIXED: Ensure we're working with valid message objects
+        const validMessages = sortedMessages.filter(
+          (msg) => msg && typeof msg === "object" && msg.id
+        );
+
+        const existingMessageIds = new Set(
+          messages.map((msg) => msg && msg.id).filter(Boolean)
+        );
+        const uniqueNewMessages = validMessages.filter(
+          (msg) => msg && !existingMessageIds.has(msg.id)
+        );
+
+        if (hasPendingMessage) {
+          const pendingMessages = messages.filter(
+            (msg) => msg && !msg.response && !msg.error
+          );
+          const nonPendingFetchedMessages = validMessages.filter(
+            (msg) =>
+              msg &&
+              !pendingMessages.some(
+                (pending) => pending && pending.id === msg.id
+              )
+          );
+          setMessages([...nonPendingFetchedMessages, ...pendingMessages]);
+        } else {
+          if (messages.length === 0 || uniqueNewMessages.length > 0) {
+            setMessages(validMessages);
+          }
+        }
+
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }, 100);
+
+        return validMessages;
+      } catch (error: unknown) {
+        console.error("Error fetching chats for session:", sessionId, error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch chat messages",
+          variant: "destructive",
+        });
+        return [];
+      }
+    },
+    [messages, setMessages]
+  );
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -267,14 +283,23 @@ function ChatContent() {
         (msg) => msg && msg.session === activeSession
       );
 
+      // Only show loading and fetch messages if we don't have messages for this session
       if (!hasMessagesForSession) {
         setIsSessionLoading(true);
         getChats(activeSession).finally(() => {
           setIsSessionLoading(false);
         });
       }
+
+      // Update the previous active session tracker
+      if (previousActiveSession !== activeSession) {
+        setPreviousActiveSession(activeSession);
+      }
+    } else if (!activeSession) {
+      // Reset when no active session
+      setPreviousActiveSession(null);
     }
-  }, [activeSession, messages]);
+  }, [activeSession, messages, getChats, previousActiveSession]);
 
   const refreshSessions = async () => {
     if (isAuthenticated) {
@@ -360,8 +385,23 @@ function ChatContent() {
       input: string,
       activeSession?: string,
       imageUrls?: string[],
-      options?: { signal?: AbortSignal; skipAddingTempMessage?: boolean; file?: File }
+      options?: {
+        signal?: AbortSignal;
+        skipAddingTempMessage?: boolean;
+        file?: File;
+      }
     ) => {
+      console.log("postChatWithImages: Received options:", options);
+      console.log("postChatWithImages: File received:", options?.file);
+      if (options?.file) {
+        console.log("postChatWithImages: File details:", {
+          name: options.file.name,
+          size: options.file.size,
+          type: options.file.type,
+          lastModified: options.file.lastModified,
+        });
+      }
+
       try {
         const tempMessageId = "temp-" + Date.now();
 
@@ -371,6 +411,9 @@ function ChatContent() {
           response: "",
           session: activeSession,
           imageUrls: imageUrls && imageUrls.length > 0 ? imageUrls : undefined,
+          // 🔥 CRITICAL FIX: Include file in temp message so it displays immediately
+          file: options?.file ? options.file.name : undefined, // Use filename for display
+          attachments: options?.file ? [options.file] : undefined, // Store actual file object
         };
 
         // Check if we should skip adding temp message (to avoid duplicates)
@@ -393,7 +436,9 @@ function ChatContent() {
           try {
             setMessages((prev) =>
               prev.map((msg) =>
-                msg && msg.id === tempMessageId ? { ...msg, isNewSession: true } : msg
+                msg && msg.id === tempMessageId
+                  ? { ...msg, isNewSession: true }
+                  : msg
               )
             );
 
@@ -423,9 +468,37 @@ function ChatContent() {
             );
           } catch (error) {
             console.error("Error creating session:", error);
+
+            const errorMessage =
+              error &&
+              typeof error === "object" &&
+              "response" in error &&
+              error.response &&
+              typeof error.response === "object" &&
+              "data" in error.response &&
+              error.response.data &&
+              typeof error.response.data === "object"
+                ? ("error" in error.response.data &&
+                  typeof error.response.data.error === "string"
+                    ? error.response.data.error
+                    : "") ||
+                  ("message" in error.response.data &&
+                  typeof error.response.data.message === "string"
+                    ? error.response.data.message
+                    : "")
+                : error instanceof Error
+                ? error.message
+                : "Failed to create session";
+
             setMessages((prev) =>
               prev.map((msg) =>
-                msg.id === tempMessageId ? { ...msg, error: true } : msg
+                msg.id === tempMessageId
+                  ? {
+                      ...msg,
+                      error: true,
+                      errorMessage: errorMessage,
+                    }
+                  : msg
               )
             );
             throw error;
@@ -450,44 +523,133 @@ function ChatContent() {
           // Include file if provided from handleSubmit options
           if (options?.file) {
             apiOptions.file = options.file;
+            console.log("postChatWithImages: Adding file to apiOptions:", {
+              name: options.file.name,
+              size: options.file.size,
+              type: options.file.type,
+            });
+            console.log(
+              "postChatWithImages: File instanceof File:",
+              options.file instanceof File
+            );
+            console.log("postChatWithImages: File object:", options.file);
+          } else {
+            console.log(
+              "postChatWithImages: No file in options or file is falsy"
+            );
+            console.log(
+              "postChatWithImages: options.file value:",
+              options?.file
+            );
           }
 
-          const data = await chatAPI.postNewChat(
-            input,
-            sessionId!,
+          console.log(
+            "postChatWithImages: Final apiOptions before API call:",
             apiOptions
           );
+          console.log(
+            "postChatWithImages: Final apiOptions.file:",
+            apiOptions.file
+          );
+
+          const data = await chatAPI.postNewChat(input, sessionId!, apiOptions);
           console.log("API Response data:", data);
           console.log("Original imageUrls:", imageUrls);
           setLatestMessageId(data.id);
 
           setMessages((prev) => {
-            const tempIndex = prev.findIndex((msg) => msg && msg.id === tempMessageId);
+            const tempIndex = prev.findIndex(
+              (msg) => msg && msg.id === tempMessageId
+            );
 
             if (tempIndex >= 0) {
               const newMessages = [...prev];
-              newMessages[tempIndex] = { 
-                ...data, 
+              // Get the temp message to preserve file information
+              const tempMessage = prev[tempIndex];
+
+              // Transform the API response to match Message interface
+              const transformedMessage: Message = {
+                id: data.id,
+                prompt: data.prompt,
+                response: data.response,
                 session: sessionId,
-                imageUrls: imageUrls && imageUrls.length > 0 ? imageUrls : undefined
+                classification: data.classification,
+                context: data.context,
+                image_url: data.image_url,
+                // 🔥 PRESERVE FILE: Use backend file if available, otherwise keep temp file
+                file: data.file || tempMessage?.file || undefined,
+                attachments: tempMessage?.attachments || undefined, // Preserve attachments
+                imageUrls:
+                  imageUrls && imageUrls.length > 0 ? imageUrls : undefined,
+                // Parse properties if it's a JSON string
+                properties: data.properties
+                  ? (() => {
+                      try {
+                        return JSON.parse(data.properties);
+                      } catch {
+                        return undefined;
+                      }
+                    })()
+                  : undefined,
               };
+              newMessages[tempIndex] = transformedMessage;
               return newMessages;
             } else {
-              const existingIndex = prev.findIndex((msg) => msg && msg.id === data.id);
+              const existingIndex = prev.findIndex(
+                (msg) => msg && msg.id === data.id
+              );
               if (existingIndex >= 0) {
                 const newMessages = [...prev];
-                newMessages[existingIndex] = { 
-                  ...data, 
+                // Transform the API response to match Message interface
+                const transformedMessage: Message = {
+                  id: data.id,
+                  prompt: data.prompt,
+                  response: data.response,
                   session: sessionId,
-                  imageUrls: imageUrls && imageUrls.length > 0 ? imageUrls : undefined
+                  classification: data.classification,
+                  context: data.context,
+                  image_url: data.image_url,
+                  file: data.file,
+                  imageUrls:
+                    imageUrls && imageUrls.length > 0 ? imageUrls : undefined,
+                  // Parse properties if it's a JSON string
+                  properties: data.properties
+                    ? (() => {
+                        try {
+                          return JSON.parse(data.properties);
+                        } catch {
+                          return undefined;
+                        }
+                      })()
+                    : undefined,
                 };
+                newMessages[existingIndex] = transformedMessage;
                 return newMessages;
               } else {
-                return [...prev, { 
-                  ...data, 
+                // Transform the API response to match Message interface
+                const transformedMessage: Message = {
+                  id: data.id,
+                  prompt: data.prompt,
+                  response: data.response,
                   session: sessionId,
-                  imageUrls: imageUrls && imageUrls.length > 0 ? imageUrls : undefined
-                }];
+                  classification: data.classification,
+                  context: data.context,
+                  image_url: data.image_url,
+                  file: data.file,
+                  imageUrls:
+                    imageUrls && imageUrls.length > 0 ? imageUrls : undefined,
+                  // Parse properties if it's a JSON string
+                  properties: data.properties
+                    ? (() => {
+                        try {
+                          return JSON.parse(data.properties);
+                        } catch {
+                          return undefined;
+                        }
+                      })()
+                    : undefined,
+                };
+                return [...prev, transformedMessage];
               }
             }
           });
@@ -518,10 +680,37 @@ function ChatContent() {
           return data;
         } catch (error) {
           console.error("Error posting chat:", error);
+
+          const postErrorMessage =
+            error &&
+            typeof error === "object" &&
+            "response" in error &&
+            error.response &&
+            typeof error.response === "object" &&
+            "data" in error.response &&
+            error.response.data &&
+            typeof error.response.data === "object"
+              ? ("error" in error.response.data &&
+                typeof error.response.data.error === "string"
+                  ? error.response.data.error
+                  : "") ||
+                ("message" in error.response.data &&
+                typeof error.response.data.message === "string"
+                  ? error.response.data.message
+                  : "")
+              : error instanceof Error
+              ? error.message
+              : "Failed to post chat";
+
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === tempMessageId
-                ? { ...msg, error: true, session: sessionId }
+                ? {
+                    ...msg,
+                    error: true,
+                    session: sessionId,
+                    errorMessage: postErrorMessage,
+                  }
                 : msg
             )
           );
@@ -564,9 +753,38 @@ function ChatContent() {
 
   // Enhanced handleSubmit with image and file support
   const handleSubmit = useCallback(
-    async (e: React.FormEvent, options?: { imageUrls?: string[]; file?: File }) => {
+    async (
+      e: React.FormEvent,
+      options?: { imageUrls?: string[]; file?: File }
+    ) => {
       e.preventDefault();
-      if (!input.trim() && (!options?.imageUrls || options.imageUrls.length === 0) && !options?.file) return;
+      console.log("Page handleSubmit: Received options:", options);
+      console.log("Page handleSubmit: File received:", options?.file);
+      console.log("Page handleSubmit: typeof file:", typeof options?.file);
+      console.log(
+        "Page handleSubmit: file instanceof File:",
+        options?.file instanceof File
+      );
+      if (options?.file) {
+        console.log("Page handleSubmit: File details:", {
+          name: options.file.name,
+          size: options.file.size,
+          type: options.file.type,
+          lastModified: options.file.lastModified,
+          constructor: options.file.constructor.name,
+        });
+        console.log(
+          "Page handleSubmit: File stringified:",
+          JSON.stringify(options.file)
+        );
+      }
+
+      if (
+        !input.trim() &&
+        (!options?.imageUrls || options.imageUrls.length === 0) &&
+        !options?.file
+      )
+        return;
 
       const imageUrls = options?.imageUrls || [];
       const file = options?.file;
@@ -653,10 +871,6 @@ function ChatContent() {
       } catch (error: unknown) {
         console.error("Error submitting card message:", error);
 
-        setMessages((prev) =>
-          prev.map((msg) => (msg && msg.id === tempId ? { ...msg, error: true } : msg))
-        );
-
         let errorMessage =
           "The server encountered an error. Please try again later.";
 
@@ -680,7 +894,36 @@ function ChatContent() {
           } else if (status === 500) {
             errorMessage = "Server error. Please try again later.";
           }
+
+          // Also try to get the specific error message from the response
+          if (
+            "data" in error.response &&
+            error.response.data &&
+            typeof error.response.data === "object"
+          ) {
+            const responseData = error.response.data as any;
+            if (responseData.error && typeof responseData.error === "string") {
+              errorMessage = responseData.error;
+            } else if (
+              responseData.message &&
+              typeof responseData.message === "string"
+            ) {
+              errorMessage = responseData.message;
+            }
+          }
         }
+
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg && msg.id === tempId
+              ? {
+                  ...msg,
+                  error: true,
+                  errorMessage: errorMessage,
+                }
+              : msg
+          )
+        );
 
         toast({
           title: "Error",

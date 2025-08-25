@@ -1,4 +1,4 @@
-   "use client";
+"use client";
 
 import { useRouter, usePathname } from "next/navigation";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -14,11 +14,8 @@ import {
   ArrowDown,
   Edit,
   MapPin,
-  Heart,
-  Phone,
   Eye,
   Trash2,
-  Loader2,
   ChevronDown,
   ChevronUp,
   Home,
@@ -69,12 +66,12 @@ const MessageImages: React.FC<{ imageUrls: string[] }> = ({ imageUrls }) => {
             />
             <div className="absolute inset-0 transition-opacity bg-black bg-opacity-0 group-hover:bg-opacity-10" />
           </div>
-          
+
           {/* Click handler to view full size */}
           <motion.button
             onClick={() => {
               // Open image in new tab
-              window.open(url, '_blank');
+              window.open(url, "_blank");
             }}
             className="absolute inset-0 flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100"
             whileHover={{ scale: 1.02 }}
@@ -90,46 +87,94 @@ const MessageImages: React.FC<{ imageUrls: string[] }> = ({ imageUrls }) => {
 };
 
 // Add MessageFiles component for displaying file attachments
-const MessageFiles: React.FC<{ file: string | null }> = ({ file }) => {
-  if (!file) return null;
+const MessageFiles: React.FC<{ file: string | null; attachments?: File[] }> = ({
+  file,
+  attachments,
+}) => {
+  // Handle both backend file URLs and local File objects
+  const hasFile = file || (attachments && attachments.length > 0);
+  if (!hasFile) return null;
+
+  // If we have attachments (File objects), use the first one
+  const fileObject =
+    attachments && attachments.length > 0 ? attachments[0] : null;
+  const fileName = fileObject
+    ? fileObject.name
+    : file
+    ? file.split("/").pop() || file
+    : "Unknown file";
+  const fileSize = fileObject ? fileObject.size : null;
 
   const getFileIcon = (fileName: string) => {
-    const extension = fileName.split('.').pop()?.toLowerCase();
+    const extension = fileName.split(".").pop()?.toLowerCase();
     switch (extension) {
-      case 'pdf':
-        return '📄';
-      case 'doc':
-      case 'docx':
-        return '📝';
-      case 'txt':
-        return '📝';
-      case 'xls':
-      case 'xlsx':
-        return '📊';
-      case 'ppt':
-      case 'pptx':
-        return '📎';
+      case "pdf":
+        return "📄";
+      case "doc":
+      case "docx":
+        return "📝";
+      case "txt":
+        return "�";
+      case "csv":
+        return "📊";
+      case "xls":
+      case "xlsx":
+        return "📊";
+      case "ppt":
+      case "pptx":
+        return "📎";
       default:
-        return '📁';
+        return "📁";
+    }
+  };
+
+  const getFileType = (fileName: string) => {
+    const extension = fileName.split(".").pop()?.toLowerCase();
+    switch (extension) {
+      case "pdf":
+        return "PDF Document";
+      case "doc":
+      case "docx":
+        return "Word Document";
+      case "txt":
+        return "Text File";
+      case "csv":
+        return "CSV File";
+      case "xls":
+      case "xlsx":
+        return "Excel Spreadsheet";
+      case "ppt":
+      case "pptx":
+        return "PowerPoint Presentation";
+      default:
+        return "Document";
     }
   };
 
   const handleFileClick = () => {
-    if (file.startsWith('http')) {
-      // If it's a URL, open in new tab
-      window.open(file, '_blank');
-    } else {
-      // If it's a file name, trigger download (you may need to adjust this based on your backend)
-      const link = document.createElement('a');
-      link.href = file;
-      link.download = file.split('/').pop() || 'file';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    if (fileObject) {
+      // For File objects, create a temporary URL for viewing
+      const url = URL.createObjectURL(fileObject);
+      window.open(url, "_blank");
+      // Clean up the URL after a delay to prevent memory leaks
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } else if (file) {
+      if (file.startsWith("http")) {
+        // If it's a URL, open in new tab
+        window.open(file, "_blank");
+      } else {
+        // Create a proper download URL based on your backend setup
+        const downloadUrl = file.startsWith("/") ? file : `/${file}`;
+        window.open(downloadUrl, "_blank");
+      }
     }
   };
 
-  const fileName = file.split('/').pop() || file;
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
   return (
     <motion.div
@@ -140,20 +185,22 @@ const MessageFiles: React.FC<{ file: string | null }> = ({ file }) => {
     >
       <motion.button
         onClick={handleFileClick}
-        className="flex items-center gap-2 p-3 transition-all border rounded-lg cursor-pointer bg-muted/50 hover:bg-muted border-border hover:border-border/60"
+        className="flex items-center gap-3 p-3 transition-all border rounded-lg cursor-pointer bg-muted/50 hover:bg-muted border-border hover:border-border/60 hover:shadow-md"
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
       >
-        <span className="text-lg">{getFileIcon(fileName)}</span>
-        <div className="flex flex-col items-start">
+        <span className="text-2xl">{getFileIcon(fileName)}</span>
+        <div className="flex flex-col items-start flex-1">
           <span className="text-sm font-medium text-foreground truncate max-w-[200px]">
             {fileName}
           </span>
           <span className="text-xs text-muted-foreground">
-            Click to view/download
+            {getFileType(fileName)}
+            {fileSize && ` • ${formatFileSize(fileSize)}`}
+            {fileObject ? " • Click to view" : " • Click to view/download"}
           </span>
         </div>
-        <Eye className="w-4 h-4 text-muted-foreground ml-auto" />
+        <Eye className="w-4 h-4 ml-auto text-muted-foreground" />
       </motion.button>
     </motion.div>
   );
@@ -171,7 +218,7 @@ const parsePropertyData = (message: any): Context[] => {
     if (typeof message.context === "string" && message.context.trim()) {
       try {
         const parsed = JSON.parse(message.context);
-          return Array.isArray(parsed) ? parsed : [parsed];
+        return Array.isArray(parsed) ? parsed : [parsed];
       } catch (error) {
         console.error("Failed to parse property context:", error);
         return [];
@@ -306,7 +353,7 @@ const getChatsBySessionWithRetry = async (
       retries++;
       console.error(
         `Attempt ${retries} failed for session ${sessionId}:`,
-`Attempt ${retries} failed for session ${sessionId}:`,
+        `Attempt ${retries} failed for session ${sessionId}:`,
         error
       );
 
@@ -409,6 +456,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
   messages: messagesProp,
   isLoading,
   setIsLoading,
+  isSessionLoading,
   latestMessageId,
   setLatestMessageId,
   messagesEndRef,
@@ -531,7 +579,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
           setMessages([]);
         }
         setSessionLoadingState((prev) => ({
-              ...prev,
+          ...prev,
           isLoading: false,
           currentSessionId: null,
         }));
@@ -548,7 +596,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
       if (sessionIdFromUrl === activeSession && messages.length > 0) {
         setSessionLoadingState((prev) => ({
-            ...prev,
+          ...prev,
           lastLoadedSessionId: sessionIdFromUrl,
         }));
         return;
@@ -566,27 +614,52 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         }
 
         const chats = await getChatsBySessionWithRetry(sessionIdFromUrl);
-        
+
+        // Debug logging to see what the API is returning
+        console.log(
+          "API returned chats:",
+          chats,
+          "Type:",
+          typeof chats,
+          "Is array:",
+          Array.isArray(chats)
+        );
+
+        // Ensure chats is an array before trying to map over it
+        const chatsArray = Array.isArray(chats) ? chats : [];
+
+        if (!Array.isArray(chats)) {
+          console.warn(
+            "Expected chats to be an array, but got:",
+            typeof chats,
+            chats
+          );
+        }
+
         // Transform messages from API to match Message interface
-        const transformedChats = (chats || []).map((chat: any): Message => ({
-          id: chat.id,
-          prompt: chat.prompt,
-          response: chat.response,
-          session: chat.session,
-          classification: chat.classification,
-          context: chat.context,
-          image_url: chat.image_url,
-          file: chat.file,
-          // Parse properties if it's a JSON string
-          properties: chat.properties ? (() => {
-            try {
-              return JSON.parse(chat.properties);
-            } catch {
-              return undefined;
-            }
-          })() : undefined,
-        }));
-        
+        const transformedChats = chatsArray.map(
+          (chat: any): Message => ({
+            id: chat.id,
+            prompt: chat.prompt,
+            response: chat.response,
+            session: chat.session,
+            classification: chat.classification,
+            context: chat.context,
+            image_url: chat.image_url,
+            file: chat.file,
+            // Parse properties if it's a JSON string
+            properties: chat.properties
+              ? (() => {
+                  try {
+                    return JSON.parse(chat.properties);
+                  } catch {
+                    return undefined;
+                  }
+                })()
+              : undefined,
+          })
+        );
+
         setMessages(transformedChats);
 
         setSessionLoadingState({
@@ -677,7 +750,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     if (
       activeSession &&
       messagesArray.length > 0 &&
-      !sessionLoadingState.isLoading
+      !sessionLoadingState.isLoading &&
+      !isSessionLoading
     ) {
       const timer = setTimeout(() => {
         scrollToBottom();
@@ -685,19 +759,34 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
       return () => clearTimeout(timer);
     }
-  }, [activeSession, scrollToBottom, sessionLoadingState.isLoading, messages]);
+  }, [
+    activeSession,
+    scrollToBottom,
+    sessionLoadingState.isLoading,
+    isSessionLoading,
+    messages,
+  ]);
 
   useEffect(() => {
     const messagesArray = Array.isArray(messages) ? messages : [];
 
-    if (messagesArray.length > 0 && !sessionLoadingState.isLoading) {
+    if (
+      messagesArray.length > 0 &&
+      !sessionLoadingState.isLoading &&
+      !isSessionLoading
+    ) {
       const timer = setTimeout(() => {
         scrollToBottom();
       }, 200);
 
       return () => clearTimeout(timer);
     }
-  }, [messages, sessionLoadingState.isLoading, scrollToBottom]);
+  }, [
+    messages,
+    sessionLoadingState.isLoading,
+    isSessionLoading,
+    scrollToBottom,
+  ]);
 
   useEffect(() => {
     const container = chatContainerRef.current;
@@ -798,8 +887,38 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
       });
     } catch (error) {
       console.error("Failed to resend message:", error);
+
+      const errorMessage =
+        error &&
+        typeof error === "object" &&
+        "response" in error &&
+        error.response &&
+        typeof error.response === "object" &&
+        "data" in error.response &&
+        error.response.data &&
+        typeof error.response.data === "object"
+          ? ("error" in error.response.data &&
+            typeof error.response.data.error === "string"
+              ? error.response.data.error
+              : "") ||
+            ("message" in error.response.data &&
+            typeof error.response.data.message === "string"
+              ? error.response.data.message
+              : "")
+          : error instanceof Error
+          ? error.message
+          : "Failed to resend message";
+
       setMessages((prev) =>
-        prev.map((m) => (m.id === messageId ? { ...m, error: true } : m))
+        prev.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                error: true,
+                errorMessage: errorMessage,
+              }
+            : m
+        )
       );
     }
   };
@@ -819,13 +938,17 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
       // Prepare options with image URLs if they exist
       const apiOptions: { file?: string } = {};
       if (message.imageUrls && message.imageUrls.length > 0) {
-        apiOptions.file = message.imageUrls.join(','); // Send as comma-separated string
+        apiOptions.file = message.imageUrls.join(","); // Send as comma-separated string
       }
 
-      const data = await chatAPI.postNewChat(message.prompt, activeSession, apiOptions);
+      const data = await chatAPI.postNewChat(
+        message.prompt,
+        activeSession,
+        apiOptions
+      );
 
       setLatestMessageId(data.id);
-      
+
       // Transform the API response properly
       const transformedMessage: Message = {
         id: data.id,
@@ -840,19 +963,19 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         image_url: data.image_url,
         file: data.file,
         // Parse properties if it's a JSON string
-        properties: data.properties ? (() => {
-          try {
-            return JSON.parse(data.properties);
-          } catch {
-            return undefined;
-          }
-        })() : undefined,
+        properties: data.properties
+          ? (() => {
+              try {
+                return JSON.parse(data.properties);
+              } catch {
+                return undefined;
+              }
+            })()
+          : undefined,
       };
 
       setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === message.id ? transformedMessage : msg
-        )
+        prev.map((msg) => (msg.id === message.id ? transformedMessage : msg))
       );
 
       setParsedPropertyData((prev) => {
@@ -870,9 +993,22 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     } catch (error: any) {
       console.error("Error retrying message:", error);
 
+      const errorMessage =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to retry message";
+
       setMessages((prev) =>
         prev.map((msg) =>
-          msg.id === message.id ? { ...msg, retrying: false, error: true } : msg
+          msg.id === message.id
+            ? {
+                ...msg,
+                retrying: false,
+                error: true,
+                errorMessage: errorMessage,
+              }
+            : msg
         )
       );
 
@@ -946,6 +1082,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
       return;
     }
 
+    // Use the handleCardClick prop if available (preferred approach)
     if (handleCardClick) {
       try {
         await handleCardClick(card);
@@ -976,21 +1113,20 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
       return;
     }
 
+    // Fallback: handle card submission directly (only if handleCardClick is not available)
     setIsLoading(true);
     const messageText = card.message;
+    const tempId = `temp-${Date.now()}`;
 
-    const isDuplicate = messages.some(
-      (msg) =>
-        msg.prompt === messageText &&
-        (!msg.response || msg.response === "") &&
-        msg.session === activeSession
-    );
+    // Create a temporary message
+    const tempMessage: Message = {
+      id: tempId,
+      prompt: messageText,
+      response: "",
+      session: activeSession,
+    };
 
-    if (!isDuplicate) {
-      const tempId = `temp-${Date.now()}`;
-      const userMessage = { id: tempId, prompt: messageText, response: "" };
-      setMessages((prev) => [...prev, userMessage]);
-    }
+    setMessages((prev) => [...prev, tempMessage]);
 
     try {
       let data;
@@ -1001,14 +1137,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
           chat_title: messageText.substring(0, 30),
           user: user?.id || "guest",
         };
-
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.prompt === messageText && !msg.response
-              ? { ...msg, isNewSession: true }
-              : msg
-          )
-        );
 
         const sessionResponse = await chatAPI.createChatSession(sessionData);
         currentSessionId = sessionResponse.id;
@@ -1022,14 +1150,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
           }
           return prev;
         });
-
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.prompt === messageText && !msg.response
-              ? { ...msg, session: currentSessionId, isNewSession: true }
-              : msg
-          )
-        );
 
         data = await chatAPI.postNewChat(
           messageText,
@@ -1045,7 +1165,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
       }
 
       setLatestMessageId(data.id);
-      
+
       // Transform the API response to match the Message interface
       const transformedMessage: Message = {
         id: data.id,
@@ -1057,41 +1177,39 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         image_url: data.image_url,
         file: data.file,
         // Parse properties if it's a JSON string
-        properties: data.properties ? (() => {
-          try {
-            return JSON.parse(data.properties);
-          } catch {
-            return undefined;
-          }
-        })() : undefined,
+        properties: data.properties
+          ? (() => {
+              try {
+                return JSON.parse(data.properties);
+              } catch {
+                return undefined;
+              }
+            })()
+          : undefined,
       };
 
-      setMessages((prev) => {
-        const tempIndex = prev.findIndex(
-          (msg) => msg.prompt === messageText && !msg.response && !msg.error
-        );
-
-        if (tempIndex >= 0) {
-          const newMessages = [...prev];
-          newMessages[tempIndex] = transformedMessage;
-          return newMessages;
-        } else {
-          const existingIndex = prev.findIndex((msg) => msg.id === data.id);
-          if (existingIndex >= 0) {
-            const newMessages = [...prev];
-            newMessages[existingIndex] = transformedMessage;
-            return newMessages;
-          } else {
-            return [...prev, transformedMessage];
-          }
-        }
-      });
+      // Replace the temporary message with the actual response
+      setMessages((prev) =>
+        prev.map((msg) => (msg.id === tempId ? transformedMessage : msg))
+      );
     } catch (error: any) {
       console.error("Error submitting card message:", error);
+
+      const cardErrorMessage =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to submit message";
+
       setMessages((prev) =>
         prev.map((msg) =>
-          msg.prompt === messageText && !msg.response
-            ? { ...msg, error: true, session: activeSession }
+          msg.id === tempId
+            ? {
+                ...msg,
+                error: true,
+                session: activeSession,
+                errorMessage: cardErrorMessage,
+              }
             : msg
         )
       );
@@ -1151,7 +1269,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
       const isExpanded = expandedProperties[message.id] || false;
 
-        return (
+      return (
         <div className="my-4 space-y-4">
           {/* Toggle Button */}
           <div className="flex items-center justify-between">
@@ -1177,7 +1295,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
           {/* Property Display */}
           <AnimatePresence mode="wait">
             {isExpanded && (
-                    <motion.div
+              <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
@@ -1190,11 +1308,11 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                     property={property}
                   />
                 ))}
-                    </motion.div>
+              </motion.div>
             )}
           </AnimatePresence>
-          </div>
-        );
+        </div>
+      );
     },
     [parsedPropertyData, expandedProperties, togglePropertyExpansion]
   );
@@ -1210,7 +1328,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
           "pb-[calc(70px+1rem)]"
         )}
       >
-        {sessionLoadingState.isLoading ? (
+        {sessionLoadingState.isLoading || isSessionLoading ? (
           <LoaderAnimation variant="typing" text="Loading chat session" />
         ) : (
           <div className="flex flex-col w-full p-4 mx-auto md:max-w-5xl">
@@ -1218,26 +1336,27 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
             {activeSession &&
               Array.isArray(messages) &&
               messages.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="w-full pb-2 mb-4 border-b border-border"
-              >
-                <h2 className="w-full font-medium text-center uppercase md:w-full text-foreground text-md">
-                  {sessions.find((s: any) => s.id === activeSession)
-                    ?.chat_title || "Chat Session"}
-                </h2>
-                <p className="text-xs text-center text-muted-foreground">
-                  Continue your conversation in this session
-                </p>
-              </motion.div>
-            )}
+                <motion.div
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="w-full pb-2 mb-4 border-b border-border"
+                >
+                  <h2 className="w-full font-medium text-center uppercase md:w-full text-foreground text-md">
+                    {sessions.find((s: any) => s.id === activeSession)
+                      ?.chat_title || "Chat Session"}
+                  </h2>
+                  <p className="text-xs text-center text-muted-foreground">
+                    Continue your conversation in this session
+                  </p>
+                </motion.div>
+              )}
 
             {/* Welcome Screen */}
             {(!Array.isArray(messages) || messages.length === 0) &&
               !isLoading &&
-              !sessionLoadingState.isLoading && (
+              !sessionLoadingState.isLoading &&
+              !isSessionLoading && (
                 <motion.div
                   className={cn(
                     "flex flex-col items-center justify-center max-w-[600px] h-[60vh] md:min-h-[63vh] mx-auto",
@@ -1247,101 +1366,101 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.5 }}
                 >
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.5 }}
-                >
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.5 }}
+                  >
                     <h1 className="mb-8 text-center md:text-[32px] text-foreground">
-                    {isAuthenticated
-                      ? `Hi ${
-                          user?.first_name
-                            ? user?.first_name + " " + user?.last_name
-                            : "there"
-                        }! How can I assist you today?`
-                      : "Hi! How can I assist you today?"}
-                  </h1>
-                </motion.div>
+                      {isAuthenticated
+                        ? `Hi ${
+                            user?.first_name
+                              ? user?.first_name + " " + user?.last_name
+                              : "there"
+                          }! How can I assist you today?`
+                        : "Hi! How can I assist you today?"}
+                    </h1>
+                  </motion.div>
 
                   {/* Action Cards */}
                   <div className="grid grid-cols-2 gap-3 w-full text-center mx-auto max-w-[620px]">
-                  {actionCards.slice(0, 2).map((card, index) => (
-                    <motion.div
-                      key={card.title}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: index * 0.1 }}
-                    >
-                      <Card
-                        className={`md:p-1 py-[0.5px] transition-all cursor-pointer border-[1px] border-border md:py-8 bg-gradient-to-br from-[#1e1e1e] to-[#2a2a2a] hover:from-[#2a2a2a] hover:to-[#3a3a3a] hover:shadow-lg hover:shadow-purple-500/10 rounded-full md:rounded-[10px] hover:scale-90 ${
-                          cardLoading === card.title || isLoading
-                            ? "opacity-70 pointer-events-none"
-                            : ""
-                        }`}
-                        onClick={() => handleCardSubmit(card)}
+                    {actionCards.slice(0, 2).map((card, index) => (
+                      <motion.div
+                        key={card.title}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: index * 0.1 }}
                       >
-                        <div className="flex items-center justify-center md:gap-3 lg:flex-col">
-                          <div className="p-2 md:border-2 border-border md:block rounded-[10px]">
-                              <span className="text-[20px]">{card.image}</span>
-                          </div>
-                          <div className="text-center">
-                            <h3 className="md:mb-1 md:font-medium text-white text-[14px] md:text-[15px] text-wrap overflow-hidden text-ellipsis">
-                              {card.title}
-                            </h3>
-                            <p className="hidden text-sm text-muted-foreground md:block">
-                              {card.description}
-                            </p>
-                          </div>
-                        </div>
-                      </Card>
-                    </motion.div>
-                  ))}
-                </div>
-
-                  <div className="flex flex-col justify-center items-center w-full gap-4 mt-4 md:flex-row md:w-[620px]">
-                  {actionCards.slice(2).map((card, index) => (
-                    <motion.div
-                      key={card.title}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: (index + 2) * 0.1 }}
-                      className={
-                        index === 0
-                          ? "md:w-full w-[155px]"
-                          : "md:w-full w-[210px]"
-                      }
-                    >
-                      <Card
-                        className={`md:p-1 py-[0.5px] transition-colors cursor-pointer rounded-full md:rounded-[10px] border-[1px] border-border md:py-8 bg-card bg-gradient-to-br from-[#1e1e1e] to-[#2a2a2a] hover:from-[#2a2a2a] hover:to-[#3a3a3a] hover:shadow-lg hover:shadow-purple-500/10 hover:bg-muted mx-auto hover:scale-90 ${
-                          cardLoading === card.title || isLoading
-                            ? "opacity-70 pointer-events-none"
-                            : ""
-                        } ${
-                          index === 0
-                            ? "md:w-full w-[160px]"
-                            : "md:w-full w-[210px]"
-                        }`}
-                        onClick={() => handleCardSubmit(card)}
-                      >
-                        <div className="flex items-center justify-center md:gap-3 lg:flex-col">
+                        <Card
+                          className={`md:p-1 py-[0.5px] transition-all cursor-pointer border-[1px] border-border md:py-8 bg-gradient-to-br from-[#1e1e1e] to-[#2a2a2a] hover:from-[#2a2a2a] hover:to-[#3a3a3a] hover:shadow-lg hover:shadow-purple-500/10 rounded-full md:rounded-[10px] hover:scale-90 ${
+                            cardLoading === card.title || isLoading
+                              ? "opacity-70 pointer-events-none"
+                              : ""
+                          }`}
+                          onClick={() => handleCardSubmit(card)}
+                        >
+                          <div className="flex items-center justify-center md:gap-3 lg:flex-col">
                             <div className="p-2 md:border-2 border-border md:block rounded-[10px]">
                               <span className="text-[20px]">{card.image}</span>
+                            </div>
+                            <div className="text-center">
+                              <h3 className="md:mb-1 md:font-medium text-white text-[14px] md:text-[15px] text-wrap overflow-hidden text-ellipsis">
+                                {card.title}
+                              </h3>
+                              <p className="hidden text-sm text-muted-foreground md:block">
+                                {card.description}
+                              </p>
+                            </div>
                           </div>
-                          <div className="text-center">
-                            <h3 className="md:mb-1 md:font-medium text-white text-[14px] md:text-[15px] text-wrap overflow-hidden text-ellipsis">
-                              {card.title}
-                            </h3>
-                            <p className="hidden text-sm text-muted-foreground md:block">
-                              {card.description}
-                            </p>
+                        </Card>
+                      </motion.div>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-col justify-center items-center w-full gap-4 mt-4 md:flex-row md:w-[620px]">
+                    {actionCards.slice(2).map((card, index) => (
+                      <motion.div
+                        key={card.title}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: (index + 2) * 0.1 }}
+                        className={
+                          index === 0
+                            ? "md:w-full w-[155px]"
+                            : "md:w-full w-[210px]"
+                        }
+                      >
+                        <Card
+                          className={`md:p-1 py-[0.5px] transition-colors cursor-pointer rounded-full md:rounded-[10px] border-[1px] border-border md:py-8 bg-card bg-gradient-to-br from-[#1e1e1e] to-[#2a2a2a] hover:from-[#2a2a2a] hover:to-[#3a3a3a] hover:shadow-lg hover:shadow-purple-500/10 hover:bg-muted mx-auto hover:scale-90 ${
+                            cardLoading === card.title || isLoading
+                              ? "opacity-70 pointer-events-none"
+                              : ""
+                          } ${
+                            index === 0
+                              ? "md:w-full w-[160px]"
+                              : "md:w-full w-[210px]"
+                          }`}
+                          onClick={() => handleCardSubmit(card)}
+                        >
+                          <div className="flex items-center justify-center md:gap-3 lg:flex-col">
+                            <div className="p-2 md:border-2 border-border md:block rounded-[10px]">
+                              <span className="text-[20px]">{card.image}</span>
+                            </div>
+                            <div className="text-center">
+                              <h3 className="md:mb-1 md:font-medium text-white text-[14px] md:text-[15px] text-wrap overflow-hidden text-ellipsis">
+                                {card.title}
+                              </h3>
+                              <p className="hidden text-sm text-muted-foreground md:block">
+                                {card.description}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      </Card>
-                    </motion.div>
-                  ))}
-                </div>
+                        </Card>
+                      </motion.div>
+                    ))}
+                  </div>
                 </motion.div>
-            )}
+              )}
 
             {/* Chat Messages */}
             {messages.length > 0 && (
@@ -1356,190 +1475,228 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                       index === messages.length - 1;
 
                     return (
-                    <motion.div
-                      key={index}
+                      <motion.div
+                        key={index}
                         ref={isLastPrompt ? lastPromptRef : null}
-                      className="w-full space-y-2 group"
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3 }}
-                    >
+                        className="w-full space-y-2 group"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3 }}
+                      >
                         {/* User Message */}
                         <div className="relative flex justify-end w-full">
-                        <div className="flex gap-1 p-1 transition-opacity duration-200 rounded-full opacity-0 bg-background/80 backdrop-blur-sm group-hover:opacity-100">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="w-6 h-6 p-1 text-gray-400 hover:text-white"
-                            onClick={() => setEditingMessageId(message.id)}
-                          >
-                            <Edit className="w-3 h-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="w-6 h-6 p-1 text-gray-400 hover:text-red-500"
-                            onClick={() => {
-                              deleteChatById(message.id);
-                              setMessages((prev) =>
-                                prev.filter((msg) => msg.id !== message.id)
-                              );
-                            }}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
+                          <div className="flex gap-1 p-1 transition-opacity duration-200 rounded-full opacity-0 bg-background/80 backdrop-blur-sm group-hover:opacity-100">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-6 h-6 p-1 text-gray-400 hover:text-white"
+                              onClick={() => setEditingMessageId(message.id)}
+                            >
+                              <Edit className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-6 h-6 p-1 text-gray-400 hover:text-red-500"
+                              onClick={() => {
+                                deleteChatById(message.id);
+                                setMessages((prev) =>
+                                  prev.filter((msg) => msg.id !== message.id)
+                                );
+                              }}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
 
-                        {editingMessageId === message.id ? (
-                          <div className="w-full max-w-[80%]">
-                            <Textarea
-                              value={editedPrompt}
+                          {editingMessageId === message.id ? (
+                            <div className="w-full max-w-[80%]">
+                              <Textarea
+                                value={editedPrompt}
                                 onChange={(e) =>
                                   setEditedPrompt(e.target.value)
                                 }
-                              className="min-h-[100px] bg-muted border-border"
-                            />
-                            <div className="flex gap-2 mt-2">
-                              <Button
-                                size="sm"
-                                className="bg-gradient-to-r from-[#FFD700] to-[#780991] hover:from-yellow-600 hover:to-pink-600"
-                                onClick={async () => {
-                                  setMessages((prev) =>
-                                    prev.map((msg) =>
-                                      msg.id === message.id
-                                        ? { ...msg, isResending: true }
-                                        : msg
-                                    )
-                                  );
-
-                                  try {
-                                    await handleResendMessage(
-                                      message.id,
-                                      editedPrompt,
-                                      message.session || activeSession || ""
-                                    );
-                                  } finally {
+                                className="min-h-[100px] bg-muted border-border"
+                              />
+                              <div className="flex gap-2 mt-2">
+                                <Button
+                                  size="sm"
+                                  className="bg-gradient-to-r from-[#FFD700] to-[#780991] hover:from-yellow-600 hover:to-pink-600"
+                                  onClick={async () => {
                                     setMessages((prev) =>
                                       prev.map((msg) =>
                                         msg.id === message.id
-                                          ? { ...msg, isResending: false }
+                                          ? { ...msg, isResending: true }
                                           : msg
                                       )
                                     );
-                                    setEditingMessageId(null);
-                                  }
-                                }}
-                                disabled={message.isResending}
-                              >
-                                {message.isResending ? (
-                                  <div className="flex items-center">
-                                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                                    Resending...
-                                  </div>
-                                ) : (
-                                  "Resend"
-                                )}
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setEditingMessageId(null)}
-                                disabled={message.isResending}
-                              >
-                                Cancel
-                              </Button>
+
+                                    try {
+                                      await handleResendMessage(
+                                        message.id,
+                                        editedPrompt,
+                                        message.session || activeSession || ""
+                                      );
+                                    } finally {
+                                      setMessages((prev) =>
+                                        prev.map((msg) =>
+                                          msg.id === message.id
+                                            ? { ...msg, isResending: false }
+                                            : msg
+                                        )
+                                      );
+                                      setEditingMessageId(null);
+                                    }
+                                  }}
+                                  disabled={message.isResending}
+                                >
+                                  {message.isResending ? (
+                                    <div className="flex items-center">
+                                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                                      Resending...
+                                    </div>
+                                  ) : (
+                                    "Resend"
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setEditingMessageId(null)}
+                                  disabled={message.isResending}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          <div className="max-w-[80%] flex flex-col items-end space-y-3">
-                            {/* Display attached images for user message - legacy imageUrls */}
-                            {message?.imageUrls && (
-                              <motion.div
-                                className="w-[70%] md:w-[60%] mb-2"
-                                initial={{ scale: 0.95, x: 20 }}
-                                animate={{ scale: 1, x: 0 }}
-                                transition={{ duration: 0.2 }}
-                              >
-                                <MessageImages imageUrls={message.imageUrls} />
-                              </motion.div>
-                            )}
+                          ) : (
+                            <div className="max-w-[80%] flex flex-col items-end space-y-3">
+                              {/* Display attached images for user message - legacy imageUrls */}
+                              {message?.imageUrls && (
+                                <motion.div
+                                  className="w-[70%] md:w-[60%] mb-2"
+                                  initial={{ scale: 0.95, x: 20 }}
+                                  animate={{ scale: 1, x: 0 }}
+                                  transition={{ duration: 0.2 }}
+                                >
+                                  <MessageImages
+                                    imageUrls={message.imageUrls}
+                                  />
+                                </motion.div>
+                              )}
 
-                            {/* Display attached image from API - single image_url */}
-                            {message?.image_url && (
-                              <motion.div
-                                className="w-[70%] md:w-[60%] mb-2"
-                                initial={{ scale: 0.95, x: 20 }}
-                                animate={{ scale: 1, x: 0 }}
-                                transition={{ duration: 0.2 }}
-                              >
-                                <MessageImages imageUrls={[message.image_url]} />
-                              </motion.div>
-                            )}
+                              {/* Display attached image from API - single image_url */}
+                              {message?.image_url && (
+                                <motion.div
+                                  className="w-[70%] md:w-[60%] mb-2"
+                                  initial={{ scale: 0.95, x: 20 }}
+                                  animate={{ scale: 1, x: 0 }}
+                                  transition={{ duration: 0.2 }}
+                                >
+                                  <MessageImages
+                                    imageUrls={[message.image_url]}
+                                  />
+                                </motion.div>
+                              )}
 
-                            {/* Display attached file from API */}
-                            {message?.file && (
+                              {/* Display attached file from API */}
+                              {message?.file && (
+                                <motion.div
+                                  className="w-[70%] md:w-[60%] mb-2"
+                                  initial={{ scale: 0.95, x: 20 }}
+                                  animate={{ scale: 1, x: 0 }}
+                                  transition={{ duration: 0.2 }}
+                                >
+                                  {/* Check if file contains image URLs (Cloudinary uploads) */}
+                                  {message.file.startsWith("http") &&
+                                  (message.file.includes("cloudinary.com") ||
+                                    message.file.match(
+                                      /\.(jpg|jpeg|png|gif|bmp|webp)$/i
+                                    )) ? (
+                                    <MessageImages imageUrls={[message.file]} />
+                                  ) : (
+                                    <MessageFiles
+                                      file={message.file}
+                                      attachments={message.attachments}
+                                    />
+                                  )}
+                                </motion.div>
+                              )}
+
                               <motion.div
-                                className="w-[70%] md:w-[60%] mb-2"
+                                className={`rounded-[10px] rounded-tr-none p-4 border-2 border-border ${
+                                  message?.response ? "" : "bg-muted"
+                                }`}
                                 initial={{ scale: 0.95, x: 20 }}
                                 animate={{ scale: 1, x: 0 }}
-                                transition={{ duration: 0.2 }}
+                                transition={{ duration: 0.2, delay: 0.1 }}
+                                layout
                               >
-                                <MessageFiles file={message.file} />
+                                <p className="text-white whitespace-pre-wrap">
+                                  {message?.prompt}
+                                </p>
                               </motion.div>
-                            )}
-                            
-                            <motion.div
-                              className={`rounded-[10px] rounded-tr-none p-4 border-2 border-border ${
-                                message?.response ? "" : "bg-muted"
-                              }`}
-                              initial={{ scale: 0.95, x: 20 }}
-                              animate={{ scale: 1, x: 0 }}
-                              transition={{ duration: 0.2, delay: 0.1 }}
-                              layout
-                            >
-                              <p className="text-white whitespace-pre-wrap">
-                                {message?.prompt}
-                              </p>
-                            </motion.div>
-                          </div>
-                        )}
-                      </div>
+                            </div>
+                          )}
+                        </div>
 
                         {/* AI Response */}
-                      {message.response ? (
+                        {message.response ? (
                           <div className="flex items-center w-full">
-                        <motion.div
-                          className="flex items-start gap-2 md:gap-4 md:max-w-[80%] w-full rounded-lg md:p-4 mt-2"
-                          initial={{ scale: 0.95, x: -20 }}
-                          animate={{ scale: 1, x: 0 }}
-                          transition={{ duration: 0.2, delay: 0.1 }}
-                        >
-                          <motion.div
-                            initial={{ scale: 0.8 }}
-                            animate={{ scale: 1 }}
-                            transition={{ duration: 0.2 }}
-                          >
-                            <Image
-                              src={star || "/placeholder.svg"}
-                              alt="Response Image"
-                              className="relative object-cover w-5 h-5 rounded-full md:w-8 md:h-8 ml-[-2px]"
-                            />
-                          </motion.div>
-                          <div className="flex-1 min-w-0 rounded-lg">
+                            <motion.div
+                              className="flex items-start gap-2 md:gap-4 md:max-w-[80%] w-full rounded-lg md:p-4 mt-2"
+                              initial={{ scale: 0.95, x: -20 }}
+                              animate={{ scale: 1, x: 0 }}
+                              transition={{ duration: 0.2, delay: 0.1 }}
+                            >
+                              <motion.div
+                                initial={{ scale: 0.8 }}
+                                animate={{ scale: 1 }}
+                                transition={{ duration: 0.2 }}
+                              >
+                                <Image
+                                  src={star || "/placeholder.svg"}
+                                  alt="Response Image"
+                                  className="relative object-cover w-5 h-5 rounded-full md:w-8 md:h-8 ml-[-2px]"
+                                />
+                              </motion.div>
+                              <div className="flex-1 min-w-0 rounded-lg">
                                 {(() => {
                                   const textParts = message.response.split(
                                     /\`\`\`json[\s\S]*\`\`\`/
                                   );
 
+                                  // Extract property data for URL correction
+                                  const rawProperties =
+                                    parsePropertyData(message);
+                                  const properties = rawProperties
+                                    .filter(validateProperty)
+                                    .map(formatProperty);
+                                  const firstProperty =
+                                    properties.length > 0
+                                      ? properties[0]
+                                      : null;
+                                  const propertyData = firstProperty
+                                    ? {
+                                        property_url:
+                                          firstProperty.property_url ||
+                                          undefined,
+                                        image_url:
+                                          firstProperty.image_url || undefined,
+                                      }
+                                    : null;
+
                                   return (
                                     <>
-                            <ProgressiveMarkdownRenderer
+                                      <ProgressiveMarkdownRenderer
                                         content={textParts[0]}
-                              typingSpeed={10}
+                                        typingSpeed={5}
                                         shouldAnimate={
                                           message.id === latestMessageId
                                         }
-                              onTextUpdate={handleTextUpdate}
+                                        messageId={message.id}
+                                        propertyData={propertyData}
+                                        onTextUpdate={handleTextUpdate}
                                         onComplete={() => {
                                           setTextAnimationCompleted((prev) => ({
                                             ...prev,
@@ -1556,10 +1713,12 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                       {textParts[1] && (
                                         <ProgressiveMarkdownRenderer
                                           content={textParts[1]}
-                                          typingSpeed={10}
+                                          typingSpeed={5}
                                           shouldAnimate={
                                             message.id === latestMessageId
                                           }
+                                          messageId={message.id}
+                                          propertyData={propertyData}
                                           onTextUpdate={handleTextUpdate}
                                         />
                                       )}
@@ -1575,7 +1734,9 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ duration: 0.3 }}
                                   >
-                                    <MessageImages imageUrls={[message.image_url]} />
+                                    <MessageImages
+                                      imageUrls={[message.image_url]}
+                                    />
                                   </motion.div>
                                 )}
 
@@ -1586,95 +1747,109 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ duration: 0.3 }}
                                   >
-                                    <MessageFiles file={message.file} />
+                                    {/* Check if file contains image URLs (Cloudinary uploads) */}
+                                    {message.file.startsWith("http") &&
+                                    (message.file.includes("cloudinary.com") ||
+                                      message.file.match(
+                                        /\.(jpg|jpeg|png|gif|bmp|webp)$/i
+                                      )) ? (
+                                      <MessageImages
+                                        imageUrls={[message.file]}
+                                      />
+                                    ) : (
+                                      <MessageFiles
+                                        file={message.file}
+                                        attachments={message.attachments}
+                                      />
+                                    )}
                                   </motion.div>
                                 )}
-                            
-                            <div className="flex items-center justify-between pt-1 mt-4">
-                              <div className="flex space-x-1">
+
+                                <div className="flex items-center justify-between pt-1 mt-4">
+                                  <div className="flex space-x-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="px-2 text-xs text-gray-400"
+                                      onClick={() =>
+                                        copyToClipboard(message.response)
+                                      }
+                                    >
+                                      <Copy className="w-3 h-3" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className={`text-xs px-2 ${
+                                        feedbackGiven[message.id] === "up"
+                                          ? "text-green-400"
+                                          : "text-gray-400 hover:text-green-400"
+                                      }`}
+                                      onClick={() =>
+                                        handleFeedback(message.id, "up")
+                                      }
+                                      disabled={!!feedbackGiven[message.id]}
+                                    >
+                                      <ThumbsUp className="w-3 h-3" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className={`text-xs px-2 ${
+                                        feedbackGiven[message.id] === "down"
+                                          ? "text-red-400"
+                                          : "text-gray-400 hover:text-red-400"
+                                      }`}
+                                      onClick={() =>
+                                        handleFeedback(message.id, "down")
+                                      }
+                                      disabled={!!feedbackGiven[message.id]}
+                                    >
+                                      <ThumbsDown className="w-3 h-3" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => retryMessage(message)}
+                                      disabled={!!retryingMessageId}
+                                      className="px-2 text-xs text-gray-400"
+                                    >
+                                      <RefreshCw className="w-3 h-3" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            </motion.div>
+                          </div>
+                        ) : message.error ? (
+                          <div className="flex justify-start w-full">
+                            <motion.div
+                              className="flex items-start gap-2 md:gap-4 md:max-w-[80%] rounded-lg p-4 bg-red-900/20 border border-red-500/30"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              transition={{ duration: 0.3 }}
+                            >
+                              <div className="flex-1 min-w-0">
+                                <p className="mb-2 text-red-400">
+                                  {message.errorMessage || "An error occurred"}
+                                </p>
                                 <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="px-2 text-xs text-gray-400"
-                                  onClick={() =>
-                                    copyToClipboard(message.response)
-                                  }
-                                >
-                                  <Copy className="w-3 h-3" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className={`text-xs px-2 ${
-                                    feedbackGiven[message.id] === "up"
-                                      ? "text-green-400"
-                                      : "text-gray-400 hover:text-green-400"
-                                  }`}
-                                  onClick={() =>
-                                    handleFeedback(message.id, "up")
-                                  }
-                                  disabled={!!feedbackGiven[message.id]}
-                                >
-                                  <ThumbsUp className="w-3 h-3" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className={`text-xs px-2 ${
-                                    feedbackGiven[message.id] === "down"
-                                      ? "text-red-400"
-                                      : "text-gray-400 hover:text-red-400"
-                                  }`}
-                                  onClick={() =>
-                                    handleFeedback(message.id, "down")
-                                  }
-                                  disabled={!!feedbackGiven[message.id]}
-                                >
-                                  <ThumbsDown className="w-3 h-3" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
+                                  variant="outline"
                                   size="sm"
                                   onClick={() => retryMessage(message)}
                                   disabled={!!retryingMessageId}
-                                  className="px-2 text-xs text-gray-400"
+                                  className="flex items-center gap-1 text-white bg-red-900/30 border-red-500/30 hover:bg-red-800/50"
                                 >
                                   <RefreshCw className="w-3 h-3" />
+                                  {message.id === retryingMessageId
+                                    ? "Retrying..."
+                                    : "Retry"}
                                 </Button>
                               </div>
-                            </div>
+                            </motion.div>
                           </div>
-                        </motion.div>
-                      </div>
-                      ) : message.error ? (
-                          <div className="flex justify-start w-full">
-                          <motion.div
-                            className="flex items-start gap-2 md:gap-4 md:max-w-[80%] rounded-lg p-4 bg-red-900/20 border border-red-500/30"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ duration: 0.3 }}
-                          >
-                            <div className="flex-1 min-w-0">
-                              <p className="mb-2 text-red-400">
-                                  {message.response?.data || "An error occurred"}
-                              </p>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => retryMessage(message)}
-                                disabled={!!retryingMessageId}
-                                className="flex items-center gap-1 text-white bg-red-900/30 border-red-500/30 hover:bg-red-800/50"
-                              >
-                                <RefreshCw className="w-3 h-3" />
-                                {message.id === retryingMessageId
-                                  ? "Retrying..."
-                                  : "Retry"}
-                              </Button>
-                            </div>
-                          </motion.div>
-                        </div>
-                      ) : null}
-                    </motion.div>
+                        ) : null}
+                      </motion.div>
                     );
                   })}
                 </AnimatePresence>
@@ -1701,18 +1876,18 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
             {!isAutoScrollEnabled && (
               <div className="fixed z-50 w-full max-w-5xl px-4 transform -translate-x-1/2 pointer-events-none bottom-44 left-1/2">
                 <div className="flex justify-end">
-              <button
-                onClick={() => {
-                  chatContainerRef.current?.scrollTo({
-                    top: chatContainerRef.current.scrollHeight,
-                    behavior: "smooth",
-                  });
-                  setIsAutoScrollEnabled(true);
-                }}
+                  <button
+                    onClick={() => {
+                      chatContainerRef.current?.scrollTo({
+                        top: chatContainerRef.current.scrollHeight,
+                        behavior: "smooth",
+                      });
+                      setIsAutoScrollEnabled(true);
+                    }}
                     className="px-3 py-2 text-sm text-white transition-all duration-300 ease-in-out border-2 rounded-full pointer-events-auto bg-background border-border hover:bg-muted/50"
-              >
-                <ArrowDown className="w-4 h-4" />
-              </button>
+                  >
+                    <ArrowDown className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             )}
@@ -1733,4 +1908,3 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 };
 
 export default ChatMessages;
-                       

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast";
 import { landlordAPI } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
-import { X, Upload, FileText, Loader2, CheckCircle, Clock, XCircle } from "lucide-react"
+import { X, Upload, FileText, Loader2,  } from "lucide-react"
 
 interface AgentVerificationModalProps {
   isOpen: boolean

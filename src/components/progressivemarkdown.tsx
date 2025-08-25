@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeRaw from 'rehype-raw';
-import rehypeSanitize from 'rehype-sanitize';
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
+import rehypeSanitize from "rehype-sanitize";
 
 interface ProgressiveMarkdownProps {
   content: string;
@@ -10,24 +10,31 @@ interface ProgressiveMarkdownProps {
   shouldAnimate?: boolean;
   onTextUpdate?: () => void;
   onComplete?: () => void;
+  messageId?: string; // Add messageId to track animated content
+  propertyData?: { property_url?: string; image_url?: string } | null; // Add property data to help correct URLs
 }
 
 const ProgressiveMarkdownRenderer: React.FC<ProgressiveMarkdownProps> = ({
   content,
-  typingSpeed = 10,
+  typingSpeed = 5, // Faster default speed for smoother animation
   shouldAnimate = true,
   onTextUpdate,
   onComplete,
+  messageId,
+  propertyData,
 }) => {
   const [visibleChars, setVisibleChars] = useState(0);
   const [iframeUrl, setIframeUrl] = useState<string | null>(null);
   const [showIframe, setShowIframe] = useState(false);
-  
-  // Store callbacks in refs to avoid dependency changes
+  const [hasAnimated, setHasAnimated] = useState(false);
+
+  // Store callbacks and content state in refs to avoid dependency changes
   const onTextUpdateRef = useRef(onTextUpdate);
   const onCompleteRef = useRef(onComplete);
   const contentLengthRef = useRef(content.length);
-  
+  const previousContentRef = useRef(content);
+  const previousMessageIdRef = useRef(messageId);
+
   // Update refs when the callbacks change
   useEffect(() => {
     onTextUpdateRef.current = onTextUpdate;
@@ -35,60 +42,106 @@ const ProgressiveMarkdownRenderer: React.FC<ProgressiveMarkdownProps> = ({
     contentLengthRef.current = content.length;
   }, [onTextUpdate, onComplete, content]);
 
-  // Reset visible chars when content changes
+  // Reset animation state when content or messageId changes significantly
   useEffect(() => {
-    setVisibleChars(shouldAnimate ? 0 : content.length);
-    
-    if (!shouldAnimate) {
-      onCompleteRef.current?.();
+    const isNewContent = content !== previousContentRef.current;
+    const isNewMessage = messageId !== previousMessageIdRef.current;
+    const contentGrew =
+      content.length > previousContentRef.current.length &&
+      content.startsWith(previousContentRef.current);
+
+    // Update refs
+    previousContentRef.current = content;
+    previousMessageIdRef.current = messageId;
+
+    if (isNewMessage || (isNewContent && !contentGrew)) {
+      // New message or completely different content - reset animation
+      setHasAnimated(false);
+      setVisibleChars(shouldAnimate ? 0 : content.length);
+
+      if (!shouldAnimate) {
+        setHasAnimated(true);
+        onCompleteRef.current?.();
+      }
+    } else if (contentGrew && shouldAnimate && !hasAnimated) {
+      // Content is growing (streaming) - continue animation from where we left off
+      // Don't reset visibleChars
+    } else if (!shouldAnimate || hasAnimated) {
+      // Should not animate or has already been animated - show all content
+      setVisibleChars(content.length);
+      if (!hasAnimated) {
+        setHasAnimated(true);
+        onCompleteRef.current?.();
+      }
     }
-  }, [content, shouldAnimate]);
-  
+  }, [content, shouldAnimate, messageId, hasAnimated]);
+
   // Separate effect for the animation timer
   useEffect(() => {
-    if (!shouldAnimate) {
+    if (
+      !shouldAnimate ||
+      hasAnimated ||
+      visibleChars >= contentLengthRef.current
+    ) {
       return;
     }
-    
+
     let animationFrame: number;
     let lastUpdateTime = 0;
-    
+
     const animate = (timestamp: number) => {
       if (timestamp - lastUpdateTime >= typingSpeed) {
         lastUpdateTime = timestamp;
-        
-        setVisibleChars(prev => {
-          if (prev >= contentLengthRef.current) {
+
+        setVisibleChars((prev) => {
+          const newVisibleChars = Math.min(prev + 1, contentLengthRef.current);
+
+          if (newVisibleChars >= contentLengthRef.current) {
+            setHasAnimated(true);
             onCompleteRef.current?.();
-            return prev;
+            return newVisibleChars;
           }
-          
-          // Call onTextUpdate but limit how o
-          if (prev % 5 === 0) {
+
+          // Call onTextUpdate but limit how often to avoid performance issues
+          if (newVisibleChars % 3 === 0) {
             onTextUpdateRef.current?.();
           }
-          
-          return prev + 1;
+
+          return newVisibleChars;
         });
       }
-      
-      if (visibleChars < contentLengthRef.current) {
+
+      if (visibleChars < contentLengthRef.current && !hasAnimated) {
         animationFrame = requestAnimationFrame(animate);
       }
     };
-    
+
     animationFrame = requestAnimationFrame(animate);
-    
+
     return () => {
       cancelAnimationFrame(animationFrame);
     };
-  }, [shouldAnimate, typingSpeed, visibleChars]);
+  }, [shouldAnimate, typingSpeed, visibleChars, hasAnimated]);
 
-  const handleLinkClick = useCallback((e: React.MouseEvent<HTMLElement>, url: string) => {
-    e.preventDefault();
-    setIframeUrl(url);
-    setShowIframe(true);
-  }, []);
+  const handleLinkClick = useCallback(
+    (e: React.MouseEvent<HTMLElement>, url: string) => {
+      e.preventDefault();
+
+      // If we have property data and the URL appears to be an image_url,
+      // check if we should use property_url instead
+      let correctedUrl = url;
+      if (propertyData && propertyData.property_url && propertyData.image_url) {
+        // If the clicked URL matches the image_url, use property_url instead
+        if (url === propertyData.image_url) {
+          correctedUrl = propertyData.property_url;
+        }
+      }
+
+      setIframeUrl(correctedUrl);
+      setShowIframe(true);
+    },
+    [propertyData]
+  );
 
   const closeIframe = useCallback(() => {
     setShowIframe(false);
@@ -102,32 +155,50 @@ const ProgressiveMarkdownRenderer: React.FC<ProgressiveMarkdownProps> = ({
         rehypePlugins={[rehypeRaw, rehypeSanitize]}
         components={{
           h1: ({ children, ...props }) => (
-            <h1 className="pb-4 mt-6 mb-8 text-3xl font-bold text-gray-900 border-b border-gray-200 dark:text-white dark:border-gray-700" {...props}>
+            <h1
+              className="pb-4 mt-6 mb-8 text-3xl font-bold text-gray-900 border-b border-gray-200 dark:text-white dark:border-gray-700"
+              {...props}
+            >
               {children}
             </h1>
           ),
           h2: ({ children, ...props }) => (
-            <h2 className="pb-3 mt-8 mb-6 text-2xl font-semibold text-gray-900 border-b border-gray-100 dark:text-white dark:border-gray-800" {...props}>
+            <h2
+              className="pb-3 mt-8 mb-6 text-2xl font-semibold text-gray-900 border-b border-gray-100 dark:text-white dark:border-gray-800"
+              {...props}
+            >
               {children}
             </h2>
           ),
           h3: ({ children, ...props }) => (
-            <h3 className="mb-5 text-xl font-semibold text-gray-900 mt-7 dark:text-white" {...props}>
+            <h3
+              className="mb-5 text-xl font-semibold text-gray-900 mt-7 dark:text-white"
+              {...props}
+            >
               {children}
             </h3>
           ),
           h4: ({ children, ...props }) => (
-            <h4 className="mt-6 mb-4 text-lg font-semibold text-gray-900 dark:text-white" {...props}>
+            <h4
+              className="mt-6 mb-4 text-lg font-semibold text-gray-900 dark:text-white"
+              {...props}
+            >
               {children}
             </h4>
           ),
           h5: ({ children, ...props }) => (
-            <h5 className="mt-5 mb-4 text-base font-semibold text-gray-900 dark:text-white" {...props}>
+            <h5
+              className="mt-5 mb-4 text-base font-semibold text-gray-900 dark:text-white"
+              {...props}
+            >
               {children}
             </h5>
           ),
           h6: ({ children, ...props }) => (
-            <h6 className="mt-4 mb-3 text-sm font-semibold tracking-wide text-gray-700 uppercase dark:text-gray-300" {...props}>
+            <h6
+              className="mt-4 mb-3 text-sm font-semibold tracking-wide text-gray-700 uppercase dark:text-gray-300"
+              {...props}
+            >
               {children}
             </h6>
           ),
@@ -149,28 +220,43 @@ const ProgressiveMarkdownRenderer: React.FC<ProgressiveMarkdownProps> = ({
             </tbody>
           ),
           tr: ({ children, ...props }) => (
-            <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-[#0D1117]" {...props}>
+            <tr
+              className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-[#0D1117]"
+              {...props}
+            >
               {children}
             </tr>
           ),
           th: ({ children, ...props }) => (
-            <th className="px-6 py-3 text-xs font-semibold tracking-wider text-left text-gray-700 uppercase dark:text-gray-300" {...props}>
+            <th
+              className="px-6 py-3 text-xs font-semibold tracking-wider text-left text-gray-700 uppercase dark:text-gray-300"
+              {...props}
+            >
               {children}
             </th>
           ),
           td: ({ children, ...props }) => (
-            <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-300" {...props}>
+            <td
+              className="px-6 py-4 text-sm text-gray-900 dark:text-gray-300"
+              {...props}
+            >
               {children}
             </td>
           ),
-          
+
           p: ({ children, ...props }) => (
-            <p className="mb-6 text-base leading-7 text-gray-800 dark:text-gray-300" {...props}>
+            <p
+              className="mb-6 text-base leading-7 text-gray-800 dark:text-gray-300"
+              {...props}
+            >
               {children}
             </p>
           ),
           strong: ({ children, ...props }) => (
-            <strong className="font-bold text-gray-900 dark:text-white" {...props}>
+            <strong
+              className="font-bold text-gray-900 dark:text-white"
+              {...props}
+            >
               {children}
             </strong>
           ),
@@ -180,27 +266,42 @@ const ProgressiveMarkdownRenderer: React.FC<ProgressiveMarkdownProps> = ({
             </em>
           ),
           ul: ({ children, ...props }) => (
-            <ul className="mb-6 ml-6 space-y-3 text-gray-800 list-disc dark:text-gray-300" {...props}>
+            <ul
+              className="mb-6 ml-6 space-y-3 text-gray-800 list-disc dark:text-gray-300"
+              {...props}
+            >
               {children}
             </ul>
           ),
           ol: ({ children, ...props }) => (
-            <ol className="mb-6 ml-6 space-y-3 text-gray-800 list-decimal dark:text-gray-300" {...props}>
+            <ol
+              className="mb-6 ml-6 space-y-3 text-gray-800 list-decimal dark:text-gray-300"
+              {...props}
+            >
               {children}
             </ol>
           ),
           li: ({ children, ...props }) => (
-            <li className="text-base leading-7 text-gray-800 dark:text-gray-300" {...props}>
+            <li
+              className="text-base leading-7 text-gray-800 dark:text-gray-300"
+              {...props}
+            >
               {children}
             </li>
           ),
           span: ({ children, ...props }) => (
-            <span className="text-base text-gray-800 dark:text-gray-300" {...props}>
+            <span
+              className="text-base text-gray-800 dark:text-gray-300"
+              {...props}
+            >
               {children}
             </span>
           ),
           hr: ({ ...props }) => (
-            <hr className="my-12 border-t-2 border-gray-200 dark:border-gray-700" {...props} />
+            <hr
+              className="my-12 border-t-2 border-gray-200 dark:border-gray-700"
+              {...props}
+            />
           ),
 
           pre: ({ children, ...props }) => (
@@ -214,32 +315,76 @@ const ProgressiveMarkdownRenderer: React.FC<ProgressiveMarkdownProps> = ({
                   }}
                   className="flex items-center gap-1 px-2 py-1 text-xs text-[#7D8590] hover:text-[#C9D1D9] hover:bg-[#21262D] rounded transition-colors"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <rect
+                      x="9"
+                      y="9"
+                      width="13"
+                      height="13"
+                      rx="2"
+                      ry="2"
+                    ></rect>
                     <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                   </svg>
                   Copy
                 </button>
               </div>
-              <pre className="p-4 text-sm font-mono text-[#C9D1D9] bg-[#0D1117] leading-relaxed whitespace-pre overflow-x-auto" {...props}>
+              <pre
+                className="p-4 text-sm font-mono text-[#C9D1D9] bg-[#0D1117] leading-relaxed whitespace-pre overflow-x-auto"
+                {...props}
+              >
                 {children}
               </pre>
             </div>
           ),
-          
-          code: ({ inline, className, children, ...props }: { inline?: boolean; className?: string; children?: React.ReactNode }) => {
-            const match = /language-(\w+)/.exec(className || '');
+
+          code: ({
+            inline,
+            className,
+            children,
+            ...props
+          }: {
+            inline?: boolean;
+            className?: string;
+            children?: React.ReactNode;
+          }) => {
+            const match = /language-(\w+)/.exec(className || "");
             if (!inline && match) {
               return (
                 <div className="relative my-4 bg-[#161B22] rounded-lg overflow-hidden border border-[#30363D]">
                   <div className="flex items-center justify-between px-4 py-3 bg-[#161B22]">
-                    <span className="text-sm text-[#7D8590] font-mono">{match[1]}</span>
+                    <span className="text-sm text-[#7D8590] font-mono">
+                      {match[1]}
+                    </span>
                     <button
-                      onClick={() => navigator.clipboard.writeText(String(children))}
+                      onClick={() =>
+                        navigator.clipboard.writeText(String(children))
+                      }
                       className="flex items-center gap-1 px-2 py-1 text-xs text-[#7D8590] hover:text-[#C9D1D9] hover:bg-[#21262D] rounded transition-colors"
                     >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <rect
+                          x="9"
+                          y="9"
+                          width="13"
+                          height="13"
+                          rx="2"
+                          ry="2"
+                        ></rect>
                         <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                       </svg>
                       Copy
@@ -253,9 +398,12 @@ const ProgressiveMarkdownRenderer: React.FC<ProgressiveMarkdownProps> = ({
                 </div>
               );
             }
-        
+
             return (
-              <code className="px-1.5 py-0.5 mx-0.5 text-sm font-mono  dark:bg-[#161B22] " {...props}>
+              <code
+                className="px-1.5 py-0.5 mx-0.5 text-sm font-mono  dark:bg-[#161B22] "
+                {...props}
+              >
                 {children}
               </code>
             );
@@ -265,16 +413,16 @@ const ProgressiveMarkdownRenderer: React.FC<ProgressiveMarkdownProps> = ({
               className="relative py-6 pl-8 pr-6 my-8 italic text-gray-700 border-l-4 border-blue-500 rounded-r-lg dark:text-gray-300 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-900/10"
               {...props}
             >
-              <div className="absolute text-3xl leading-none text-blue-500 left-3 top-6 dark:text-blue-400">&ldquo;</div>
-              <div className="pl-4">
-                {children}
+              <div className="absolute text-3xl leading-none text-blue-500 left-3 top-6 dark:text-blue-400">
+                &ldquo;
               </div>
+              <div className="pl-4">{children}</div>
             </blockquote>
           ),
           a: ({ children, href, ...props }) => {
             // Check if the URL is long (more than 50 characters)
             const isLongUrl = href && href.length > 50;
-            
+
             return isLongUrl ? (
               <button
                 onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
@@ -284,8 +432,18 @@ const ProgressiveMarkdownRenderer: React.FC<ProgressiveMarkdownProps> = ({
                 // Only spread props safe for buttons
                 {...(props as React.ButtonHTMLAttributes<HTMLButtonElement>)}
               >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                <svg
+                  className="w-4 h-4 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                  />
                 </svg>
                 View Link
               </button>

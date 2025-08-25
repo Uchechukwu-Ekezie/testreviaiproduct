@@ -11,14 +11,16 @@ import { Avatar } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/auth-context";
 
 import Image from "next/image";
-import { Settings, LogOut, User, Crown } from "lucide-react";
+import { Settings, LogOut, User, Crown, LayoutDashboard } from "lucide-react";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ProfileModal } from "./profile-modal";
 import { SettingsModal } from "./settings-modal";
 import { UpgradePlanModal } from "./upgrade-plan-modal";
 
 export function ProfileDropdown() {
   const { user, logout } = useAuth();
+  const router = useRouter();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
@@ -59,6 +61,13 @@ export function ProfileDropdown() {
               <User style={{ width: "24px", height: "24px" }} />
 
               <span>Profile</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="flex items-center gap-2 pb-3 border-0 cursor-pointer text-muted-foreground hover:text-white hover:bg-zinc-800 hover:border-none focus:outline-none focus:ring-0"
+              onClick={() => router.push("/dashboard")}
+            >
+              <LayoutDashboard style={{ width: "24px", height: "24px" }} />
+              <span>Dashboard</span>
             </DropdownMenuItem>
             {/* <DropdownMenuItem
 className="flex items-center gap-2 pb-3 border-0 cursor-pointer text-muted-foreground hover:text-white hover:bg-zinc-800 hover:border-none focus:outline-none focus:ring-0"

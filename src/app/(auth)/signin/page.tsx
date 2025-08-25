@@ -36,8 +36,8 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const isMobile = useMediaQuery("(max-width: 1024px)");
-  const { login} = useAuth();
-  
+  const { login } = useAuth();
+
   // clear local storage
 
   useEffect(() => {
@@ -146,7 +146,7 @@ export default function LoginPage() {
   return (
     <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-background font-sf-pro">
       <div className="flex flex-col items-center w-full gap-8 mx-auto lg:flex-row max-w-1440">
-        <Card className="w-full max-w-[503px] mx-auto lg:min-h-[96vh] bg-transparent border-transparent flex flex-col">
+        <Card className="w-full max-w-[503px] m-auto   bg-transparent border-transparent flex flex-col">
           <CardHeader className="space-y-3">
             <Logo />
             <h2 className="text-center text-[25px] font-[500] text-muted-foreground md:pt-[33.5px]">

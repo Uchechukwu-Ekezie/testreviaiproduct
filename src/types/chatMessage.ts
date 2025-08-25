@@ -5,6 +5,7 @@ export interface Message {
   session?: string | null | undefined;
   classification?: string;
   error?: boolean;
+  errorMessage?: string; // Add error message field
   retrying?: boolean;
   isNewSession?: boolean;
   properties?: Property[];

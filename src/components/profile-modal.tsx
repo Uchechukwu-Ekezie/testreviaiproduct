@@ -37,7 +37,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     first_name: user?.first_name || "",
     last_name: user?.last_name || "",
     avatar: user?.avatar || "",
-    phone: user?.phone || "",
+    phone: user?.phone || user?.agent_info?.phone || "",
   });
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(
     null
@@ -62,19 +62,34 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
   // Update form data when user data changes or modal is opened
   useEffect(() => {
     if (user && isOpen) {
-      setFormData({
+      const phoneValue = user.phone || user.agent_info?.phone || "";
+      
+      const newFormData = {
         username: user.username || "",
         first_name: user.first_name || "",
         last_name: user.last_name || "",
         avatar: user.avatar || "",
-        phone: user.phone || "",
-      });
+        phone: phoneValue,
+      };
+      
+      setFormData(newFormData);
       setSelectedAvatarFile(null);
       setAvatarPreview(null);
       setAvatarUploadError(null);
       setIsUploadingAvatar(false);
     }
   }, [user, isOpen]);
+
+  // Additional effect to handle user.agent_info changes specifically
+  useEffect(() => {
+    if (user?.agent_info?.phone && isOpen) {
+      console.log("Agent info phone updated:", user.agent_info.phone);
+      setFormData(prev => ({
+        ...prev,
+        phone: user.phone || user.agent_info?.phone || prev.phone
+      }));
+    }
+  }, [user?.agent_info?.phone, user?.phone, isOpen]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -180,6 +195,11 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         changedFields.first_name = formData.first_name;
       if (user?.last_name !== formData.last_name)
         changedFields.last_name = formData.last_name;
+      
+      // Check for phone number changes (compare with both possible sources)
+      const currentPhone = user?.phone || user?.agent_info?.phone || "";
+      if (currentPhone !== formData.phone)
+        changedFields.phone = formData.phone;
 
       // Early return if no changes
       if (Object.keys(changedFields).length === 0 && !selectedAvatarFile) {
@@ -387,7 +407,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
           </div>
 
           {/* Phone */}
-          <div className="space-y-2">
+          {/* <div className="space-y-2">
             <Label htmlFor="phone" className="text-muted-foreground">
               Phone Number
             </Label>
@@ -395,12 +415,12 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
               id="phone"
               name="phone"
               type="tel"
-              value={formData.phone}
+              value={user?.agent_info?.phone}
               onChange={handleInputChange}
               className="border border-white/15 w-full bg-transparent h-9 rounded-[10px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-muted-foreground pl-3 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
               placeholder="Enter your phone number"
             />
-          </div>
+          </div> */}
 
           {/* Subscription Info */}
           {user?.subscription_type && (

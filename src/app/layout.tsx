@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   title: "Revi.ai",
   description: "Your AI Assistant",
   icons: {
-    icon: "./favicon.ico",
+    icon: "./reviloo.svg",
   },
 };
 

@@ -2,7 +2,7 @@
 
 import type React from "react";
 import { Button } from "@/components/ui/button";
-import {  PanelLeftOpen, Plus } from "lucide-react";
+import { PanelLeftOpen, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProfileDropdown } from "@/components/profile-dropdown";
 import { useRouter } from "next/navigation";
@@ -24,9 +24,11 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   isLgScreen,
   sidebarOpen,
   startNewChat,
-   // Destructure the new prop
+  // Destructure the new prop
 }) => {
   const router = useRouter();
+
+  // Debug logging removed to prevent console spam on every re-render
 
   const setCollapsed = (collapsed: boolean) => {
     if (!collapsed) {
@@ -36,21 +38,42 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
     }
   };
 
+  // const handleDashboardClick = () => {
+  //   router.push("/dashboard");
+  // };
+
   return (
     <>
       {/* Fixed Right Actions */}
       <div className="fixed z-50 right-10 top-3">
-        {isAuthenticated ? (
-          <ProfileDropdown />
-        ) : (
-          <Button
-            variant="ghost"
-            className="text-sm text-muted-foreground hover:text-foreground"
-            onClick={() => router.push("/signin")}
-          >
-            Sign In
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Dashboard Button - Show for all authenticated users for now */}
+          {/* {isAuthenticated && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDashboardClick}
+              className="flex items-center gap-2 px-3 py-2 text-white border bg-zinc-800 hover:bg-zinc-700 border-zinc-600"
+              title="Agent Dashboard"
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              <span className="text-sm">Dashboard</span>
+            </Button>
+          )} */}
+
+          {/* Profile/Sign In */}
+          {isAuthenticated ? (
+            <ProfileDropdown />
+          ) : (
+            <Button
+              variant="ghost"
+              className="text-sm text-muted-foreground hover:text-foreground"
+              onClick={() => router.push("/signin")}
+            >
+              Sign In
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Main Header */}
@@ -67,7 +90,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
           {/* Left side controls */}
           <div className="flex items-center gap-2">
             {/* Menu Button - Show on medium and large screens when sidebar is closed */}
-            { !sidebarOpen && (
+            {!sidebarOpen && (
               <button
                 onClick={() => {
                   setSidebarOpen(true);
