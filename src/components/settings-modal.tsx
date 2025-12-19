@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils";
 import {
   Settings,
@@ -21,6 +20,14 @@ import {
   Check,
   Copy,
   UserPlus,
+  TrendingUp,
+  Target,
+  BarChart3,
+  Calendar,
+  DollarSign,
+  Star,
+  Users,
+  Zap,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { DeleteAccountModal } from "./delete-account-modal";
@@ -41,6 +48,7 @@ interface SettingsModalProps {
 type SettingsTab =
   | "general"
   | "personalization"
+
   | "password"
   | "delete"
   | "invite"
@@ -48,162 +56,133 @@ type SettingsTab =
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const router = useRouter();
   const isMobile = useIsMobile();
-  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+  const { logout, user } = useAuth();
 
-  // const [theme, setTheme] = useState("system")
-  // const [language, setLanguage] = useState("auto-english")
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [passwordForm, setPasswordForm] = useState({
-    new_password1: "",
-    new_password2: "",
+  // Consolidated state management
+  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+  
+  // Password change state
+  const [passwordState, setPasswordState] = useState({
+    isChanging: false,
+    showNew: false,
+    showConfirm: false,
+    form: { new_password1: "", new_password2: "" }
   });
-  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
-  const [showFilteredResponse, setShowFilteredResponse] = useState(false);
-  const [filteredResponseEnabled, setFilteredResponseEnabled] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<string | null>(null);
-  const [referralCode] = useState("FL3598KJ");
-  const [referralPoints] = useState(5);
-  const [referralUsers] = useState(5);
+
+  // Modal states
+  const [modalStates, setModalStates] = useState({
+    showDeleteAccount: false,
+    showFilteredResponse: false,
+    showVerification: false
+  });
+
+  // Feature states
+  const [featureStates, setFeatureStates] = useState({
+    filteredResponseEnabled: false,
+    memoryEnabled: false,
+    selectedRole: null as string | null
+  });
+
+  // Loading states
+  const [loadingStates, setLoadingStates] = useState({
+    isDeletingAllChats: false,
+    isVerificationLoading: false
+  });
+
+  // Referral data (memoized for better performance)
+  const referralData = useMemo(() => ({
+    code: "FL3598KJ",
+    points: 5,
+    users: 5
+  }), []);
+
   const [copied, setCopied] = useState(false);
-  const [isDeletingAllChats, setIsDeletingAllChats] = useState(false);
-  const [memoryEnabled, setMemoryEnabled] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState<
     "none" | "pending" | "verified" | "rejected"
   >("none");
-  const [showVerificationModal, setShowVerificationModal] = useState(false);
-  const { logout, user, submitAgentRequest } = useAuth();
 
-  // Get verification status from user object and server
+  // Optimized verification status determination
+  const determineVerificationStatus = useCallback((userData: any) => {
+    // Check agent_info.status from the backend response (new structure)
+    if (userData?.agent_info?.status) {
+      const agentStatus = userData.agent_info.status;
+      return agentStatus === "pending" ? "pending" :
+             agentStatus === "approved" ? "verified" :
+             agentStatus === "rejected" ? "rejected" : "none";
+    }
+    
+    // Fallback to legacy agent_request structure
+    if (userData?.agent_request?.status) {
+      const agentStatus = userData.agent_request.status;
+      return agentStatus === "pending" ? "pending" :
+             agentStatus === "approved" ? "verified" :
+             agentStatus === "rejected" ? "rejected" : "none";
+    }
+    
+    // Fallback to verification_status field
+    if (userData?.verification_status) {
+      return userData.verification_status;
+    }
+    
+    return "none";
+  }, []);
+
+  // Memoized verification status fetch
   const fetchVerificationStatus = useCallback(async () => {
     if (!user?.id) {
       setVerificationStatus("none");
       return;
     }
 
-    try {
-      // Fetch latest data from server using /auth/me endpoint
-      const userData = await userAPI.getProfile();
+    setLoadingStates(prev => ({ ...prev, isVerificationLoading: true }));
 
-      // Check agent_info.status from the backend response
-      if (userData?.agent_info?.status) {
-        const agentStatus = userData.agent_info.status;
-        if (agentStatus === "pending") {
-          setVerificationStatus("pending");
-        } else if (agentStatus === "approved") {
-          setVerificationStatus("verified");
-        } else if (agentStatus === "rejected") {
-          setVerificationStatus("rejected");
-        } else {
-          setVerificationStatus("none");
-        }
-      } else {
-        // Fallback to user object data if server data is not available
-        if (user?.agent_request?.status) {
-          const agentStatus = user.agent_request.status;
-          if (agentStatus === "pending") {
-            setVerificationStatus("pending");
-          } else if (agentStatus === "approved") {
-            setVerificationStatus("verified");
-          } else if (agentStatus === "rejected") {
-            setVerificationStatus("rejected");
-          } else {
-            setVerificationStatus("none");
-          }
-        } else {
-          setVerificationStatus("none");
-        }
-      }
+    try {
+      const userData = await userAPI.getProfile();
+      const status = determineVerificationStatus(userData);
+      setVerificationStatus(status);
     } catch (error) {
       console.error("Failed to fetch verification status:", error);
-      // Fallback to local user data if API fails
-      if (user?.agent_request?.status) {
-        const agentStatus = user.agent_request.status;
-        if (agentStatus === "pending") {
-          setVerificationStatus("pending");
-        } else if (agentStatus === "approved") {
-          setVerificationStatus("verified");
-        } else if (agentStatus === "rejected") {
-          setVerificationStatus("rejected");
-        } else {
-          setVerificationStatus("none");
-        }
-      } else {
-        setVerificationStatus("none");
-      }
+      // Fallback to local user data
+      const status = determineVerificationStatus(user);
+      setVerificationStatus(status);
+    } finally {
+      setLoadingStates(prev => ({ ...prev, isVerificationLoading: false }));
     }
-  }, [user?.id, user?.agent_request]);
+  }, [user?.id, user, determineVerificationStatus]);
 
-  // Fetch verification status when modal opens or when switching to landlord/agent tab
+  // Optimized useEffect for verification status
   useEffect(() => {
     if (isOpen && activeTab === "Landlord/agent" && user?.id) {
       fetchVerificationStatus();
+    } else if (user) {
+      // Update verification status from local user data when user changes
+      const status = determineVerificationStatus(user);
+      setVerificationStatus(status);
     }
-  }, [isOpen, activeTab, user?.id, fetchVerificationStatus]);
+  }, [isOpen, activeTab, user?.id, user, fetchVerificationStatus, determineVerificationStatus]);
 
-  // Also fetch when user data is updated
-  useEffect(() => {
-    // Check if we have fresh server data from agent_info (new structure)
-    if (user?.agent_info?.status) {
-      const agentStatus = user.agent_info.status;
-      if (agentStatus === "pending") {
-        setVerificationStatus("pending");
-      } else if (agentStatus === "approved") {
-        setVerificationStatus("verified");
-      } else if (agentStatus === "rejected") {
-        setVerificationStatus("rejected");
-      } else {
-        setVerificationStatus("none");
-      }
-    }
-    // Fallback to legacy agent_request structure
-    else if (user?.agent_request?.status) {
-      const agentStatus = user.agent_request.status;
-      if (agentStatus === "pending") {
-        setVerificationStatus("pending");
-      } else if (agentStatus === "approved") {
-        setVerificationStatus("verified");
-      } else if (agentStatus === "rejected") {
-        setVerificationStatus("rejected");
-      } else {
-        setVerificationStatus("none");
-      }
-    } else if (user?.verification_status) {
-      setVerificationStatus(user.verification_status);
-    } else {
-      setVerificationStatus("none");
-    }
-  }, [user?.verification_status, user?.agent_request, user?.agent_info]);
+  // Memoized event handlers
+  const handleRoleSelect = useCallback((role: string, preferences: unknown) => {
+    setFeatureStates(prev => ({
+      ...prev,
+      selectedRole: role,
+      filteredResponseEnabled: true
+    }));
+  }, []);
 
-  // const handleFilteredResponseToggle = (checked: boolean) => {
-  //   if (checked) {
-  //     setShowFilteredResponse(true)
-  //   } else {
-  //     setFilteredResponseEnabled(false)
-  //     setSelectedRole(null)
-  //   }
-  // }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleRoleSelect = (role: string, preferences: unknown) => {
-    setSelectedRole(role);
-    setFilteredResponseEnabled(true);
-  };
-
-  const copyReferralCode = () => {
-    navigator.clipboard.writeText(referralCode);
+  const copyReferralCode = useCallback(() => {
+    navigator.clipboard.writeText(referralData.code);
     setCopied(true);
     toast({
       title: "Copied!",
       description: "Referral code copied to clipboard",
     });
     setTimeout(() => setCopied(false), 2000);
-  };
+  }, [referralData.code]);
 
-  // delete all chats sessions
-  const deleteAllSessions = async () => {
-    setIsDeletingAllChats(true);
+  // Memoized action handlers
+  const deleteAllSessions = useCallback(async () => {
+    setLoadingStates(prev => ({ ...prev, isDeletingAllChats: true }));
     try {
       await chatAPI.deleteAllChatSessions();
       toast({
@@ -212,48 +191,62 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       });
     } catch (error: unknown) {
       console.error("Delete all chat sessions error:", error);
-      let errorMessage = "Failed to delete all chat sessions";
-      if (error && typeof error === "object" && "detail" in error) {
-        errorMessage = (error as { detail?: string }).detail || errorMessage;
-      }
+      const errorMessage = (error && typeof error === "object" && "detail" in error) 
+        ? (error as { detail?: string }).detail || "Failed to delete all chat sessions"
+        : "Failed to delete all chat sessions";
       toast({
         title: "Error",
         description: errorMessage,
         variant: "destructive",
       });
     } finally {
-      setIsDeletingAllChats(false);
+      setLoadingStates(prev => ({ ...prev, isDeletingAllChats: false }));
     }
-  };
+  }, []);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     logout();
     toast({
       title: "Logged out",
       description: "You have been successfully logged out",
     });
-    onClose(); // Close settings modal after logout
-  };
+    onClose();
+  }, [logout, onClose]);
 
-  const handleMemoryToggle = () => {
-    setMemoryEnabled(!memoryEnabled);
-    toast({
-      title: "Memory setting updated",
-      description: `Memory has been turned ${!memoryEnabled ? "on" : "off"}`,
+  const handleMemoryToggle = useCallback(() => {
+    setFeatureStates(prev => {
+      const newMemoryEnabled = !prev.memoryEnabled;
+      toast({
+        title: "Memory setting updated",
+        description: `Memory has been turned ${newMemoryEnabled ? "on" : "off"}`,
+      });
+      return { ...prev, memoryEnabled: newMemoryEnabled };
     });
-  };
+  }, []);
 
-  const handleRequestVerification = () => {
-    setShowVerificationModal(true);
-  };
+  const handleRequestVerification = useCallback(() => {
+    setModalStates(prev => ({ ...prev, showVerification: true }));
+  }, []);
 
   const handleVerificationSuccess = async (data?: {
     phone?: string;
     verification_document?: File | string;
   }) => {
     try {
-      // Submit the agent request using the auth context
-      await submitAgentRequest(data || {});
+      // Import landlordAPI dynamically to avoid circular dependency
+      const { landlordAPI } = await import("@/lib/api");
+
+      // Submit the agent request using landlordAPI.postAgentRequest
+      const payload = {
+        phone: data?.phone || "",
+        verification_document: data?.verification_document
+          ? typeof data.verification_document === "string"
+            ? data.verification_document
+            : ""
+          : "",
+      };
+
+      await landlordAPI.postAgentRequest(payload);
 
       // Update the local verification status
       setVerificationStatus("pending");
@@ -279,10 +272,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     }
   };
 
-  const handlePasswordChange = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handlePasswordChange = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    if (passwordForm.new_password1 !== passwordForm.new_password2) {
+    const { new_password1, new_password2 } = passwordState.form;
+
+    if (new_password1 !== new_password2) {
       toast({
         title: "Error",
         description: "New passwords do not match",
@@ -291,7 +286,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       return;
     }
 
-    if (passwordForm.new_password1.length < 8) {
+    if (new_password1.length < 8) {
       toast({
         title: "Error",
         description: "Password must be at least 8 characters long",
@@ -301,54 +296,74 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     }
 
     try {
-      await authAPI.passwordChange(
-        passwordForm.new_password1,
-        passwordForm.new_password2
-      );
+      await authAPI.passwordChange(new_password1, new_password2);
 
       toast({
         title: "Success",
         description: "Password has been changed successfully",
       });
-      setIsChangingPassword(false);
-      setPasswordForm({
-        new_password1: "",
-        new_password2: "",
+      
+      setPasswordState({
+        isChanging: false,
+        showNew: false,
+        showConfirm: false,
+        form: { new_password1: "", new_password2: "" }
       });
     } catch (error: unknown) {
       console.error("Password change error:", error);
-      let errorMessage = "Failed to change password";
-      if (error && typeof error === "object" && "detail" in error) {
-        errorMessage = (error as { detail?: string }).detail || errorMessage;
-      }
+      const errorMessage = (error && typeof error === "object" && "detail" in error)
+        ? (error as { detail?: string }).detail || "Failed to change password"
+        : "Failed to change password";
       toast({
         title: "Error",
         description: errorMessage,
         variant: "destructive",
       });
     }
-  };
+  }, [passwordState.form]);
 
-  const tabs = [
+  // Memoized tabs configuration
+  const tabs = useMemo(() => [
     { id: "general" as const, label: "General", icon: Settings },
-    { id: "personalization" as const, label: "Personalization", icon: User },
+    // { id: "personalization" as const, label: "Personalization", icon: User },
+    // { id: "growth" as const, label: "Growth & Sales", icon: UserPlus },
     { id: "Landlord/agent" as const, label: "Landlord/agent", icon: UserPlus },
     { id: "password" as const, label: "Password", icon: Lock },
     { id: "delete" as const, label: "Delete Account", icon: Trash2 },
-  ];
+  ], []);
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-2xl gap-0 p-0 bg-[#262626] border-zinc-800 w-[95vw] sm:w-[90vw] md:w-[85vw] lg:max-w-2xl">
+      <Dialog
+        open={isOpen}
+        modal={!modalStates.showVerification}
+        onOpenChange={(open) => {
+          if (!open && !modalStates.showVerification) {
+            onClose();
+          }
+        }}
+      >
+        <DialogContent
+          className="max-w-2xl gap-0 p-0 bg-[#262626] border-zinc-800 w-[95vw] sm:w-[90vw] md:w-[85vw] lg:max-w-2xl"
+          onPointerDownOutside={(event) => {
+            if (modalStates.showVerification) {
+              event.preventDefault();
+            }
+          }}
+          onInteractOutside={(event) => {
+            if (modalStates.showVerification) {
+              event.preventDefault();
+            }
+          }}
+        >
           <DialogHeader className="p-3 border-b sm:p-4 border-zinc-800">
             <DialogTitle className="text-base font-normal text-white sm:text-lg">
-              {isChangingPassword ? "Password" : "Settings"}
+              {passwordState.isChanging ? "Password" : "Settings"}
             </DialogTitle>
           </DialogHeader>
 
           {/* Mobile Tabs - Only show when not changing password */}
-          {isMobile && !isChangingPassword && (
+          {isMobile && !passwordState.isChanging && (
             <div className="grid items-center grid-cols-2 px-2 border-b border-zinc-800">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
@@ -377,7 +392,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             )}
           >
             {/* Sidebar - Hide on mobile and when changing password */}
-            {!isMobile && !isChangingPassword && (
+            {!isMobile && !passwordState.isChanging && (
               <div className="border-r w-36 sm:w-40 md:w-48 border-zinc-800">
                 {tabs.map((tab) => {
                   const Icon = tab.icon;
@@ -427,9 +442,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         size={isMobile ? "sm" : "default"}
                         className="self-end sm:self-auto"
                         onClick={deleteAllSessions}
-                        disabled={isDeletingAllChats}
+                        disabled={loadingStates.isDeletingAllChats}
                       >
-                        {isDeletingAllChats ? "Deleting..." : "Delete all"}
+                        {loadingStates.isDeletingAllChats ? "Deleting..." : "Delete all"}
                       </Button>
                     </div>
 
@@ -449,7 +464,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         variant="destructive"
                         size={isMobile ? "sm" : "default"}
                         className="self-end sm:self-auto"
-                        onClick={() => setShowDeleteAccount(true)}
+                        onClick={() => setModalStates(prev => ({ ...prev, showDeleteAccount: true }))}
                       >
                         Delete account
                       </Button>
@@ -458,7 +473,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 </div>
               )}
 
-              {isChangingPassword ? (
+              {passwordState.isChanging ? (
                 <form
                   onSubmit={handlePasswordChange}
                   className="space-y-3 sm:space-y-4"
@@ -469,12 +484,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     </label>
                     <div className="relative">
                       <Input
-                        type={showNewPassword ? "text" : "password"}
-                        value={passwordForm.new_password1}
+                        type={passwordState.showNew ? "text" : "password"}
+                        value={passwordState.form.new_password1}
                         onChange={(e) =>
-                          setPasswordForm((prev) => ({
+                          setPasswordState((prev) => ({
                             ...prev,
-                            new_password1: e.target.value,
+                            form: { ...prev.form, new_password1: e.target.value }
                           }))
                         }
                         className="pr-10 text-xs text-white bg-zinc-800/50 border-zinc-700 sm:text-sm"
@@ -484,10 +499,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       />
                       <button
                         type="button"
-                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        onClick={() => setPasswordState(prev => ({ ...prev, showNew: !prev.showNew }))}
                         className="absolute -translate-y-1/2 right-3 top-1/2 text-zinc-400 hover:text-zinc-300"
                       >
-                        {showNewPassword ? (
+                        {passwordState.showNew ? (
                           <EyeOff className="w-3 h-3 sm:w-4 sm:h-4" />
                         ) : (
                           <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -505,12 +520,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     </label>
                     <div className="relative">
                       <Input
-                        type={showConfirmPassword ? "text" : "password"}
-                        value={passwordForm.new_password2}
+                        type={passwordState.showConfirm ? "text" : "password"}
+                        value={passwordState.form.new_password2}
                         onChange={(e) =>
-                          setPasswordForm((prev) => ({
+                          setPasswordState((prev) => ({
                             ...prev,
-                            new_password2: e.target.value,
+                            form: { ...prev.form, new_password2: e.target.value }
                           }))
                         }
                         className="pr-10 text-xs text-white bg-zinc-800/50 border-zinc-700 sm:text-sm"
@@ -521,11 +536,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       <button
                         type="button"
                         onClick={() =>
-                          setShowConfirmPassword(!showConfirmPassword)
+                          setPasswordState(prev => ({ ...prev, showConfirm: !prev.showConfirm }))
                         }
                         className="absolute -translate-y-1/2 right-3 top-1/2 text-zinc-400 hover:text-zinc-300"
                       >
-                        {showConfirmPassword ? (
+                        {passwordState.showConfirm ? (
                           <EyeOff className="w-3 h-3 sm:w-4 sm:h-4" />
                         ) : (
                           <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -539,8 +554,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       type="submit"
                       className="flex-1 bg-gradient-to-r from-yellow-500 to-pink-500 hover:from-yellow-600 hover:to-pink-600 text-white rounded-[10px] text-xs sm:text-sm"
                       disabled={
-                        !passwordForm.new_password1 ||
-                        !passwordForm.new_password2
+                        !passwordState.form.new_password1 ||
+                        !passwordState.form.new_password2
                       }
                     >
                       Change Password
@@ -549,13 +564,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       type="button"
                       variant="outline"
                       onClick={() => {
-                        setIsChangingPassword(false);
-                        setPasswordForm({
-                          new_password1: "",
-                          new_password2: "",
+                        setPasswordState({
+                          isChanging: false,
+                          showNew: false,
+                          showConfirm: false,
+                          form: { new_password1: "", new_password2: "" }
                         });
-                        setShowNewPassword(false);
-                        setShowConfirmPassword(false);
                       }}
                       className="flex-1 border-zinc-700 hover:bg-zinc-800 text-zinc-400 rounded-[10px] text-xs sm:text-sm"
                     >
@@ -605,10 +619,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                           </span>
                           <Button
                             onClick={deleteAllSessions}
-                            disabled={isDeletingAllChats}
+                            disabled={loadingStates.isDeletingAllChats}
                             className="p-1 sm:p-2 rounded-[10px] bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm h-8 sm:h-auto self-end sm:self-auto"
                           >
-                            {isDeletingAllChats ? "Deleting..." : "Delete all"}
+                            {loadingStates.isDeletingAllChats ? "Deleting..." : "Delete all"}
                           </Button>
                         </div>
                         <div className="border-b-[0.1px]"></div>
@@ -625,6 +639,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                           </Button>
                         </div>
                         <div className="border-b-[0.1px]"></div>
+
+                        {/* Sales Boost Section */}
+                      
                       </div>
                     </div>
                   )}
@@ -633,16 +650,16 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     <div className="space-y-4 sm:space-y-6">
                       {/* Filtered Response */}
                       <button
-                        onClick={() => setShowFilteredResponse(true)}
+                        onClick={() => setModalStates(prev => ({ ...prev, showFilteredResponse: true }))}
                         className="flex items-center justify-between w-full px-3 py-2 text-left transition rounded-lg sm:px-4 sm:py-3 bg-zinc-800/50 hover:bg-zinc-700"
                       >
                         <div className="space-y-1">
                           <span className="text-xs sm:text-sm text-zinc-300">
                             Filtered response
                           </span>
-                          {selectedRole ? (
+                          {featureStates.selectedRole ? (
                             <p className="text-xs capitalize text-zinc-500">
-                              Role: {selectedRole}
+                              Role: {featureStates.selectedRole}
                             </p>
                           ) : (
                             <p className="text-xs text-zinc-500">
@@ -652,12 +669,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         </div>
                         <div
                           className={`px-2 sm:px-3 py-1 rounded-full text-xs ${
-                            filteredResponseEnabled
+                            featureStates.filteredResponseEnabled
                               ? "bg-gradient-to-r from-yellow-500 to-pink-500 text-white"
                               : "bg-zinc-700 text-zinc-400"
                           }`}
                         >
-                          {filteredResponseEnabled ? "On" : "Off"}
+                          {featureStates.filteredResponseEnabled ? "On" : "Off"}
                         </div>
                       </button>
 
@@ -676,12 +693,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         </div>
                         <div
                           className={`px-2 py-1 text-xs rounded-full sm:px-3 ${
-                            memoryEnabled
+                            featureStates.memoryEnabled
                               ? "bg-gradient-to-r from-yellow-500 to-pink-500 text-white"
                               : "bg-zinc-700 text-zinc-400"
                           }`}
                         >
-                          {memoryEnabled ? "On" : "Off"}
+                          {featureStates.memoryEnabled ? "On" : "Off"}
                         </div>
                       </button>
 
@@ -708,6 +725,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       </div>
                     </div>
                   )}
+
 
                   {activeTab === "Landlord/agent" && (
                     <div className="space-y-4 sm:space-y-6">
@@ -876,7 +894,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                               className="w-[16px] h-[16px] mt-0.5"
                             />
                             <p className="text-zinc-300">
-                              Advanced analytics and insights
+                              Get more bookings & sales
                             </p>
                           </div>
 
@@ -887,7 +905,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                               className="w-[16px] h-[16px] mt-0.5"
                             />
                             <p className="text-zinc-300">
-                              Reduced platform fees
+                              Advanced analytics and insights
                             </p>
                           </div>
                         </div>
@@ -915,9 +933,32 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                 </p>
                               </div>
                               <Button
-                                onClick={() => {
+                                type="button"
+                                onClick={async (e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
                                   onClose();
-                                  router.push("/dashboard");
+
+                                  // Refresh user data to get latest verification status
+                                  try {
+                                    await userAPI.getProfile();
+                                  } catch (error) {
+                                    console.error(
+                                      "Failed to refresh user data:",
+                                      error
+                                    );
+                                  }
+
+                                  // Small delay to ensure modal closes and data refreshes before navigation
+                                  setTimeout(() => {
+                                    try {
+                                      router.push("/dashboard");
+                                    } catch (error) {
+                                      console.error("Navigation error:", error);
+                                      // Fallback to window.location
+                                      window.location.href = "/dashboard";
+                                    }
+                                  }, 200);
                                 }}
                                 className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-[10px] text-xs sm:text-sm px-4 py-2 whitespace-nowrap"
                               >
@@ -944,7 +985,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     <div className="space-y-6">
                       <div className="flex flex-col items-center justify-center mb-6">
                         <div className="mb-1 text-4xl font-bold text-white">
-                          {referralPoints.toString().padStart(2, "0")}
+                          {referralData.points.toString().padStart(2, "0")}
                         </div>
                         <div className="text-sm text-zinc-400">
                           Referral Points Earned
@@ -957,7 +998,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         </label>
                         <div className="relative">
                           <Input
-                            value={referralCode}
+                            value={referralData.code}
                             readOnly
                             className="pr-10 text-white bg-zinc-800/50 border-zinc-700"
                           />
@@ -987,7 +1028,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                           Number of People Who Used the Link
                         </label>
                         <div className="flex items-center justify-center w-16 h-10 text-white border rounded-md bg-zinc-800/50 border-zinc-700">
-                          {referralUsers.toString().padStart(2, "0")}
+                          {referralData.users.toString().padStart(2, "0")}
                         </div>
                       </div>
 
@@ -1007,7 +1048,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         Change Password
                       </span>
                       <Button
-                        onClick={() => setIsChangingPassword(true)}
+                        onClick={() => setPasswordState(prev => ({ ...prev, isChanging: true }))}
                         className="p-1 sm:p-2 rounded-[10px] bg-transparent border border-zinc-600 hover:bg-zinc-800 text-white/90 text-xs sm:text-sm h-8 sm:h-auto self-end sm:self-auto"
                       >
                         Change
@@ -1022,17 +1063,17 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       </Dialog>
 
       <DeleteAccountModal
-        isOpen={showDeleteAccount}
-        onClose={() => setShowDeleteAccount(false)}
+        isOpen={modalStates.showDeleteAccount}
+        onClose={() => setModalStates(prev => ({ ...prev, showDeleteAccount: false }))}
       />
       <FilteredResponseModal
-        isOpen={showFilteredResponse}
-        onClose={() => setShowFilteredResponse(false)}
+        isOpen={modalStates.showFilteredResponse}
+        onClose={() => setModalStates(prev => ({ ...prev, showFilteredResponse: false }))}
         onSelect={handleRoleSelect}
       />
       <AgentVerificationModal
-        isOpen={showVerificationModal}
-        onClose={() => setShowVerificationModal(false)}
+        isOpen={modalStates.showVerification}
+        onClose={() => setModalStates(prev => ({ ...prev, showVerification: false }))}
         onSuccess={handleVerificationSuccess}
       />
     </>
