@@ -79,7 +79,6 @@ export default function MediaViewPage({
   // -----------------------------------------------------------------
   // Global UI state
   // -----------------------------------------------------------------
-  const [isMounted, setIsMounted] = useState(false); // Track client-side mount to prevent hydration mismatch
   const [currentPostId, setCurrentPostId] = useState<string>("");
   const [routePostId, setRoutePostId] = useState<string>(""); // Track URL param separately
   const [translateY, setTranslateY] = useState(0);
@@ -143,13 +142,8 @@ export default function MediaViewPage({
   const isLoadingMore = useRef(false);
   const lastPlayedPostRef = useRef<string | null>(null); // Track last post that was autoplayed
   const manuallyPausedRef = useRef<Record<string, boolean>>({}); // Track videos that were manually paused
-  const previousPostsLength = useRef(0); // Track previous posts length to detect when new posts are added
-  const savedScrollPosition = useRef<number>(0); // Save scroll position before posts update
-
-  // Set mounted state on client-side to prevent hydration mismatch
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+  const isUserScrolling = useRef(false); // Track if user is actively scrolling
+  const scrollEndTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Helper function to check if a post has a video
   const checkUrlForVideo = (url?: string | null) => {
@@ -226,38 +220,6 @@ export default function MediaViewPage({
       setAllPostsLoaded(true);
     }
   }, [posts.length, allPostsLoaded]);
-
-  // Preserve scroll position when new posts are loaded
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    // If posts array length increased (new posts loaded) and we're not navigating
-    if (
-      posts.length > previousPostsLength.current &&
-      previousPostsLength.current > 0 &&
-      !isNavigating.current &&
-      !isTransitioning
-    ) {
-      console.log(
-        `📍 Posts loaded: ${previousPostsLength.current} -> ${posts.length}. Restoring scroll position: ${savedScrollPosition.current}`
-      );
-
-      // Use requestAnimationFrame to ensure DOM has updated
-      requestAnimationFrame(() => {
-        if (container && savedScrollPosition.current > 0) {
-          container.scrollTop = savedScrollPosition.current;
-          console.log(`✅ Scroll position restored to: ${container.scrollTop}`);
-        }
-      });
-    }
-
-    // Save current scroll position and posts length before next update
-    if (posts.length > 0) {
-      savedScrollPosition.current = container.scrollTop;
-      previousPostsLength.current = posts.length;
-    }
-  }, [posts.length, isTransitioning]);
 
   // Initialize follow status when posts load (only once)
   useEffect(() => {
@@ -342,24 +304,13 @@ export default function MediaViewPage({
     }
   }, [currentIdx, posts.length, hasMore, isLoading, loadMorePosts]);
 
-  // Auto-load more posts on scroll - Using containerRef instead of window
+  // Auto-load more posts on scroll
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
     const handleScroll = () => {
-      // Don't trigger during transitions
-      if (isTransitioning || isNavigating.current) {
-        return;
-      }
-
-      const scrollTop = container.scrollTop;
-      const scrollHeight = container.scrollHeight;
-      const clientHeight = container.clientHeight;
-      const scrollBottom = scrollTop + clientHeight;
-      
+      scrollPosition.current = window.scrollY + window.innerHeight;
+      const maxScroll = document.documentElement.scrollHeight;
       if (
-        scrollHeight - scrollBottom < 2000 &&
+        maxScroll - scrollPosition.current < 2000 &&
         hasMore &&
         !isLoading &&
         !isLoadingMore.current
@@ -371,9 +322,9 @@ export default function MediaViewPage({
         });
       }
     };
-    container.addEventListener("scroll", handleScroll, { passive: true });
-    return () => container.removeEventListener("scroll", handleScroll);
-  }, [hasMore, isLoading, loadMorePosts, isTransitioning]);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [hasMore, isLoading, loadMorePosts]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1280,15 +1231,19 @@ export default function MediaViewPage({
         }
 
         updateTimeout = setTimeout(() => {
+          // On mobile, only update if user has stopped scrolling to prevent jumping back
+          // On desktop, update more freely
+          const isMobile = isMobileDevice;
+          const shouldUpdate = !isMobile || !isUserScrolling.current;
+          
           // Update current post only if post changed, has significant visibility, and not already updated
-          // IMPORTANT: Only update if not currently being navigated programmatically
           if (
             mostVisiblePostId &&
-            highestRatio > 0.7 && // Increased threshold to 0.7 to be more conservative on mobile
+            highestRatio > 0.5 &&
             mostVisiblePostId !== currentPostId &&
             mostVisiblePostId !== lastUpdatedPostId &&
             !isNavigating.current &&
-            !isTransitioning // Don't update during transitions
+            shouldUpdate
           ) {
             console.log(
               `🔄 Post Focus: Most visible post changed to ${mostVisiblePostId} (visibility: ${(
@@ -1301,15 +1256,12 @@ export default function MediaViewPage({
             setActivePostId(mostVisiblePostId);
 
             // Update URL in browser history without navigation
-            // Use requestAnimationFrame to prevent scroll interruption
             if (typeof window !== "undefined") {
-              requestAnimationFrame(() => {
-                window.history.replaceState(
-                  null,
-                  "",
-                  `/social-feed/post/${mostVisiblePostId}`
-                );
-              });
+              window.history.replaceState(
+                null,
+                "",
+                `/social-feed/post/${mostVisiblePostId}`
+              );
             }
 
             // Only register view and fetch comments if not already done for this post
@@ -1325,60 +1277,58 @@ export default function MediaViewPage({
                 .catch(() => {}); // Silent fail to prevent errors
             }
           }
-        }, 300); // Increased debounce to 300ms for better stability on mobile
+        }, isMobileDevice && isUserScrolling.current ? 500 : 100); // Longer delay during mobile scroll
 
         // Manage video playback (only when significant change happens)
-        // Don't update videos during transitions to avoid interrupting scroll
         if (
           mostVisiblePostId &&
-          highestRatio > 0.7 && // Match the threshold above
-          mostVisiblePostId !== lastUpdatedPostId &&
-          !isTransitioning // Don't update during transitions
+          highestRatio > 0.5 &&
+          mostVisiblePostId !== lastUpdatedPostId
         ) {
-          // Use requestAnimationFrame to batch DOM updates
-          requestAnimationFrame(() => {
-            // Batch video state updates to prevent excessive re-renders
-            const videoUpdates: Record<string, boolean> = {};
-            const mutedUpdates: Record<string, boolean> = {};
+          // Batch video state updates to prevent excessive re-renders
+          const videoUpdates: Record<string, boolean> = {};
+          const mutedUpdates: Record<string, boolean> = {};
 
-            Object.keys(videoRefs.current).forEach((postId) => {
-              const video = videoRefs.current[postId];
-              if (!video) return;
+          Object.keys(videoRefs.current).forEach((postId) => {
+            const video = videoRefs.current[postId];
+            if (!video) return;
 
-              // Pause if not the most visible post and is playing
-              if (postId !== mostVisiblePostId && !video.paused) {
-                video.pause();
-                video.muted = true;
-                videoUpdates[postId] = false;
-                mutedUpdates[postId] = true;
-              }
-
-              // Resume the most visible post if it wasn't manually paused
-              if (
-                postId === mostVisiblePostId &&
-                video.paused &&
-                !manuallyPausedRef.current[postId]
-              ) {
-                video.play().catch(() => {});
-                videoUpdates[postId] = true;
-              }
-            });
-
-            // Batch state updates
-            if (Object.keys(videoUpdates).length > 0) {
-              setVideoPlayingMap((prev) => ({ ...prev, ...videoUpdates }));
+            // Pause if not the most visible post and is playing
+            if (postId !== mostVisiblePostId && !video.paused) {
+              video.pause();
+              video.muted = true;
+              videoUpdates[postId] = false;
+              mutedUpdates[postId] = true;
             }
-            if (Object.keys(mutedUpdates).length > 0) {
-              setVideoMutedMap((prev) => ({ ...prev, ...mutedUpdates }));
+
+            // Resume the most visible post if it wasn't manually paused
+            if (
+              postId === mostVisiblePostId &&
+              video.paused &&
+              !manuallyPausedRef.current[postId]
+            ) {
+              video.play().catch(() => {});
+              videoUpdates[postId] = true;
             }
           });
+
+          // Batch state updates
+          if (Object.keys(videoUpdates).length > 0) {
+            setVideoPlayingMap((prev) => ({ ...prev, ...videoUpdates }));
+          }
+          if (Object.keys(mutedUpdates).length > 0) {
+            setVideoMutedMap((prev) => ({ ...prev, ...mutedUpdates }));
+          }
         }
       },
       {
         threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-        rootMargin: "-15% 0px -15% 0px", // Increased margin to make detection more conservative on mobile
+        rootMargin: "-10% 0px -10% 0px", // Slightly smaller detection area for better center focus
       }
     );
+
+    // Check if mobile once for the entire effect
+    const isMobileDevice = typeof window !== 'undefined' && window.innerWidth <= 768;
 
     // Observe all post containers (not just ones with videos)
     const observeContainers = () => {
@@ -1399,11 +1349,6 @@ export default function MediaViewPage({
 
     // Also add scroll listener as backup to pause videos immediately
     const handleScroll = () => {
-      // Don't handle scroll during transitions
-      if (isTransitioning || isNavigating.current) {
-        return;
-      }
-
       // Find which post is currently most visible in viewport
       let mostVisiblePostId: string | null = null;
       let highestRatio = 0;
@@ -1426,30 +1371,22 @@ export default function MediaViewPage({
         });
       }
 
-      // Only manage video playback if we have a clear winner (>70% visible)
-      if (highestRatio < 0.7) {
-        return;
-      }
+      // Pause all videos except the most visible one, and mute them to stop sound
+      Object.keys(videoRefs.current).forEach((postId) => {
+        const video = videoRefs.current[postId];
+        if (!video) return;
 
-      // Use requestAnimationFrame to avoid blocking scroll
-      requestAnimationFrame(() => {
-        // Pause all videos except the most visible one, and mute them to stop sound
-        Object.keys(videoRefs.current).forEach((postId) => {
-          const video = videoRefs.current[postId];
-          if (!video) return;
-
-          if (postId !== mostVisiblePostId) {
-            if (!video.paused) {
-              console.log(
-                `⏸️ Scroll: Pausing video ${postId} (most visible: ${mostVisiblePostId})`
-              );
-              video.pause();
-              video.muted = true; // Mute to stop sound
-              setVideoPlayingMap((prev) => ({ ...prev, [postId]: false }));
-              setVideoMutedMap((prev) => ({ ...prev, [postId]: true }));
-            }
+        if (postId !== mostVisiblePostId) {
+          if (!video.paused) {
+            console.log(
+              `⏸️ Scroll: Pausing video ${postId} (most visible: ${mostVisiblePostId})`
+            );
+            video.pause();
+            video.muted = true; // Mute to stop sound
+            setVideoPlayingMap((prev) => ({ ...prev, [postId]: false }));
+            setVideoMutedMap((prev) => ({ ...prev, [postId]: true }));
           }
-        });
+        }
       });
     };
 
@@ -1458,8 +1395,22 @@ export default function MediaViewPage({
     let lastScrollTime = 0;
     const throttledScroll = () => {
       const now = Date.now();
-      // Run immediately if it's been more than 100ms since last run (increased for mobile)
-      if (now - lastScrollTime > 100) {
+      
+      // Mark that user is scrolling
+      isUserScrolling.current = true;
+      
+      // Clear any existing scroll end timeout
+      if (scrollEndTimeout.current) {
+        clearTimeout(scrollEndTimeout.current);
+      }
+      
+      // Set a timeout to mark scroll as ended after user stops
+      scrollEndTimeout.current = setTimeout(() => {
+        isUserScrolling.current = false;
+      }, 300); // User has stopped scrolling for 300ms
+      
+      // Run immediately if it's been more than 50ms since last run
+      if (now - lastScrollTime > 50) {
         handleScroll();
         lastScrollTime = now;
       } else if (!scrollTimeout) {
@@ -1468,14 +1419,14 @@ export default function MediaViewPage({
           handleScroll();
           lastScrollTime = Date.now();
           scrollTimeout = null;
-        }, 100); // Increased throttle for better mobile performance
+        }, 50);
       }
     };
 
     const scrollContainer = containerRef.current;
     if (scrollContainer) {
       scrollContainer.addEventListener("scroll", throttledScroll, {
-        passive: true, // Ensure passive for better scroll performance on mobile
+        passive: true,
       });
     }
 
@@ -1483,12 +1434,13 @@ export default function MediaViewPage({
       clearTimeout(timeoutId);
       if (scrollTimeout) clearTimeout(scrollTimeout);
       if (updateTimeout) clearTimeout(updateTimeout);
+      if (scrollEndTimeout.current) clearTimeout(scrollEndTimeout.current);
       observer.disconnect();
       if (scrollContainer) {
         scrollContainer.removeEventListener("scroll", throttledScroll);
       }
     };
-  }, [currentPostId, videoPosts.length, viewPost, fetchComments, commentsMap, isTransitioning]);
+  }, [currentPostId, videoPosts.length, viewPost, fetchComments, commentsMap]);
 
   // Also pause non-active videos as a fallback (with debounce to prevent excessive calls)
   useEffect(() => {
@@ -2510,17 +2462,6 @@ export default function MediaViewPage({
           >
             Go to Feed
           </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // Prevent hydration mismatch by not rendering posts until client-side mount
-  if (!isMounted) {
-    return (
-      <div className="flex h-screen bg-[#0a0a0a] items-center justify-center">
-        <div className="text-center">
-          <p className="text-white text-sm">Loading...</p>
         </div>
       </div>
     );
