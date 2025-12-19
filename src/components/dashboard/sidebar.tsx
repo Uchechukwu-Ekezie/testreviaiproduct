@@ -127,11 +127,11 @@ export function Sidebar() {
     setIsLoggingOut(true);
     try {
       await logout();
-      router.push("/login");
+      router.push("/l");
     } catch (error) {
       console.error("Logout failed:", error);
       // Still redirect even if logout API fails
-      router.push("/login");
+      router.push("/");
     } finally {
       setIsLoggingOut(false);
       setShowLogoutModal(false);
@@ -200,7 +200,7 @@ export function Sidebar() {
         </nav>
 
         {/* Bottom Section - Logout */}
-        <div className="p-4 border-t border-[#2a2a2a]">
+        {/* <div className="p-4 border-t border-[#2a2a2a]">
           <button
             onClick={handleLogoutClick}
             className={`flex items-center gap-3 rounded-[15px] px-3 py-2 text-sm font-medium transition-colors w-full text-gray-400 hover:bg-red-500/10 hover:text-red-400 ${
@@ -210,7 +210,7 @@ export function Sidebar() {
             <LogOut className="w-5 h-5" />
             {!isCollapsed && <span>Log Out</span>}
           </button>
-        </div>
+        </div> */}
       </div>
 
       {/* Logout Confirmation Modal */}
