@@ -1,7 +1,6 @@
 "use client";
 
-import type React from "react";
-import { useState, Suspense } from "react";
+import React, { useState, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Image from "next/image";
@@ -16,6 +15,7 @@ import Logo from "@/components/logo";
 import PPTU from "@/components/pptu";
 import { toast } from "@/components/ui/use-toast";
 import { authAPI } from "@/lib/api";
+import { extractErrorMessage } from "@/utils/error-handler";
 
 function ResetPasswordContent() {
   const [passwords, setPasswords] = useState({
@@ -32,9 +32,20 @@ function ResetPasswordContent() {
   const searchParams = useSearchParams();
   const isMobile = useMediaQuery("(max-width: 1024px)");
 
-  // Get uid and token from URL parameters
-  const uid = searchParams?.get("uid") || "";
-  const token = searchParams?.get("token") || "";
+  // Get email and OTP from localStorage (stored during verification)
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+
+  // Load email and OTP from localStorage on component mount
+  React.useEffect(() => {
+    const storedEmail = localStorage.getItem("resetEmail");
+    const storedOtp = localStorage.getItem("resetOtp");
+    
+    if (storedEmail && storedOtp) {
+      setEmail(storedEmail);
+      setOtp(storedOtp);
+    }
+  }, []);
 
   const togglePasswordVisibility = (
     field: "newPassword" | "confirmPassword"
@@ -50,8 +61,8 @@ function ResetPasswordContent() {
     setError("");
     setIsLoading(true);
 
-    if (!uid || !token) {
-      setError("Invalid reset link. Please request a new password reset.");
+    if (!email || !otp) {
+      setError("Invalid reset session. Please request a new password reset.");
       setIsLoading(false);
       return;
     }
@@ -82,21 +93,22 @@ function ResetPasswordContent() {
       router.push("/signin");
     } catch (error) {
       console.error("Password reset error:", error);
-      setError("Failed to update password. Please try again or request a new reset link.");
+      const errorMessage = extractErrorMessage(error, "Failed to update password. Please try again or request a new reset link.");
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // If no uid or token is present, show an error
-  if (!uid || !token) {
+  // If no email or OTP is present, show an error
+  if (!email || !otp) {
     return (
       <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-[#212121] font-sf-pro">
         <Card className="w-full max-w-[503px] mx-auto p-6">
           <CardContent className="text-center">
-            <h2 className="mb-4 text-xl text-white">Invalid Reset Link</h2>
+            <h2 className="mb-4 text-xl text-white">Invalid Reset Session</h2>
             <p className="mb-6 text-zinc-400">
-              This password reset link is invalid or has expired. Please request a new password reset.
+              This password reset session is invalid or has expired. Please request a new password reset.
             </p>
             <Button
               onClick={() => router.push("/forgot-password")}
@@ -141,7 +153,7 @@ function ResetPasswordContent() {
                         }))
                       }
                       placeholder="Enter your password"
-                      className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-white pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
+                      className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-white/40 pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
 
                       required
                       disabled={isLoading}
@@ -185,7 +197,7 @@ function ResetPasswordContent() {
                         }))
                       }
                       placeholder="Enter your password"
-                      className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-white pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
+                      className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-white/40 pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
 
                       required
                       disabled={isLoading}
