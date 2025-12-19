@@ -9,7 +9,7 @@ export interface User {
     password?: string
     first_name: string
     last_name: string
-    type: "user" | "admin"
+    type: "user" | "admin" | "landlord"
     is_superuser?: boolean
     is_staff?: boolean
     is_active?: boolean
@@ -58,6 +58,7 @@ export interface User {
     updateProfile: (userData: Partial<User>) => Promise<boolean>
     loginWithGoogle: (credentialResponse: GoogleOAuthPayload) => Promise<boolean>
     updateProfileImage: (imageUrl: string) => Promise<boolean>
-    refreshAccessToken: () => Promise<string | null>  
+    refreshAccessToken: () => Promise<string | null>
+    refreshUserData: () => Promise<boolean>
     submitAgentRequest: (data: { phone?: string; verification_document?: File | string }) => Promise<boolean>
   }

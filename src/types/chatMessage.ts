@@ -8,6 +8,7 @@ export interface Message {
   errorMessage?: string; // Add error message field
   retrying?: boolean;
   isNewSession?: boolean;
+  isStreaming?: boolean; // Add streaming state
   properties?: Property[];
   context?: Context[];
   imageUrls?: string[]; // For legacy support
