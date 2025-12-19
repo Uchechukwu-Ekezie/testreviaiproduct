@@ -11,8 +11,7 @@
   - `postsCache` - 100 items max
   - `userCache` - 20 items max
 
-### 2. **Next.js Config Updated** (`next.config.ts`)
-- Already had experimental caching configured:
+### 2. ** Already had experimental caching configured:
   - Dynamic routes: 30 seconds cache
   - Static routes: 180 seconds cache
 
