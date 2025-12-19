@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-
+import { useRouter } from "next/navigation";
 import { userAPI } from "@/lib/api";
 
 import {
@@ -14,11 +14,13 @@ import {
   Check,
   X,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import { Header } from "@/components/dashboard/header";
 import { useReviews } from "@/contexts/reviews-context";
 
 export default function ReviewsPage() {
+  const router = useRouter();
   const {
     reviews,
     isLoading,
@@ -26,7 +28,7 @@ export default function ReviewsPage() {
     fetchReviewsByUserId,
     approveReview,
     rejectReview,
-
+    deleteReview,
     replyToReview,
     getReviewStats,
   } = useReviews();
@@ -182,6 +184,24 @@ export default function ReviewsPage() {
     const result = await rejectReview(reviewId);
     if (!result.success) {
       console.error("Failed to reject review:", result.error);
+    }
+    setActionLoading((prev) => {
+      const newState = { ...prev };
+      delete newState[reviewId];
+      return newState;
+    });
+  };
+
+  const handleDelete = async (reviewId: string) => {
+    if (!confirm("Are you sure you want to delete this review? This action cannot be undone.")) {
+      return;
+    }
+
+    setActionLoading((prev) => ({ ...prev, [reviewId]: "deleting" }));
+    const result = await deleteReview(reviewId);
+    if (!result.success) {
+      console.error("Failed to delete review:", result.error);
+      alert("Failed to delete review. Please try again.");
     }
     setActionLoading((prev) => {
       const newState = { ...prev };
@@ -495,10 +515,23 @@ export default function ReviewsPage() {
                               <Reply className="w-4 h-4" />
                             </button>
                             <button
-                              className="text-gray-400 hover:text-white"
+                              onClick={() => router.push(`/dashboard/reviews/${review.id}`)}
+                              className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-[#373737] rounded-lg"
                               title="View Details"
                             >
                               <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(review.id)}
+                              disabled={!!actionLoading[review.id]}
+                              className="text-red-500 hover:text-red-400 disabled:opacity-50 p-2 hover:bg-[#373737] rounded-lg transition-colors"
+                              title="Delete Review"
+                            >
+                              {actionLoading[review.id] === "deleting" ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
                             </button>
                           </div>
 
