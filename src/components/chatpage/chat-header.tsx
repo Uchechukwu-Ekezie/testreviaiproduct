@@ -2,7 +2,7 @@
 
 import type React from "react";
 import { Button } from "@/components/ui/button";
-import { PanelLeftOpen, Plus } from "lucide-react";
+import { PanelLeftOpen, Plus, User, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProfileDropdown } from "@/components/profile-dropdown";
 import { useRouter } from "next/navigation";
@@ -15,6 +15,7 @@ interface ChatHeaderProps {
   sidebarOpen: boolean;
   startNewChat?: () => void;
   isMediumScreen: boolean; // Add this prop
+  isClient?: boolean; // Add this prop for hydration safety
 }
 
 const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -24,7 +25,8 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   isLgScreen,
   sidebarOpen,
   startNewChat,
-  // Destructure the new prop
+  isMediumScreen,
+  isClient = true, // Default to true for backward compatibility
 }) => {
   const router = useRouter();
 
@@ -47,19 +49,18 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
       {/* Fixed Right Actions */}
       <div className="fixed z-50 right-10 top-3">
         <div className="flex items-center gap-2">
-          {/* Dashboard Button - Show for all authenticated users for now */}
-          {/* {isAuthenticated && (
+          {/* Social Feed Button - Only show when authenticated */}
+          {isAuthenticated && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleDashboardClick}
-              className="flex items-center gap-2 px-3 py-2 text-white border bg-zinc-800 hover:bg-zinc-700 border-zinc-600"
-              title="Agent Dashboard"
+              onClick={() => router.push("/social-feed")}
+              className="text-sm text-muted-foreground hover:text-foreground bg-transparent rounded-2xl hover:from-purple-500/30 hover:to-pink-500/30 border border-purple-500/30"
             >
-              <LayoutDashboard className="w-4 h-4" />
-              <span className="text-sm">Dashboard</span>
+              {/* <User className="w-4 h-4 mr-1" /> */}
+              Social Feed
             </Button>
-          )} */}
+          )}
 
           {/* Profile/Sign In */}
           {isAuthenticated ? (
@@ -79,8 +80,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
       {/* Main Header */}
       <header
         className={cn(
-          "fixed top-0 z-40 h-14  bg-background",
-          "transition-all duration-300",
+          "fixed top-0 z-40 h-14  bg-transparent",
           "w-full",
           sidebarCollapsed && !isLgScreen ? "md:pl-16" : "md:pl-64",
           isLgScreen && !sidebarOpen ? "lg:pl-4" : "lg:pl-64"
@@ -90,7 +90,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
           {/* Left side controls */}
           <div className="flex items-center gap-2">
             {/* Menu Button - Show on medium and large screens when sidebar is closed */}
-            {!sidebarOpen && (
+            {isClient && !sidebarOpen && (
               <button
                 onClick={() => {
                   setSidebarOpen(true);
@@ -103,7 +103,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
             )}
 
             {/* New Chat Button - only visible when sidebar is closed */}
-            {!sidebarOpen && (
+            {isClient && !sidebarOpen && (
               <div className="flex items-center justify-center w-8 h-8 border-2 rounded-full">
                 <button
                   onClick={(e) => {
