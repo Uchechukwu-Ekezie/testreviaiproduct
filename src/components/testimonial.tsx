@@ -77,7 +77,7 @@ export default function Testimonial() {
   return (
     <div
       {...handlers}
-      className="relative max-w-[720px] w-full bg-[#262626] h-[800px] flex flex-col justify-center items-center p-6 rounded-xl shadow-lg"
+      className="relative max-w-[720px] w-full bg-[#262626] h-[800px] flex flex-col justify-center items-center p-6 rounded-[32px] shadow-lg"
     >
       {/* Testimonial Slides */}
       <div className="w-full overflow-hidden">
