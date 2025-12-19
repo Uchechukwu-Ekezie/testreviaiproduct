@@ -32,9 +32,14 @@ export default function Dashboard() {
   // Fetch user's properties on component mount
   useEffect(() => {
     if (user?.id) {
-      fetchPropertiesByUserId(user.id);
+      // Add a small delay to ensure this runs after the initial general fetch
+      const timeoutId = setTimeout(() => {
+        fetchPropertiesByUserId(user.id!);
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [user?.id]);
+  }, [user?.id, fetchPropertiesByUserId]);
 
   // Calculate dashboard statistics from real data
   const dashboardStats = {
