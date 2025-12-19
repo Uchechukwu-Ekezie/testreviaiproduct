@@ -4,6 +4,11 @@
 @tailwind utilities;
 
 @layer base {
+  /* Prevent mobile zoom on input focus */
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+  
   :root {
     /* Light mode variables */
     --background: 0 0% 100%;
@@ -152,4 +157,42 @@ input:-moz-autofill,
 input:-moz-autofill:focus {
   box-shadow: 0 0 0 30px #121212 inset !important;
   -moz-text-fill-color: white !important;
+}
+
+/* Hide scrollbar utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* Internet Explorer 10+ */
+  scrollbar-width: none;  /* Firefox */
+  -webkit-overflow-scrolling: touch; /* iOS smooth scrolling */
+}
+.scrollbar-hide::-webkit-scrollbar { 
+  display: none;  /* Safari and Chrome */
+  width: 0;
+  height: 0;
+}
+.scrollbar-hide::-webkit-scrollbar-track {
+  display: none;
+}
+.scrollbar-hide::-webkit-scrollbar-thumb {
+  display: none;
+}
+
+/* Mobile safe area utilities for better mobile UX */
+.safe-area-top {
+  top: max(env(safe-area-inset-top), 1rem);
+}
+.safe-area-left {
+  left: max(env(safe-area-inset-left), 1rem);
+}
+.safe-area-right {
+  right: max(env(safe-area-inset-right), 1rem);
+}
+.safe-area-bottom {
+  bottom: max(env(safe-area-inset-bottom), 1rem);
+}
+
+/* Mobile viewport height for full screen experiences */
+.h-screen-mobile {
+  height: 100vh;
+  height: 100dvh; /* Dynamic viewport height */
 }
