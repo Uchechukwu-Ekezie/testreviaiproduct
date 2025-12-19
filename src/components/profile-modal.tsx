@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,7 +10,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-// import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/auth-context";
@@ -25,30 +24,43 @@ interface ProfileModalProps {
 }
 
 export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
-  const { user, updateProfile, updateProfileImage } = useAuth();
+  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
-  const [avatarUploadError, setAvatarUploadError] = useState<string | null>(
-    null
-  );
+  const [avatarUploadError, setAvatarUploadError] = useState<string | null>(null);
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState({
+  // Memoized initial form data to prevent unnecessary re-renders
+  const initialFormData = useMemo(() => ({
     username: user?.username || "",
     first_name: user?.first_name || "",
     last_name: user?.last_name || "",
     avatar: user?.avatar || "",
     phone: user?.phone || user?.agent_info?.phone || "",
-  });
-  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(
-    null
-  );
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  }), [user?.username, user?.first_name, user?.last_name, user?.avatar, user?.phone, user?.agent_info?.phone]);
 
-  // Handle avatar file selection
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [formData, setFormData] = useState(initialFormData);
+
+  // Memoized avatar change handler
+  const handleAvatarChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setAvatarUploadError("File size must be less than 5MB");
+        return;
+      }
+
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setAvatarUploadError("Please select an image file");
+        return;
+      }
+
       setSelectedAvatarFile(file);
+      setAvatarUploadError(null);
 
       // Create preview URL
       const reader = new FileReader();
@@ -57,63 +69,35 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
       };
       reader.readAsDataURL(file);
     }
-  };
+  }, []);
 
-  // Update form data when user data changes or modal is opened
+  // Optimized form reset when modal opens
   useEffect(() => {
-    if (user && isOpen) {
-      const phoneValue = user.phone || user.agent_info?.phone || "";
-      
-      const newFormData = {
-        username: user.username || "",
-        first_name: user.first_name || "",
-        last_name: user.last_name || "",
-        avatar: user.avatar || "",
-        phone: phoneValue,
-      };
-      
-      setFormData(newFormData);
+    if (isOpen && user) {
+      setFormData(initialFormData);
       setSelectedAvatarFile(null);
       setAvatarPreview(null);
       setAvatarUploadError(null);
       setIsUploadingAvatar(false);
     }
-  }, [user, isOpen]);
+  }, [isOpen, user, initialFormData]);
 
-  // Additional effect to handle user.agent_info changes specifically
-  useEffect(() => {
-    if (user?.agent_info?.phone && isOpen) {
-      console.log("Agent info phone updated:", user.agent_info.phone);
-      setFormData(prev => ({
-        ...prev,
-        phone: user.phone || user.agent_info?.phone || prev.phone
-      }));
-    }
-  }, [user?.agent_info?.phone, user?.phone, isOpen]);
-
-  const handleInputChange = (
+  // Memoized input change handler
+  const handleInputChange = useCallback((
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-  };
+  }, []);
 
-  // Upload image to Cloudinary and get the URL
-  const uploadToCloudinary = async (file: File) => {
-    // Create a FormData object for Cloudinary upload
+  // Memoized Cloudinary upload function
+  const uploadToCloudinary = useCallback(async (file: File) => {
     const cloudinaryFormData = new FormData();
     cloudinaryFormData.append("file", file);
-
-    // For unsigned uploads, an upload preset is REQUIRED
-    const uploadPreset =
-      process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "reviai_avatars";
-    cloudinaryFormData.append("upload_preset", uploadPreset);
-
-    // Add folder parameter for organization (allowed in unsigned uploads)
+    cloudinaryFormData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "reviai_avatars");
     cloudinaryFormData.append("folder", "profile_avatars");
 
     try {
-      // Make sure the cloud name is defined
       const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
       if (!cloudName) {
         throw new Error("Cloudinary cloud name is not defined");
@@ -134,55 +118,42 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
       }
 
       const data = await response.json();
-
-      // Use the URL from Cloudinary directly - no transformations
       return data.secure_url;
     } catch (error) {
       console.error("Cloudinary upload error:", error);
       throw error;
     }
-  };
+  }, []);
 
-  // Send the Cloudinary URL to your backend
-  const updateAvatarInBackend = async (avatarUrl: string): Promise<string> => {
+  // Memoized backend update function
+  const updateAvatarInBackend = useCallback(async (avatarUrl: string): Promise<string> => {
     try {
-      console.log("[1] Starting update with:", avatarUrl);
+      const uploadedAvatarUrl = await userAPI.uploadAvatar(avatarUrl);
 
-      // Make the API call
-      const response = await userAPI.uploadAvatar(avatarUrl);
-      console.log("[2] Received response:", response);
-
-      // If we get here but response is undefined, backend isn't returning data
-      if (!response) {
-        throw new Error(
-          "Backend returned 200 but no data - check server implementation"
-        );
+      if (!uploadedAvatarUrl) {
+        throw new Error("Backend returned 200 but no data - check server implementation");
       }
 
-      // Fallback: Use the original Cloudinary URL if backend doesn't return one
-      const finalAvatarUrl = response?.avatar || avatarUrl;
-      console.log("[3] Using avatar URL:", finalAvatarUrl);
-
-      await updateProfileImage(finalAvatarUrl);
-      return finalAvatarUrl;
+      return uploadedAvatarUrl || avatarUrl;
     } catch (error: unknown) {
-      console.error("[4] Full error:", {
-        message: (error as any).message,
-        response: (error as any).response?.data,
-      });
-
       // If backend fails but we have a Cloudinary URL, use it as fallback
       if (avatarUrl) {
-        console.warn("Using Cloudinary URL as fallback due to backend error");
-        await updateProfileImage(avatarUrl);
-        return avatarUrl;
+        try {
+          await userAPI.uploadAvatar(avatarUrl);
+          return avatarUrl;
+        } catch (fallbackError) {
+          console.error("Fallback upload failed:", fallbackError);
+        }
       }
 
-      throw new Error((error as any).response?.data?.message || "Avatar update failed");
+      throw new Error(
+        (error as any).response?.data?.message || "Avatar update failed"
+      );
     }
-  };
+  }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Memoized form submission handler
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
 
     try {
@@ -195,11 +166,10 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         changedFields.first_name = formData.first_name;
       if (user?.last_name !== formData.last_name)
         changedFields.last_name = formData.last_name;
-      
+
       // Check for phone number changes (compare with both possible sources)
       const currentPhone = user?.phone || user?.agent_info?.phone || "";
-      if (currentPhone !== formData.phone)
-        changedFields.phone = formData.phone;
+      if (currentPhone !== formData.phone) changedFields.phone = formData.phone;
 
       // Early return if no changes
       if (Object.keys(changedFields).length === 0 && !selectedAvatarFile) {
@@ -217,15 +187,12 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
       if (selectedAvatarFile) {
         setIsUploadingAvatar(true);
         try {
-          // First upload to Cloudinary
           const cloudinaryUrl = await uploadToCloudinary(selectedAvatarFile);
           if (!cloudinaryUrl) {
             throw new Error("Failed to upload avatar to Cloudinary");
           }
 
-          // Then update the backend with the Cloudinary URL
           const confirmedAvatarUrl = await updateAvatarInBackend(cloudinaryUrl);
-
           changedFields.avatar = confirmedAvatarUrl;
           setFormData((prev) => ({ ...prev, avatar: confirmedAvatarUrl }));
 
@@ -237,8 +204,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
           setAvatarUploadError(error.message || "Error uploading avatar");
           toast({
             title: "Avatar Update Failed",
-            description:
-              error.message || "Couldn't update avatar. Please try again.",
+            description: error.message || "Couldn't update avatar. Please try again.",
             variant: "destructive",
           });
           setIsLoading(false);
@@ -251,8 +217,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
 
       // Update profile with changed fields
       if (Object.keys(changedFields).length > 0) {
-        await updateProfile(changedFields);
-
+        await userAPI.updateProfile(changedFields);
         toast({
           title: "Profile updated",
           description: "Your profile has been updated successfully.",
@@ -264,7 +229,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
       setAvatarPreview(null);
       setTimeout(() => {
         onClose();
-      }, 1500);
+      }, 1000); // Reduced delay for better UX
     } catch (error: any) {
       toast({
         title: "Update failed",
@@ -274,7 +239,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user, formData, selectedAvatarFile, uploadToCloudinary, updateAvatarInBackend, onClose]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -352,7 +317,6 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
               onChange={handleInputChange}
               // className="border-border bg-card"
               className="border border-white/15 w-full bg-transparent h-9 rounded-[10px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-muted-foreground pl-3 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
-
               placeholder="Enter your username"
               minLength={3}
               maxLength={20}
@@ -370,7 +334,6 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
               value={formData.first_name}
               onChange={handleInputChange}
               className="border border-white/15 w-full bg-transparent h-9 rounded-[10px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-muted-foreground pl-3 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
-
               placeholder="Enter your first name"
             />
           </div>
@@ -386,7 +349,6 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
               value={formData.last_name}
               onChange={handleInputChange}
               className="border border-white/15 w-full bg-transparent h-9 rounded-[10px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-muted-foreground pl-3 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
-
               placeholder="Enter your last name"
             />
           </div>
@@ -402,7 +364,6 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
               readOnly
               disabled
               className="opacity-70 border border-white/15 w-full bg-transparent h-9 rounded-[10px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-muted-foreground pl-3 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
-
             />
           </div>
 
@@ -423,7 +384,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
           </div> */}
 
           {/* Subscription Info */}
-          {user?.subscription_type && (
+          {/* {user?.subscription_type && (
             <div className="p-4 space-y-2 rounded-md bg-zinc-800">
               <h3 className="text-sm font-medium text-white">
                 Subscription Info
@@ -457,7 +418,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                 )}
               </div>
             </div>
-          )}
+          )} */}
 
           {/* Action Buttons */}
           <div className="flex justify-end gap-3">
