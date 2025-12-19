@@ -1,0 +1,27 @@
+/* styles/globals.css */
+@font-face {
+    font-family: 'SF Pro';
+    src: url('/fonts/sf-pro/SF-Pro-Regular.woff2') format('woff2'),
+         url('/fonts/sf-pro/SF-Pro-Regular.woff') format('woff');
+    font-weight: 400;
+    font-style: normal;
+  }
+  
+  @font-face {
+    font-family: 'SF Pro';
+    src: url('/fonts/sf-pro/SF-Pro-Bold.woff2') format('woff2'),
+         url('/fonts/sf-pro/SF-Pro-Bold.woff') format('woff');
+    font-weight: 700;
+    font-style: normal;
+  }
+  
+  @font-face {
+    font-family: 'SF Pro';
+    src: url('/fonts/sf-pro/SF-Pro-Italic.woff2') format('woff2'),
+         url('/fonts/sf-pro/SF-Pro-Italic.woff') format('woff');
+    font-weight: 400;
+    font-style: italic;
+  }
+  
+  /* Additional font-face definitions as needed */
+  
