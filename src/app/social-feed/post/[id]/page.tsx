@@ -144,6 +144,8 @@ export default function MediaViewPage({
   const manuallyPausedRef = useRef<Record<string, boolean>>({}); // Track videos that were manually paused
   const isUserScrolling = useRef(false); // Track if user is actively scrolling
   const scrollEndTimeout = useRef<NodeJS.Timeout | null>(null);
+  const isLoadingPostsRef = useRef(false); // Track if we're currently loading more posts
+  const preservedScrollPost = useRef<string | null>(null); // Preserve which post user was viewing during load
 
   // Helper function to check if a post has a video
   const checkUrlForVideo = (url?: string | null) => {
@@ -298,11 +300,24 @@ export default function MediaViewPage({
         hasMore,
       });
       isLoadingMore.current = true;
+      isLoadingPostsRef.current = true; // Mark that we're loading
+      preservedScrollPost.current = currentPostId; // Preserve current post
+      console.log(`📌 Preserving scroll position at post: ${currentPostId}`);
+      
       loadMorePosts().finally(() => {
-        isLoadingMore.current = false;
+        // Wait a bit before allowing state updates again to let DOM settle
+        setTimeout(() => {
+          isLoadingMore.current = false;
+          isLoadingPostsRef.current = false;
+          console.log(`✅ Posts loaded, scroll position preserved at: ${preservedScrollPost.current}`);
+          // Clear after a bit longer to ensure stability
+          setTimeout(() => {
+            preservedScrollPost.current = null;
+          }, 1000);
+        }, 500);
       });
     }
-  }, [currentIdx, posts.length, hasMore, isLoading, loadMorePosts]);
+  }, [currentIdx, posts.length, hasMore, isLoading, loadMorePosts, currentPostId]);
 
   // Auto-load more posts on scroll
   useEffect(() => {
@@ -967,7 +982,7 @@ export default function MediaViewPage({
   // Navigation: next/prev (defined first for use in event handlers)
   // -----------------------------------------------------------------
   const goToNext = useCallback(() => {
-    if (isNavigating.current || isTransitioning) return;
+    if (isNavigating.current || isTransitioning || isLoadingPostsRef.current) return;
     const nextIdx = currentIdx + 1;
     const next = videoPosts[nextIdx];
 
@@ -1039,7 +1054,7 @@ export default function MediaViewPage({
   ]);
 
   const goToPrev = useCallback(() => {
-    if (isNavigating.current || isTransitioning) return;
+    if (isNavigating.current || isTransitioning || isLoadingPostsRef.current) return;
     const prev = videoPosts[currentIdx - 1];
     if (!prev) return;
     isNavigating.current = true;
@@ -1236,6 +1251,12 @@ export default function MediaViewPage({
           const isMobile = isMobileDevice;
           const shouldUpdate = !isMobile || !isUserScrolling.current;
           
+          // CRITICAL: Don't update if we're loading posts - this prevents scroll jumping
+          if (isLoadingPostsRef.current || preservedScrollPost.current) {
+            console.log(`⏸️ Skipping post update - loading posts or scroll position preserved`);
+            return;
+          }
+          
           // Update current post only if post changed, has significant visibility, and not already updated
           if (
             mostVisiblePostId &&
@@ -1349,6 +1370,11 @@ export default function MediaViewPage({
 
     // Also add scroll listener as backup to pause videos immediately
     const handleScroll = () => {
+      // Don't handle scroll events while loading posts
+      if (isLoadingPostsRef.current || preservedScrollPost.current) {
+        return;
+      }
+      
       // Find which post is currently most visible in viewport
       let mostVisiblePostId: string | null = null;
       let highestRatio = 0;
