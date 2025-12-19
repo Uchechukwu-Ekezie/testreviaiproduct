@@ -9,6 +9,7 @@ import React, {
   useCallback,
 } from "react";
 import { reviewsAPI } from "@/lib/api";
+import { reviewsCache } from "@/lib/cache";
 
 interface Review {
   id: string;
@@ -51,6 +52,7 @@ interface ReviewsContextType {
     filters?: ReviewFilters
   ) => Promise<void>;
   getReviewById: (id: string) => Promise<Review | null>;
+  getReviewsByPropertyId: (propertyId: string) => Promise<Review[]>;
   approveReview: (id: string) => Promise<{ success: boolean; error?: string }>;
   rejectReview: (id: string) => Promise<{ success: boolean; error?: string }>;
   deleteReview: (id: string) => Promise<{ success: boolean; error?: string }>;
@@ -91,26 +93,15 @@ export const ReviewsProvider: React.FC<ReviewsProviderProps> = ({
 
   const fetchReviews = useCallback(async () => {
     try {
-      console.log("fetchReviews: Starting...");
       setIsLoading(true);
       setError(null);
-      const response = await reviewsAPI.getAll();
-      console.log("fetchReviews: Raw response:", response);
+      const response = (await reviewsAPI.getAll()) as any;
 
       if (response && Array.isArray(response)) {
-        console.log(
-          "fetchReviews: Setting reviews from array, count:",
-          response.length
-        );
         setReviews(response);
       } else if (response && response.results) {
-        console.log(
-          "fetchReviews: Setting reviews from results, count:",
-          response.results.length
-        );
         setReviews(response.results);
       } else {
-        console.log("fetchReviews: No valid data, setting empty array");
         setReviews([]);
       }
     } catch (error) {
@@ -121,46 +112,23 @@ export const ReviewsProvider: React.FC<ReviewsProviderProps> = ({
       setReviews([]);
     } finally {
       setIsLoading(false);
-      console.log("fetchReviews: Completed");
     }
   }, []);
 
   const fetchReviewsByUserId = useCallback(
     async (userId: string, filters?: ReviewFilters) => {
       try {
-        console.log(
-          "fetchReviewsByUserId: Starting with userId:",
-          userId,
-          "filters:",
-          filters
-        );
         setIsLoading(true);
         setError(null);
-        const response = await reviewsAPI.getByUserId(userId, filters);
-        console.log("fetchReviewsByUserId: Raw response:", response);
+        const response = (await reviewsAPI.getByUserId(userId, filters)) as any;
 
         if (response && Array.isArray(response)) {
-          console.log(
-            "fetchReviewsByUserId: Setting reviews from array, count:",
-            response.length
-          );
           setReviews(response);
         } else if (response && response.results) {
-          console.log(
-            "fetchReviewsByUserId: Setting reviews from results, count:",
-            response.results.length
-          );
           setReviews(response.results);
         } else if (response && response.data) {
-          console.log(
-            "fetchReviewsByUserId: Setting reviews from data, count:",
-            response.data.length
-          );
           setReviews(response.data);
         } else {
-          console.log(
-            "fetchReviewsByUserId: No valid data, setting empty array"
-          );
           setReviews([]);
         }
       } catch (error) {
@@ -171,7 +139,6 @@ export const ReviewsProvider: React.FC<ReviewsProviderProps> = ({
         setReviews([]);
       } finally {
         setIsLoading(false);
-        console.log("fetchReviewsByUserId: Completed");
       }
     },
     []
@@ -180,9 +147,7 @@ export const ReviewsProvider: React.FC<ReviewsProviderProps> = ({
   const getReviewById = useCallback(
     async (id: string): Promise<Review | null> => {
       try {
-        console.log("getReviewById: Fetching review with id:", id);
-        const response = await reviewsAPI.getById(id);
-        console.log("getReviewById: Response:", response);
+        const response = (await reviewsAPI.getById(id)) as any;
         return response || null;
       } catch (error) {
         console.error("getReviewById: Error occurred:", error);
@@ -195,11 +160,61 @@ export const ReviewsProvider: React.FC<ReviewsProviderProps> = ({
     []
   );
 
+  const getReviewsByPropertyId = useCallback(
+    async (propertyId: string): Promise<Review[]> => {
+      try {
+        // Check cache first
+        const cacheKey = `reviews_property_${propertyId}`;
+        const cached = reviewsCache.get<Review[]>(cacheKey);
+        if (cached) {
+          console.log("✅ Reviews loaded from cache for property:", propertyId);
+          return cached;
+        }
+
+        console.log("🔄 Fetching reviews from API for property:", propertyId);
+        const response = (await reviewsAPI.getByProperty(propertyId)) as any;
+
+        let reviews: Review[] = [];
+        if (Array.isArray(response)) {
+          console.log(
+            "getReviewsByPropertyId: Got array response:",
+            response.length
+          );
+          reviews = response;
+        } else if (response && Array.isArray(response.results)) {
+          console.log(
+            "getReviewsByPropertyId: Got paginated response:",
+            response.results.length
+          );
+          reviews = response.results;
+        } else {
+          console.log(
+            "getReviewsByPropertyId: Unexpected response format:",
+            response
+          );
+        }
+
+        // Cache for 3 minutes
+        reviewsCache.set(cacheKey, reviews, 180);
+
+        return reviews;
+      } catch (error) {
+        console.error("getReviewsByPropertyId: Error occurred:", error);
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : "Failed to fetch reviews for property";
+        setError(errorMessage);
+        return [];
+      }
+    },
+    []
+  );
+
   const approveReview = useCallback(
     async (id: string): Promise<{ success: boolean; error?: string }> => {
       try {
         setIsLoading(true);
-        console.log("approveReview: Approving review:", id);
         await reviewsAPI.approve(id);
 
         // Update local state
@@ -228,7 +243,6 @@ export const ReviewsProvider: React.FC<ReviewsProviderProps> = ({
     async (id: string): Promise<{ success: boolean; error?: string }> => {
       try {
         setIsLoading(true);
-        console.log("rejectReview: Rejecting review:", id);
         await reviewsAPI.reject(id);
 
         // Update local state
@@ -257,7 +271,6 @@ export const ReviewsProvider: React.FC<ReviewsProviderProps> = ({
     async (id: string): Promise<{ success: boolean; error?: string }> => {
       try {
         setIsLoading(true);
-        console.log("deleteReview: Deleting review:", id);
         await reviewsAPI.delete(id);
 
         // Remove from local state
@@ -285,12 +298,6 @@ export const ReviewsProvider: React.FC<ReviewsProviderProps> = ({
     ): Promise<{ success: boolean; error?: string }> => {
       try {
         setIsLoading(true);
-        console.log(
-          "replyToReview: Replying to review:",
-          id,
-          "with message:",
-          message
-        );
         const response = await reviewsAPI.reply(id, message);
 
         if (response) {
@@ -317,7 +324,6 @@ export const ReviewsProvider: React.FC<ReviewsProviderProps> = ({
   );
 
   const refreshReviews = useCallback(async () => {
-    console.log("refreshReviews: Called");
     await fetchReviews();
   }, [fetchReviews]);
 
@@ -347,14 +353,7 @@ export const ReviewsProvider: React.FC<ReviewsProviderProps> = ({
 
   // Debug effect to log state changes
   useEffect(() => {
-    console.log(
-      "ReviewsContext: State changed - Reviews count:",
-      reviews.length,
-      "Loading:",
-      isLoading,
-      "Error:",
-      error
-    );
+    // State change monitoring removed
   }, [reviews, isLoading, error]);
 
   const value: ReviewsContextType = {
@@ -364,6 +363,7 @@ export const ReviewsProvider: React.FC<ReviewsProviderProps> = ({
     fetchReviews,
     fetchReviewsByUserId,
     getReviewById,
+    getReviewsByPropertyId,
     approveReview,
     rejectReview,
     deleteReview,
