@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -252,19 +252,22 @@ export function AgentVerificationModal({ isOpen, onClose, onSuccess }: AgentVeri
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md gap-0 p-0 bg-[#262626] border-zinc-800 w-[95vw] sm:w-[90vw] md:w-[85vw] lg:max-w-md">
+    <Dialog open={isOpen} modal={true}>
+      <DialogContent
+        className="max-w-md gap-0 p-0 bg-[#262626] border-zinc-800 w-[95vw] sm:w-[90vw] md:w-[85vw] lg:max-w-md"
+        onPointerDownOutside={(event) => event.preventDefault()}
+        onInteractOutside={(event) => event.preventDefault()}
+      >
         <DialogHeader className="flex flex-row items-center justify-between p-4 border-b border-zinc-800">
           <DialogTitle className="text-lg font-medium text-white">
             Request Agent Verification
           </DialogTitle>
-          <button
+          <DialogClose
             onClick={handleClose}
             disabled={isSubmitting || isUploading}
             className="text-zinc-400 hover:text-white disabled:cursor-not-allowed"
-          >
-            <X className="w-5 h-5" />
-          </button>
+            aria-label="Close"
+          />
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="p-4 space-y-4">

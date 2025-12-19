@@ -160,7 +160,7 @@ export default function SignUpPage() {
                             first_name: e.target.value,
                           })
                         }
-                        className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[15px] placeholder:text-[17px] placeholder:text-white pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
+                        className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[15px] placeholder:text-[17px] placeholder:text-white/40 pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
                         disabled={isLoading}
                         required
                       />
@@ -189,7 +189,7 @@ export default function SignUpPage() {
                             last_name: e.target.value,
                           })
                         }
-                        className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[15px] placeholder:text-[17px] placeholder:text-white pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
+                        className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[15px] placeholder:text-[17px] placeholder:text-white/40 pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
                         disabled={isLoading}
                         required
                       />
@@ -215,7 +215,7 @@ export default function SignUpPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, email: e.target.value })
                       }
-                      className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[15px] placeholder:text-[17px] placeholder:text-white pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
+                      className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[15px] placeholder:text-[17px] placeholder:text-white/40 pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
                       disabled={isLoading}
                       required
                     />
@@ -241,7 +241,7 @@ export default function SignUpPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, password: e.target.value })
                       }
-                      className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[15px] placeholder:text-[17px] placeholder:text-white pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
+                      className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[15px] placeholder:text-[17px] placeholder:text-white/40 pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
                       disabled={isLoading}
                       required
                     />

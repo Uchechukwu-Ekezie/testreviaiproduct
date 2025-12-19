@@ -15,3 +15,19 @@ export interface ChatSession {
   created_at?: string;
   user?: string;
 } 
+
+export interface ChatSubmitLocation {
+  latitude: number;
+  longitude: number;
+  label?: string;
+}
+
+export interface ChatSubmitOptions {
+  imageUrls?: string[];
+  file?: File;
+  location?: string;
+  locationDetails?: ChatSubmitLocation;
+  locationLabel?: string;
+  userLatitude?: number;
+  userLongitude?: number;
+}

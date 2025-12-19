@@ -6,6 +6,8 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { UserReviews } from "@/lib/api";
 import { toast } from "./ui/use-toast";
+import type { ApiError } from "@/lib/api/types";
+import { getErrorMessage } from "@/lib/api/error-handler";
 import sms from "../../public/Image/sms.png";
 import Image from "next/image";
 
@@ -25,6 +27,8 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
   const { user: authUser } = useAuth();
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
   const [experience, setExperience] = useState("");
   const [rating, setRating] = useState<number>(0); // Separate rating state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -32,19 +36,42 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
   const [isUploading, setIsUploading] = useState(false);
 
   // Cloudinary configuration - replace with your actual values
-  const CLOUDINARY_CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "your-cloud-name";
-  const CLOUDINARY_UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET_TWO || "your-upload-preset";
+  const CLOUDINARY_CLOUD_NAME =
+    process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "your-cloud-name";
+  const CLOUDINARY_UPLOAD_PRESET =
+    process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET_TWO ||
+    "your-upload-preset";
 
   // Use authUser from context instead of the prop
   const currentUser = authUser || user;
 
   // Rating options for button-based system (5 options)
   const ratingOptions = [
-    { value: 1, label: 'Worse', color: 'bg-red-600 hover:bg-red-700 focus:ring-red-400' },
-    { value: 2, label: 'Bad', color: 'bg-red-500 hover:bg-red-600 focus:ring-red-400' },
-    { value: 3, label: 'Average', color: 'bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-400' },
-    { value: 4, label: 'Good', color: 'bg-green-500 hover:bg-green-600 focus:ring-green-400' },
-    { value: 5, label: 'Very Good', color: 'bg-green-600 hover:bg-green-700 focus:ring-green-400' }
+    {
+      value: 1,
+      label: "Worse",
+      color: "bg-red-600 hover:bg-red-700 focus:ring-red-400",
+    },
+    {
+      value: 2,
+      label: "Bad",
+      color: "bg-red-500 hover:bg-red-600 focus:ring-red-400",
+    },
+    {
+      value: 3,
+      label: "Average",
+      color: "bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-400",
+    },
+    {
+      value: 4,
+      label: "Good",
+      color: "bg-green-500 hover:bg-green-600 focus:ring-green-400",
+    },
+    {
+      value: 5,
+      label: "Very Good",
+      color: "bg-green-600 hover:bg-green-700 focus:ring-green-400",
+    },
   ];
 
   // Set email from user when component mounts or user changes
@@ -57,14 +84,14 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
   // Prevent body scroll when modal is open
   useEffect(() => {
     if (isOpen) {
-      document.body.style.overflow = 'hidden';
+      document.body.style.overflow = "hidden";
     } else {
-      document.body.style.overflow = 'unset';
+      document.body.style.overflow = "unset";
     }
 
     // Cleanup on unmount
     return () => {
-      document.body.style.overflow = 'unset';
+      document.body.style.overflow = "unset";
     };
   }, [isOpen]);
 
@@ -72,15 +99,15 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
 
   const uploadToCloudinary = async (file: File): Promise<string> => {
     const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-    formData.append('folder', 'landlord-reports'); // Different folder for reports
+    formData.append("file", file);
+    formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+    formData.append("folder", "landlord-reports"); // Different folder for reports
 
     try {
       const response = await fetch(
         `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
         {
-          method: 'POST',
+          method: "POST",
           body: formData,
         }
       );
@@ -92,7 +119,7 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
       const data = await response.json();
       return data.secure_url;
     } catch (error) {
-      console.error('Error uploading to Cloudinary:', error);
+      console.error("Error uploading to Cloudinary:", error);
       throw error;
     }
   };
@@ -122,7 +149,9 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
       if (urls.length > 0) {
         toast({
           title: "Success",
-          description: `${urls.length} file${urls.length !== 1 ? 's' : ''} uploaded successfully!`,
+          description: `${urls.length} file${
+            urls.length !== 1 ? "s" : ""
+          } uploaded successfully!`,
         });
       }
 
@@ -139,18 +168,19 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!address || !experience) {
+    if (!address || !city || !state || !experience) {
       toast({
         title: "Warning",
-        description: "Please fill in address and your reason for report.",
+        description:
+          "Please fill in all address fields and your reason for report.",
       });
       return;
     }
 
     if (rating === 0) {
       toast({
-        title: "Warning", 
-        description: "Please select a rating for your landlord experience."
+        title: "Warning",
+        description: "Please select a rating for your landlord experience.",
       });
       return;
     }
@@ -159,7 +189,8 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
     if (files.length === 0) {
       toast({
         title: "Required Field Missing",
-        description: "Please upload at least one file (utility bill or property document).",
+        description:
+          "Please upload at least one file (utility bill or property document).",
         variant: "destructive",
       });
       return;
@@ -184,20 +215,31 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
       }
 
       // Prepare the data for the API
-      const data = {
-        address,
+      const fullAddress = `${address}, ${city}, ${state}`.trim();
+      const data: {
+        address: string;
+        review_text: string;
+        user: string;
+        rating: number;
+        chat_session: string;
+        evidence?: string[];
+      } = {
+        address: fullAddress,
         review_text: experience,
         user: currentUser.id || "",
         rating: rating, // Include the rating (1, 2, 3, 4, or 5)
         chat_session: activeSession || "general",
-        evidence: fileUrls.length > 0 ? JSON.stringify(fileUrls) : "", // Convert array to JSON string
       };
+
+      if (fileUrls.length > 0) {
+        data.evidence = fileUrls;
+      }
 
       // Log the data being sent to help with debugging
       console.log("Submitting landlord report with data:", data);
 
       // Call the API function
-      const response = await UserReviews.postReview(data);
+      const response = await UserReviews.create(data as any);
 
       console.log("Landlord report submitted successfully:", response);
 
@@ -209,24 +251,21 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
 
       // Reset form fields
       setAddress("");
+      setCity("");
+      setState("");
       setExperience("");
       setRating(0);
       setFiles([]);
 
       // Close the popup
       onClose();
-    } catch (err: any) {
-      console.error("Error submitting landlord report:", err);
-
-      // Show a more specific error message if available
-      const errorMessage =
-        err.response?.data?.message ||
-        err.response?.data?.detail ||
-        "Failed to submit your report. Please try again later.";
+    } catch (err: unknown) {
+      const apiError = err as ApiError;
+      console.error("Error submitting landlord report:", apiError);
 
       toast({
         title: "Error",
-        description: errorMessage,
+        description: getErrorMessage(apiError),
         variant: "destructive",
       });
     } finally {
@@ -237,19 +276,18 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const selectedFiles = Array.from(e.target.files);
-      setFiles(prev => [...prev, ...selectedFiles]);
+      setFiles((prev) => [...prev, ...selectedFiles]);
     }
   };
 
   const removeFile = (index: number) => {
-    setFiles(prev => prev.filter((_, i) => i !== index));
+    setFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 bg-background/50 backdrop-blur-sm sm:p-4">
       {/* Modal Container with Responsive Sizing and Scrolling */}
       <div className="w-full max-w-[90vw] sm:max-w-[600px] lg:max-w-[692px]  max-h-[95vh] sm:max-h-[90vh] bg-background border border-border rounded-[10px] shadow-lg flex flex-col overflow-hidden">
-        
         {/* Header - Fixed at top */}
         <div className="relative flex-shrink-0 p-4 border-b sm:p-5 border-border">
           <button
@@ -303,28 +341,59 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
                 </div>
                 {currentUser?.email && (
                   <p className="mt-1 text-xs text-gray-400">
-                    Using your account email. This field is automatically filled.
+                    Using your account email. This field is automatically
+                    filled.
                   </p>
                 )}
               </div>
 
-              {/* Address Field */}
-              <div>
-                <label
-                  htmlFor="address"
-                  className="block mb-1 text-xs text-gray-400 sm:mb-2 sm:text-sm"
-                >
+              {/* Address Fields */}
+              <div className="space-y-3 sm:space-y-4">
+                <label className="block text-xs text-gray-400 sm:text-sm">
                   Property Address
                 </label>
-                <input
-                  type="text"
-                  id="address"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="e.g No. 15, Admiralty Way, Lekki, Lagos"
-                  className="w-full px-3 py-2 sm:py-3 text-sm sm:text-base text-white border rounded-[8px] sm:rounded-[12px] bg-background border-border focus:outline-none focus:ring-2 focus:ring-yellow-400/50 placeholder:text-gray-500"
-                  required
-                />
+
+                {/* Street Address */}
+                <div>
+                  <input
+                    type="text"
+                    id="address"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Street address (e.g., No. 15, Admiralty Way)"
+                    className="w-full px-3 py-2 sm:py-3 text-sm sm:text-base text-white border rounded-[8px] sm:rounded-[12px] bg-background border-border focus:outline-none focus:ring-2 focus:ring-yellow-400/50 placeholder:text-gray-500"
+                    required
+                  />
+                </div>
+
+                {/* City and State Row */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                  {/* City */}
+                  <div>
+                    <input
+                      type="text"
+                      id="city"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      placeholder="City (e.g., Lekki)"
+                      className="w-full px-3 py-2 sm:py-3 text-sm sm:text-base text-white border rounded-[8px] sm:rounded-[12px] bg-background border-border focus:outline-none focus:ring-2 focus:ring-yellow-400/50 placeholder:text-gray-500"
+                      required
+                    />
+                  </div>
+
+                  {/* State */}
+                  <div>
+                    <input
+                      type="text"
+                      id="state"
+                      value={state}
+                      onChange={(e) => setState(e.target.value)}
+                      placeholder="State (e.g., Lagos)"
+                      className="w-full px-3 py-2 sm:py-3 text-sm sm:text-base text-white border rounded-[8px] sm:rounded-[12px] bg-background border-border focus:outline-none focus:ring-2 focus:ring-yellow-400/50 placeholder:text-gray-500"
+                      required
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Experience Field */}
@@ -361,8 +430,10 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
                       className={`px-4 py-2 rounded-lg text-white text-sm font-medium transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-opacity-50 ${
                         rating === option.value
                           ? `${option.color} ring-2 ring-white ring-opacity-50 transform scale-105`
-                          : `${option.color.split(' ')[0]} opacity-70 hover:opacity-100`
-                      } ${option.color.split(' ')[2]}`}
+                          : `${
+                              option.color.split(" ")[0]
+                            } opacity-70 hover:opacity-100`
+                      } ${option.color.split(" ")[2]}`}
                     >
                       {option.label}
                     </button>
@@ -370,7 +441,8 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
                 </div>
                 {rating > 0 && (
                   <p className="text-xs text-gray-300 sm:text-sm">
-                    You selected: {ratingOptions.find(opt => opt.value === rating)?.label}
+                    You selected:{" "}
+                    {ratingOptions.find((opt) => opt.value === rating)?.label}
                   </p>
                 )}
                 {rating === 0 && (
@@ -386,14 +458,15 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
                   htmlFor="photos"
                   className="block mb-1 text-xs text-gray-400 sm:mb-2 sm:text-sm"
                 >
-                  Upload your utility bill or property document (image/PDF/document) *
+                  Upload your utility bill or property document
+                  (image/PDF/document) *
                 </label>
                 <label
                   htmlFor="photos"
                   className={`flex items-center justify-center w-full px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-white transition border rounded-[8px] sm:rounded-[12px] cursor-pointer focus-within:ring-2 focus-within:ring-yellow-400/50 ${
-                    files.length === 0 
-                      ? 'border-red-400 hover:border-red-300' 
-                      : 'border-border hover:border-gray-500'
+                    files.length === 0
+                      ? "border-red-400 hover:border-red-300"
+                      : "border-border hover:border-gray-500"
                   }`}
                 >
                   <Plus className="w-3 h-3 mr-2 sm:w-4 sm:h-4" />
@@ -413,12 +486,18 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
                 {files.length > 0 && (
                   <div className="mt-2 space-y-2 sm:mt-3">
                     <p className="text-xs text-gray-400">
-                      {files.length} file{files.length !== 1 ? 's' : ''} selected
+                      {files.length} file{files.length !== 1 ? "s" : ""}{" "}
+                      selected
                     </p>
                     <div className="space-y-2 overflow-y-auto max-h-32">
                       {files.map((file, index) => (
-                        <div key={index} className="flex items-center justify-between p-2 border rounded sm:p-3 border-border">
-                          <span className="flex-1 mr-2 text-xs text-white truncate sm:text-sm">{file.name}</span>
+                        <div
+                          key={index}
+                          className="flex items-center justify-between p-2 border rounded sm:p-3 border-border"
+                        >
+                          <span className="flex-1 mr-2 text-xs text-white truncate sm:text-sm">
+                            {file.name}
+                          </span>
                           <button
                             type="button"
                             onClick={() => removeFile(index)}
@@ -431,7 +510,7 @@ const ReportYourLandlord: React.FC<ReportYourLandlordProps> = ({
                     </div>
                   </div>
                 )}
-                
+
                 {/* Show warning if no files selected */}
                 {files.length === 0 && (
                   <p className="mt-1 text-xs text-red-400">

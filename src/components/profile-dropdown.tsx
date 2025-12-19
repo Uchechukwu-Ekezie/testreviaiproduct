@@ -11,8 +11,8 @@ import { Avatar } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/auth-context";
 
 import Image from "next/image";
-import { Settings, LogOut, User, Crown, LayoutDashboard } from "lucide-react";
-import { useState } from "react";
+import { Settings, LogOut, User, Crown, LayoutDashboard, MessageSquare } from "lucide-react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ProfileModal } from "./profile-modal";
 import { SettingsModal } from "./settings-modal";
@@ -24,6 +24,14 @@ export function ProfileDropdown() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
+
+  // Memoized handlers for better performance
+  const handleProfileOpen = useCallback(() => setIsProfileOpen(true), []);
+  const handleProfileClose = useCallback(() => setIsProfileOpen(false), []);
+  const handleSettingsOpen = useCallback(() => setIsSettingsOpen(true), []);
+  const handleSettingsClose = useCallback(() => setIsSettingsOpen(false), []);
+  const handleUpgradeOpen = useCallback(() => setIsUpgradeOpen(true), []);
+  const handleUpgradeClose = useCallback(() => setIsUpgradeOpen(false), []);
   return (
     <>
       <DropdownMenu>
@@ -56,18 +64,26 @@ export function ProfileDropdown() {
           <div className="w-[250px]  ">
             <DropdownMenuItem
               className="flex items-center gap-2 pb-3 border-0 cursor-pointer text-muted-foreground hover:text-white hover:bg-zinc-800 hover:border-none focus:outline-none focus:ring-0"
-              onClick={() => setIsProfileOpen(true)}
+              onClick={handleProfileOpen}
             >
               <User style={{ width: "24px", height: "24px" }} />
-
               <span>Profile</span>
             </DropdownMenuItem>
+            {(user?.type === "admin" || user?.agent_request?.status === "approved") && (
+              <DropdownMenuItem
+                className="flex items-center gap-2 pb-3 border-0 cursor-pointer text-muted-foreground hover:text-white hover:bg-zinc-800 hover:border-none focus:outline-none focus:ring-0"
+                onClick={() => router.push("/dashboard")}
+              >
+                <LayoutDashboard style={{ width: "24px", height: "24px" }} />
+                <span>Dashboard</span>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem
               className="flex items-center gap-2 pb-3 border-0 cursor-pointer text-muted-foreground hover:text-white hover:bg-zinc-800 hover:border-none focus:outline-none focus:ring-0"
-              onClick={() => router.push("/dashboard")}
+              onClick={() => router.push("/reviews")}
             >
-              <LayoutDashboard style={{ width: "24px", height: "24px" }} />
-              <span>Dashboard</span>
+              <MessageSquare style={{ width: "24px", height: "24px" }} />
+              <span>Reviews</span>
             </DropdownMenuItem>
             {/* <DropdownMenuItem
 className="flex items-center gap-2 pb-3 border-0 cursor-pointer text-muted-foreground hover:text-white hover:bg-zinc-800 hover:border-none focus:outline-none focus:ring-0"
@@ -78,7 +94,7 @@ onClick={() => setIsUpgradeOpen(true)}
             </DropdownMenuItem> */}
             <DropdownMenuItem
               className="flex items-center gap-2 pb-3 border-0 cursor-pointer text-muted-foreground hover:text-white hover:bg-zinc-800 hover:border-none focus:outline-none focus:ring-0"
-              onClick={() => setIsSettingsOpen(true)}
+              onClick={handleSettingsOpen}
             >
               <Settings style={{ width: "24px", height: "24px" }} />
               Settings
@@ -97,15 +113,15 @@ onClick={() => setIsUpgradeOpen(true)}
 
       <ProfileModal
         isOpen={isProfileOpen}
-        onClose={() => setIsProfileOpen(false)}
+        onClose={handleProfileClose}
       />
       <SettingsModal
         isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
+        onClose={handleSettingsClose}
       />
       <UpgradePlanModal
         isOpen={isUpgradeOpen}
-        onClose={() => setIsUpgradeOpen(false)}
+        onClose={handleUpgradeClose}
       />
     </>
   );

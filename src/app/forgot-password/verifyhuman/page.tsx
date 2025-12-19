@@ -11,23 +11,36 @@ import Testimonial from "@/components/testimonial"
 import { useMediaQuery } from "@/hooks/use-mobile"
 import Logo from "@/components/logo"
 import PPTU from "@/components/pptu"
+import { authAPI } from "@/lib/api/auth.api"
+import { extractErrorMessage } from "@/utils/error-handler"
 
 export default function VerifyHumanPage() {
   const [verificationCode, setVerificationCode] = useState("")
   const [displayCode] = useState("SBYSW8DJ") // In a real app, this would be generated
   const [error, setError] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const isMobile = useMediaQuery("(max-width: 1024px)")
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+    setIsLoading(true)
 
-    if (verificationCode.toUpperCase() === displayCode) {
-      // Here you would typically verify with your backend
-      router.push("/signin") // Redirect to login page after successful verification
-    } else {
-      setError("Invalid verification code. Please try again.")
+    try {
+      // Call the real API endpoint
+      await authAPI.verifyHuman(verificationCode)
+      
+      // If successful, redirect to signin
+      router.push("/signin")
+    } catch (error) {
+      console.error("Verification error:", error)
+      
+      const errorMessage = extractErrorMessage(error)
+      
+      setError(errorMessage)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -64,9 +77,10 @@ export default function VerifyHumanPage() {
 
               <Button
                 type="submit"
-                className="w-full text-white font-medium h-11 bg-gradient-to-r from-[#FFD700] to-[#780991] hover:from-yellow-600 hover:to-pink-600 rounded-[15px]"
+                disabled={isLoading || !verificationCode.trim()}
+                className="w-full text-white font-medium h-11 bg-gradient-to-r from-[#FFD700] to-[#780991] hover:from-yellow-600 hover:to-pink-600 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed rounded-[15px]"
               >
-                Verify
+                {isLoading ? "Verifying..." : "Verify"}
               </Button>
             </form>
           </CardContent>

@@ -120,7 +120,15 @@ export default function SettingsPage() {
             setIdVerification({
               status: profile.agent_info.status || "pending",
               documents: profile.agent_info.verification_document
-                ? [profile.agent_info.verification_document]
+                ? [
+                    {
+                      name: profile.agent_info.verification_document,
+                      type: "document",
+                      uploadDate:
+                        profile.agent_info.request_date ||
+                        new Date().toISOString(),
+                    },
+                  ]
                 : [],
             });
           }

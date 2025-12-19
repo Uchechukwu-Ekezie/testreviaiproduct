@@ -1,33 +1,43 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState, useRef, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import Image from "next/image"
+import { useState, useRef, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import Image from "next/image";
 
-import { useRouter } from "next/navigation"
-import { ArrowLeft } from "lucide-react"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import sms from "../../../public/Image/sms.png"
-import Testimonial from "@/components/testimonial"
-import { useMediaQuery } from "@/hooks/use-mobile"
-import Logo from "@/components/logo"
-import PPTU from "@/components/pptu"
-import { Label } from "@/components/ui/label"
-import { authAPI } from "@/lib/api"
-import { toast } from "@/components/ui/use-toast"
-import axios from "axios"
+import { useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import sms from "../../../public/Image/sms.png";
+import Testimonial from "@/components/testimonial";
+import { useMediaQuery } from "@/hooks/use-mobile";
+import Logo from "@/components/logo";
+import PPTU from "@/components/pptu";
+import { Label } from "@/components/ui/label";
+import { authAPI } from "@/lib/api";
+import { toast } from "@/components/ui/use-toast";
+import { extractErrorMessage, handleFormError } from "@/utils/error-handler";
+import axios from "axios";
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState("")
-  const [verificationCode, setVerificationCode] = useState(["", "", "", "", "", ""])
-  const [currentStep, setCurrentStep] = useState<"email" | "verification">("email")
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState("")
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([])
-  const router = useRouter()
-  const isMobile = useMediaQuery("(max-width: 1024px)")
+  const [email, setEmail] = useState("");
+  const [verificationCode, setVerificationCode] = useState([
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+  ]);
+  const [currentStep, setCurrentStep] = useState<"email" | "verification">(
+    "email"
+  );
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const router = useRouter();
+  const isMobile = useMediaQuery("(max-width: 1024px)");
 
   // Focus first input when verification step is entered
   useEffect(() => {
@@ -50,7 +60,10 @@ export default function ForgotPasswordPage() {
     }
   };
 
-  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (
+    index: number,
+    e: React.KeyboardEvent<HTMLInputElement>
+  ) => {
     // Handle backspace
     if (e.key === "Backspace") {
       if (!verificationCode[index] && index > 0) {
@@ -66,7 +79,7 @@ export default function ForgotPasswordPage() {
         setVerificationCode(newCode);
       }
     }
-    
+
     // Handle arrow keys
     if (e.key === "ArrowLeft" && index > 0) {
       inputRefs.current[index - 1]?.focus();
@@ -78,15 +91,18 @@ export default function ForgotPasswordPage() {
 
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
-    const pastedData = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
-    
+    const pastedData = e.clipboardData
+      .getData("text")
+      .replace(/\D/g, "")
+      .slice(0, 6);
+
     if (pastedData.length > 0) {
       const newCode = ["", "", "", "", "", ""];
       for (let i = 0; i < pastedData.length && i < 6; i++) {
         newCode[i] = pastedData[i];
       }
       setVerificationCode(newCode);
-      
+
       // Focus the next empty input or the last one
       const nextIndex = Math.min(pastedData.length, 5);
       inputRefs.current[nextIndex]?.focus();
@@ -94,114 +110,95 @@ export default function ForgotPasswordPage() {
   };
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-    setIsLoading(true)
+    e.preventDefault();
+    setError("");
+    setIsLoading(true);
 
     try {
       // Validate email format before sending
-      if (!email || !email.includes('@') || !email.includes('.')) {
-        setError("Please enter a valid email address")
-        setIsLoading(false)
-        return
+      if (!email || !email.includes("@") || !email.includes(".")) {
+        setError("Please enter a valid email address");
+        setIsLoading(false);
+        return;
       }
-      
-      console.log("Submitting password reset request for email:", email)
-      
+
+      console.log("Submitting password reset request for email:", email);
+
       // Call the API to request a password reset
-      await authAPI.requestPasswordReset(email)
+      await authAPI.requestPasswordReset(email);
 
       // Show success toast
       toast({
         title: "Verification code sent",
         description: "Please check your email for the verification code.",
-      })
+      });
 
       // Move to the verification step
-      setCurrentStep("verification")
+      setCurrentStep("verification");
     } catch (error) {
-      console.error("Password reset request failed:", error)
-      
-      let errorMessage = "Failed to send verification code. Please try again."
+      console.error("Password reset request failed:", error);
 
-      if (axios.isAxiosError(error) && error.response?.data) {
-        errorMessage = error.response.data.detail || error.response.data.message || errorMessage
-      }
+      const errorMessage = extractErrorMessage(error);
 
-      setError(errorMessage)
+      setError(errorMessage);
       toast({
         title: "Request failed",
         description: errorMessage,
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const handleVerificationSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-    
+    e.preventDefault();
+    setError("");
+
     const code = verificationCode.join("");
-    
+
     if (code.length !== 6) {
-      setError("Please enter all 6 digits of the verification code")
-      return
+      setError("Please enter all 6 digits of the verification code");
+      return;
     }
-    
-    setIsLoading(true)
+
+    setIsLoading(true);
 
     try {
       // Validate inputs
       if (!email || !code) {
-        setError("Email and verification code are required")
-        setIsLoading(false)
-        return
+        setError("Email and verification code are required");
+        setIsLoading(false);
+        return;
       }
 
       // Call the API to verify the OTP code with email
-      const response = await authAPI.verifyEmailOtp(email, code)
+      await authAPI.verifyEmailOtp(email, code);
 
       // Show success toast
       toast({
         title: "Verification successful",
         description: "You can now reset your password.",
-      })
+      });
 
-      // Extract the reset token from the response
-      const { uid, token } = response
-
-      // Move to the reset password page with the token
-      router.push(`/forgot-password/reset-password?uid=${encodeURIComponent(uid)}&token=${encodeURIComponent(token)}`)
+      // The server doesn't return uid/token in OTP verification response
+      // We'll use the email and OTP stored in localStorage for the reset step
+      // Move to the reset password page
+      router.push("/forgot-password/reset-password");
     } catch (error) {
-      console.error("Verification failed:", error)
-      
-      let errorMessage = "Invalid verification code. Please try again."
-      let shouldShowResend = false
-      
-      if (axios.isAxiosError(error)) {
-        const errorDetail = error.response?.data?.detail || 
-                          error.response?.data?.message ||
-                          error.response?.data?.error ||
-                          (typeof error.response?.data === 'string' ? error.response.data : null)
+      console.error("Verification failed:", error);
 
-        if (errorDetail) {
-          errorMessage = errorDetail
-          // If OTP is expired, suggest resending
-          if (errorDetail.toLowerCase().includes('expired')) {
-            errorMessage = "Your verification code has expired. Please request a new one."
-            shouldShowResend = true
-          }
-        }
-      }
+      const { errorMessage, shouldShowResend } = handleFormError(error, {
+        fallbackMessage: "Invalid verification code. Please try again.",
+        resendKeywords: ["expired", "invalid", "not found"]
+      });
 
-      setError(errorMessage)
+      setError(errorMessage);
       toast({
         title: "Verification failed",
         description: errorMessage,
         variant: "destructive",
-      })
+      });
 
       // Clear the code and focus first input on error
       setVerificationCode(["", "", "", "", "", ""]);
@@ -209,52 +206,58 @@ export default function ForgotPasswordPage() {
 
       // If OTP is expired, automatically trigger resend
       if (shouldShowResend) {
-        handleResendCode()
+        handleResendCode();
       }
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const handleResendCode = async () => {
-    setIsLoading(true)
+    setIsLoading(true);
     try {
-      await authAPI.requestPasswordReset(email)
-      
+      await authAPI.requestPasswordReset(email);
+
       toast({
         title: "Code resent",
         description: "A new verification code has been sent to your email.",
-      })
-      
+      });
+
       // Clear current code and focus first input
       setVerificationCode(["", "", "", "", "", ""]);
       inputRefs.current[0]?.focus();
     } catch (error) {
-      console.error("Failed to resend code:", error)
-      
-      let errorMessage = "Failed to resend code. Please try again."
+      console.error("Failed to resend code:", error);
+
+      let errorMessage = "Failed to resend code. Please try again.";
       if (axios.isAxiosError(error) && error.response?.data) {
-        errorMessage = error.response.data.detail || error.response.data.message || errorMessage
+        errorMessage =
+          error.response.data.detail ||
+          error.response.data.message ||
+          errorMessage;
       }
 
       toast({
         title: "Failed to resend code",
         description: errorMessage,
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
-  const isCodeComplete = verificationCode.every(digit => digit !== "");
+  const isCodeComplete = verificationCode.every((digit) => digit !== "");
 
   const renderEmailStep = () => (
-    <CardContent className="flex flex-col justify-center flex-grow text-center">
-      <h2 className="text-center text-[25px] font-[500] text-white pb-6">Reset Your Password</h2>
+    <CardContent className="flex flex-col justify-center  text-center">
+      <h2 className="text-center text-[25px] font-[500] text-white pb-6">
+        Reset Your Password
+      </h2>
 
       <p className="mb-8 text-sm text-zinc-400">
-        Enter your email address and we&apos;ll send you a verification code to reset your password.
+        Enter your email address and we&apos;ll send you a verification code to
+        reset your password.
       </p>
 
       <form onSubmit={handleEmailSubmit} className="space-y-4">
@@ -270,7 +273,7 @@ export default function ForgotPasswordPage() {
               placeholder="Enter your email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-white pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
+              className="border border-white/15 w-full bg-transparent h-11 rounded-[15px] text-white !text-[16px] placeholder:text-[17px] placeholder:text-white/40 pl-10 pr-10 focus:outline-none focus:ring-0 focus:border-white/40"
               disabled={isLoading}
               required
             />
@@ -282,7 +285,7 @@ export default function ForgotPasswordPage() {
           </div>
         </div>
 
-        {error && <p className="text-sm text-red-500">{error}</p>}
+        {/* {error && <p className="text-sm text-red-500">{error}</p>} */}
 
         <Button
           type="submit"
@@ -303,14 +306,17 @@ export default function ForgotPasswordPage() {
         Back to Login
       </Button>
     </CardContent>
-  )
+  );
 
   const renderVerificationStep = () => (
     <CardContent className="flex flex-col justify-center flex-grow text-center">
-      <h2 className="text-left text-[25px] font-[500] text-white pb-2">Verify Your Email</h2>
+      <h2 className="text-left text-[25px] font-[500] text-white pb-2">
+        Verify Your Email
+      </h2>
 
       <p className="mb-6 text-sm text-left text-zinc-400">
-        Enter the verification code we&apos;ve sent to <span className="text-white">{email}</span>
+        Enter the verification code we&apos;ve sent to{" "}
+        <span className="text-white">{email}</span>
       </p>
 
       <form onSubmit={handleVerificationSubmit} className="space-y-4">
@@ -337,7 +343,7 @@ export default function ForgotPasswordPage() {
           ))}
         </div>
 
-        {error && <p className="text-sm text-left text-red-500">{error}</p>}
+        {/* {error && <p className="text-sm text-left text-red-500">{error}</p>} */}
 
         <Button
           type="submit"
@@ -376,7 +382,7 @@ export default function ForgotPasswordPage() {
         </Button>
       </div>
     </CardContent>
-  )
+  );
 
   return (
     <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-[#212121] font-sf-pro">
@@ -390,7 +396,7 @@ export default function ForgotPasswordPage() {
             {currentStep === "email" && renderEmailStep()}
             {currentStep === "verification" && renderVerificationStep()}
           </CardContent>
-          
+
           <div className="mt-auto">
             <PPTU />
           </div>
@@ -403,5 +409,5 @@ export default function ForgotPasswordPage() {
         )}
       </div>
     </div>
-  )
+  );
 }

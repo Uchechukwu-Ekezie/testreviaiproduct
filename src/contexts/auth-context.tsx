@@ -5,21 +5,84 @@ import {
   useContext,
   useState,
   useEffect,
+  useRef,
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
-import api, {
+import {
   authAPI,
-  userAPI,
-  clearAuthToken,
-  getAuthToken,
   setAuthToken,
-  verifyToken,
-  landlordAPI,
+  getAuthToken,
+  refreshAccessToken,
+  userAPI,
 } from "@/lib/api";
-import { toast } from "@/components/ui/use-toast";
-import type { AuthContextType, User } from "@/types/user";
-import { GoogleOAuthPayload } from "@/types/auth";
+import type { SignupData } from "@/lib/api/types";
+
+// ✅ User interface matching the API response
+export interface User {
+  id: string;
+  username: string;
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  is_active?: boolean;
+  is_staff?: boolean;
+  email_verified?: boolean;
+  type?: string;
+  avatar?: string;
+  user_type?: string;
+  phone?: string;
+  verification_status?: "none" | "pending" | "verified" | "rejected";
+  agent_request?: {
+    id: string;
+    status: "pending" | "approved" | "rejected";
+    phone?: string;
+    verification_document?: string;
+    approved_by?: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+  agent_info?: {
+    status: "pending" | "approved" | "rejected";
+    request_date: string;
+    verification_document?: string;
+    phone?: string;
+  };
+  created_at?: string;
+  updated_at?: string;
+  last_login?: string;
+  date_joined?: string;
+  subscription_type?: string;
+  subscription_start_date?: string;
+  subscription_end_date?: string;
+  subscription_status?: string;
+  followers_count?: number;
+  following_count?: number;
+  rating?: number;
+  reviews_count?: number;
+  location?: string;
+
+  is_following?: (user: User) => boolean;
+  follow?: (user: User) => Promise<void>;
+  unfollow?: (user: User) => Promise<void>;
+}
+
+// ✅ Auth context interface
+interface AuthContextType {
+  user: User | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<boolean>;
+  signup: (userData: {
+    email: string;
+    first_name: string;
+    last_name: string;
+    password: string;
+    user_type?: "agent" | "landlord";
+  }) => Promise<boolean>;
+  logout: () => void;
+  refreshAccessToken: () => Promise<string | null>;
+}
 
 // ✅ Create auth context with default values
 const AuthContext = createContext<AuthContextType>({
@@ -29,12 +92,7 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => false,
   signup: async () => false,
   logout: () => {},
-  requestPasswordReset: async () => {},
-  updateProfile: async () => false,
-  loginWithGoogle: async () => false,
-  updateProfileImage: async () => false,
   refreshAccessToken: async () => null,
-  submitAgentRequest: async () => false,
 });
 
 // ✅ Auth provider props
@@ -47,164 +105,186 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const hasCheckedAuth = useRef(false); // Prevent re-checking auth on navigation
 
-  // 🔹 Refresh access token function
-  const refreshAccessToken = async (): Promise<string | null> => {
-    const refreshToken = localStorage.getItem("refreshToken");
+  // ✅ Refresh access token function (working version from your code)
+  const refreshAccessTokenFunc = async (): Promise<string | null> => {
+    const refreshToken =
+      typeof window !== "undefined"
+        ? localStorage.getItem("refreshToken")
+        : null;
 
     if (!refreshToken) {
-      // console.log("No refresh token available.");
       return null;
     }
 
     try {
-      const response = await api.post(
-        "/auth/token/refresh/",
-        { refresh: refreshToken },
-        {
-          withCredentials: true,
-        }
-      );
-
-      const newAccessToken = response.data.access_token || response.data.access;
+      // Use the refreshAccessToken function from axios-config
+      const newAccessToken = await refreshAccessToken();
 
       if (newAccessToken) {
-        // Save the new access token
+        // Save the new token with timestamp
+        if (typeof window !== "undefined") {
+          localStorage.setItem("authToken", newAccessToken);
+        }
+
+        // Save token with creation timestamp
+        const tokenData = {
+          token: newAccessToken,
+          timestamp: Date.now(),
+        };
+
+        if (typeof window !== "undefined") {
+          localStorage.setItem("tokenData", JSON.stringify(tokenData));
+        }
         setAuthToken(newAccessToken);
-        // console.log("Access token refreshed successfully");
+
         return newAccessToken;
       }
 
       return null;
     } catch (error) {
       console.error("Failed to refresh access token", error);
-      // In case of failure, clear stored tokens and logout
-      clearAuthToken();
-      localStorage.removeItem("refreshToken");
+      // In case of failure, clear stored tokens and redirect to login
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("authToken");
+        localStorage.removeItem("refreshToken");
+        localStorage.removeItem("tokenData");
+        localStorage.removeItem("authUser");
+        
+        // Show a toast or message that session expired
+        console.log("Session expired. Please login again.");
+      }
       setUser(null);
-      router.push("/login");
+      
+      // Redirect to signin page
+      router.push("/signin");
+      
       return null;
     }
   };
 
-  // 🔹 Setup API interceptor for automatic token refresh
+  // 🔹 Check for existing session on mount (immediate synchronous restoration)
   useEffect(() => {
-    const setupInterceptors = () => {
-      // Request interceptor to add auth token
-      const requestInterceptor = api.interceptors.request.use(
-        (config) => {
-          const token = getAuthToken();
-          if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-          }
-          return config;
-        },
-        (error) => Promise.reject(error)
-      );
+    // Only check once per app lifetime - prevents re-checking on navigation
+    if (hasCheckedAuth.current) {
+      return;
+    }
+    hasCheckedAuth.current = true;
 
-      // Response interceptor to handle 401 errors and refresh tokens
-      const responseInterceptor = api.interceptors.response.use(
-        (response) => response,
-        async (error) => {
-          const originalRequest = error.config;
-
-          if (error.response?.status === 401 && !originalRequest._retry) {
-            originalRequest._retry = true;
-
-            try {
-              const newToken = await refreshAccessToken();
-              if (newToken) {
-                originalRequest.headers.Authorization = `Bearer ${newToken}`;
-                return api(originalRequest);
-              }
-            } catch (refreshError) {
-              console.error("Token refresh failed:", refreshError);
-              // Redirect to login if refresh fails
-              logout();
-              return Promise.reject(refreshError);
-            }
-          }
-
-          return Promise.reject(error);
-        }
-      );
-
-      // Cleanup function
-      return () => {
-        api.interceptors.request.eject(requestInterceptor);
-        api.interceptors.response.eject(responseInterceptor);
-      };
-    };
-
-    const cleanup = setupInterceptors();
-    return cleanup;
-  }, []);
-
-  // 🔹 Check for existing session on mount
-  useEffect(() => {
     const checkAuth = async () => {
-      // console.log("Auth context: Checking authentication status...")
       setIsLoading(true);
 
       try {
-        const token = getAuthToken();
-        if (!token) {
-          console.log("Auth context: No token found");
+        // Immediate synchronous restoration
+        const savedToken =
+          typeof window !== "undefined"
+            ? localStorage.getItem("authToken")
+            : null;
+        const savedUser =
+          typeof window !== "undefined"
+            ? localStorage.getItem("authUser")
+            : null;
+        const refreshToken =
+          typeof window !== "undefined"
+            ? localStorage.getItem("refreshToken")
+            : null;
+
+        // New users with no tokens - immediately stop loading
+        if (!savedToken && !refreshToken) {
+          console.log("Auth context: No tokens found, user not authenticated");
+          setUser(null);
           setIsLoading(false);
           return;
         }
 
-        // console.log("Auth context: Token found, verifying...")
-
-        // Verify token before setting it
-        const isValid = await verifyToken();
-
-        if (!isValid) {
-          // console.log("Auth context: Token is invalid, trying to refresh...")
-
-          // Try to refresh the token
-          const newToken = await refreshAccessToken();
-          if (!newToken) {
-            // console.log("Auth context: Token refresh failed, clearing session")
-            clearAuthToken();
-            setUser(null);
+        if (savedToken && savedUser) {
+          try {
+            const parsedUser = JSON.parse(savedUser);
+            setUser(parsedUser);
+            setAuthToken(savedToken);
             setIsLoading(false);
-            return;
+            return; // Exit early if we have saved data
+          } catch (error) {
+            console.error("Failed to immediately restore auth:", error);
           }
         }
 
-        // Token is valid (or refreshed), get user data
-        // console.log("Auth context: Token is valid, fetching user profile...")
-        const userData = await userAPI.getProfile();
+        // Only try server verification if we have a token but no saved user data
+        if (savedToken && !savedUser) {
+          try {
+            setAuthToken(savedToken);
 
-        if (userData) {
-          // console.log("Auth context: User profile retrieved successfully")
-          setUser({
-            id: userData.id,
-            username: userData.username || userData.email.split("@")[0],
-            email: userData.email,
-            first_name: userData.first_name || "",
-            last_name: userData.last_name || "",
-            type: userData.type || "user",
-            subscription_type: userData.subscription_type,
-            subscription_start_date: userData.subscription_start_date,
-            subscription_end_date: userData.subscription_end_date,
-            is_active: userData.is_active,
-            avatar: userData.avatar || "/placeholder.svg",
-            date_joined: userData.date_joined,
-            last_login: userData.last_login,
-            agent_request: userData.agent_request || undefined, // ← FIXED: Include agent_request
-          });
-        } else {
-          // console.log("Auth context: User profile is empty or invalid")
-          clearAuthToken();
-          localStorage.removeItem("refreshToken");
-          setUser(null);
+            const userData = await userAPI.getProfile();
+
+            setUser(userData);
+            if (typeof window !== "undefined") {
+              localStorage.setItem("authUser", JSON.stringify(userData));
+            }
+          } catch (error) {
+            console.error(
+              "Auth context: Token verification failed, trying to refresh...",
+              error
+            );
+
+            // Try to refresh the token only if we have a refresh token
+            if (refreshToken) {
+              const newToken = await refreshAccessTokenFunc();
+              if (newToken) {
+                try {
+                  const userData = await userAPI.getProfile();
+                  setUser(userData);
+                  if (typeof window !== "undefined") {
+                    localStorage.setItem("authUser", JSON.stringify(userData));
+                  }
+                } catch (profileError) {
+                  console.error(
+                    "Auth context: Profile fetch failed after refresh:",
+                    profileError
+                  );
+                  // Clear everything if refresh doesn't help
+                  if (typeof window !== "undefined") {
+                    localStorage.removeItem("authToken");
+                    localStorage.removeItem("refreshToken");
+                    localStorage.removeItem("tokenData");
+                    localStorage.removeItem("authUser");
+                  }
+                  setUser(null);
+                }
+              } else {
+                // Token refresh failed - clear everything
+                console.log("Token refresh failed. Clearing auth data.");
+                if (typeof window !== "undefined") {
+                  localStorage.removeItem("authToken");
+                  localStorage.removeItem("refreshToken");
+                  localStorage.removeItem("tokenData");
+                  localStorage.removeItem("authUser");
+                }
+                setUser(null);
+                
+                // Redirect to signin page
+                router.push("/signin");
+              }
+            } else {
+              // No refresh token, just clear everything
+              if (typeof window !== "undefined") {
+                localStorage.removeItem("authToken");
+                localStorage.removeItem("refreshToken");
+                localStorage.removeItem("tokenData");
+                localStorage.removeItem("authUser");
+              }
+              setUser(null);
+            }
+          }
         }
       } catch (error) {
         console.error("Auth context: Authentication error:", error);
-        clearAuthToken();
-        localStorage.removeItem("refreshToken");
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("authToken");
+          localStorage.removeItem("refreshToken");
+          localStorage.removeItem("tokenData");
+          localStorage.removeItem("authUser");
+        }
         setUser(null);
       } finally {
         setIsLoading(false);
@@ -214,22 +294,81 @@ export function AuthProvider({ children }: AuthProviderProps) {
     checkAuth();
   }, []);
 
-  // 🔹 Login function
+  // Re-check auth state when window gains focus
+  useEffect(() => {
+    const handleFocus = () => {
+      const token =
+        typeof window !== "undefined"
+          ? localStorage.getItem("authToken")
+          : null;
+      const savedUser =
+        typeof window !== "undefined" ? localStorage.getItem("authUser") : null;
+
+      if (token && savedUser && !user) {
+        try {
+          const parsedUser = JSON.parse(savedUser);
+          setUser(parsedUser);
+          setAuthToken(token);
+        } catch (error) {
+          console.error("Failed to restore auth state:", error);
+        }
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("focus", handleFocus);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("focus", handleFocus);
+      }
+    };
+  }, [user]);
+
+  // Periodic check to ensure auth state consistency
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const token =
+        typeof window !== "undefined"
+          ? localStorage.getItem("authToken")
+          : null;
+      const savedUser =
+        typeof window !== "undefined" ? localStorage.getItem("authUser") : null;
+      const isAuthenticated = !!user;
+
+      // If we have tokens in localStorage but not in state, restore them
+      if (token && savedUser && !isAuthenticated) {
+        try {
+          const parsedUser = JSON.parse(savedUser);
+          setUser(parsedUser);
+          setAuthToken(token);
+        } catch (error) {
+          console.error(
+            "Failed to restore auth state during periodic check:",
+            error
+          );
+        }
+      }
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // 🔹 Login function (working version)
   const login = async (email: string, password: string): Promise<boolean> => {
     setIsLoading(true);
     let success = false;
 
     try {
-      console.log("Auth context: Attempting login...");
-
       // Clear any existing tokens before login attempt
-      clearAuthToken();
-      localStorage.removeItem("refreshToken");
-      localStorage.removeItem("tokenData");
-      delete api.defaults.headers.common["Authorization"];
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("authToken");
+        localStorage.removeItem("refreshToken");
+        localStorage.removeItem("tokenData");
+        localStorage.removeItem("authUser");
+      }
 
       const response = await authAPI.login(email, password);
-      // console.log("Auth context: Login response:", response)
 
       if (!response || !response.access) {
         console.error(
@@ -244,7 +383,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setAuthToken(token);
 
       // Store refresh token if provided
-      if (response.refresh) {
+      if (response.refresh && typeof window !== "undefined") {
         localStorage.setItem("refreshToken", response.refresh);
       }
 
@@ -252,56 +391,59 @@ export function AuthProvider({ children }: AuthProviderProps) {
       let userObj: User;
       if (response.user) {
         userObj = {
-          id: response.user.id || response.user.pk,
+          id: response.user.id,
           username: response.user.username || response.user.email.split("@")[0],
           email: response.user.email,
           first_name: response.user.first_name || "",
           last_name: response.user.last_name || "",
           type: response.user.type || "user",
-          subscription_type: response.user.subscription_type,
-          subscription_start_date: response.user.subscription_start_date,
-          subscription_end_date: response.user.subscription_end_date,
           is_active: response.user.is_active,
           avatar: response.user.avatar || "/placeholder.svg",
           date_joined: response.user.date_joined,
           last_login: response.user.last_login,
-          agent_request: response.user.agent_request || undefined, // ← FIXED: Include agent_request
+          agent_request: response.user.agent_request || undefined,
         };
       } else {
         const userData = await userAPI.getProfile();
         userObj = {
-          id: userData.id || userData.pk,
+          id: userData.id,
           username: userData.username || userData.email.split("@")[0],
           email: userData.email,
           first_name: userData.first_name || "",
           last_name: userData.last_name || "",
           type: userData.type || "user",
-          subscription_type: userData.subscription_type,
-          subscription_start_date: userData.subscription_start_date,
-          subscription_end_date: userData.subscription_end_date,
           is_active: userData.is_active,
           avatar: userData.avatar || "/placeholder.svg",
           date_joined: userData.date_joined,
           last_login: userData.last_login,
-          agent_request: userData.agent_request || undefined, // ← FIXED: Include agent_request
+          agent_request: userData.agent_request || undefined,
         };
       }
 
       setUser(userObj);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("authUser", JSON.stringify(userObj));
+      }
       success = true;
       router.push("/");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Auth context: Login error details:", {
         error,
-        response: error.response,
-        data: error.response?.data || error.detail,
-        status: error.response?.status,
-        message: error.message,
+        response: (error as any).response,
+        data: (error as any).response?.data || (error as any).detail,
+        status: (error as any).response?.status,
+        message: (error as any).message,
       });
 
-      clearAuthToken();
-      localStorage.removeItem("refreshToken");
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("authToken");
+        localStorage.removeItem("refreshToken");
+        localStorage.removeItem("tokenData");
+        localStorage.removeItem("authUser");
+      }
       setUser(null);
+
+      // Re-throw the error so the signin page can handle the toast display
       throw error;
     } finally {
       setIsLoading(false);
@@ -310,168 +452,65 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return success;
   };
 
-  const loginWithGoogle = async (
-    credentialResponse: GoogleOAuthPayload
-  ): Promise<boolean> => {
-    setIsLoading(true);
-    let success = false;
-
-    try {
-      console.log("Auth context: Attempting Google login...");
-
-      clearAuthToken();
-      localStorage.removeItem("refreshToken");
-
-      const response = await authAPI.loginWithGoogle(credentialResponse);
-      console.log("Auth context: Google login response:", response);
-
-      if (!response || !response.access) {
-        console.error(
-          "Auth context: Invalid Google login response structure:",
-          response
-        );
-        throw new Error("Invalid Google login response structure");
-      }
-
-      // Set both access and refresh tokens
-      const token = response.access;
-      setAuthToken(token);
-
-      // Store refresh token if provided
-      if (response.refresh) {
-        localStorage.setItem("refreshToken", response.refresh);
-      }
-
-      // Then fetch user profile
-      let userObj: User;
-      if (response.user) {
-        userObj = {
-          id: response.user.id || response.user.pk,
-          username: response.user.username || response.user.email.split("@")[0],
-          email: response.user.email,
-          first_name: response.user.first_name || "",
-          last_name: response.user.last_name || "",
-          type: response.user.type || "user",
-          subscription_type: response.user.subscription_type,
-          subscription_start_date: response.user.subscription_start_date,
-          subscription_end_date: response.user.subscription_end_date,
-          is_active: response.user.is_active,
-          avatar: response.user.avatar || "/placeholder.svg",
-          date_joined: response.user.date_joined,
-          last_login: response.user.last_login,
-          agent_request: response.user.agent_request || undefined, // ← FIXED: Include agent_request
-        };
-      } else {
-        const userData = await userAPI.getProfile();
-        userObj = {
-          id: userData.id || userData.pk,
-          username: userData.username || userData.email.split("@")[0],
-          email: userData.email,
-          first_name: userData.first_name || "",
-          last_name: userData.last_name || "",
-          type: userData.type || "user",
-          subscription_type: userData.subscription_type,
-          subscription_start_date: userData.subscription_start_date,
-          subscription_end_date: userData.subscription_end_date,
-          is_active: userData.is_active,
-          avatar: userData.avatar || "/placeholder.svg",
-          date_joined: userData.date_joined,
-          last_login: userData.last_login,
-          agent_request: userData.agent_request || undefined, // ← FIXED: Include agent_request
-        };
-      }
-
-      setUser(userObj);
-      success = true;
-      router.push("/");
-    } catch (error: any) {
-      console.error("Auth context: Google login error details:", {
-        error,
-        response: error.response,
-        data: error.response?.data || error.detail,
-        status: error.response?.status,
-        message: error.message,
-      });
-
-      clearAuthToken();
-      localStorage.removeItem("refreshToken");
-      setUser(null);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-
-    return success;
-  };
-
-  // 🔹 Signup function
+  // 🔹 Signup function (compatible with existing API)
   const signup = async (userData: {
     email: string;
     first_name: string;
     last_name: string;
     password: string;
+    user_type?: "agent" | "landlord";
   }): Promise<boolean> => {
     setIsLoading(true);
     let success = false;
 
-    // Clear any existing tokens before signup attempt (same as login)
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("tokenData");
-    delete api.defaults.headers.common["Authorization"];
-
     try {
-      console.log("Auth context: Attempting signup...");
-      const signupData = {
-        ...userData,
-        username: userData.email.split("@")[0],
+      const signupData: SignupData = {
+        username: userData.email.split("@")[0], // Generate username from email
+        email: userData.email,
+        first_name: userData.first_name,
+        last_name: userData.last_name,
+        password: userData.password,
       };
-      const response = await authAPI.signup(signupData);
-      console.log("Auth context: Signup response:", response);
 
-      const responseData = response.data;
+      const response = (await authAPI.signup(signupData)) as any;
 
       const userObj: User = {
-        id: responseData.id || responseData.pk,
-        username: responseData.username,
-        email: responseData.email || userData.email,
-        first_name: responseData.first_name || userData.first_name,
-        last_name: responseData.last_name || userData.last_name,
-        type: responseData.type || "user",
-        is_active:
-          responseData.is_active !== undefined ? responseData.is_active : true,
-        avatar: responseData.avatar || "/placeholder.svg",
-        date_joined: responseData.date_joined || new Date().toISOString(),
-        agent_request: responseData.agent_request || undefined, // ← FIXED: Include agent_request
+        id: response.id || "temp-id",
+        username: response.username || userData.email.split("@")[0],
+        email: response.email || userData.email,
+        first_name: response.first_name || userData.first_name,
+        last_name: response.last_name || userData.last_name,
+        type: response.type || "user",
+        is_active: response.is_active !== undefined ? response.is_active : true,
+        avatar: response.avatar || "/placeholder.svg",
+        date_joined: response.date_joined || new Date().toISOString(),
+        agent_request: response.agent_request || undefined,
       };
 
       setUser(userObj);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("authUser", JSON.stringify(userObj));
+      }
 
       // If there's an access token in the response, set it
-      if (responseData.access) {
-        setAuthToken(responseData.access);
+      if (response.access) {
+        setAuthToken(response.access);
 
         // Store refresh token if provided
-        if (responseData.refresh) {
-          localStorage.setItem("refreshToken", responseData.refresh);
+        if (response.refresh && typeof window !== "undefined") {
+          localStorage.setItem("refreshToken", response.refresh);
         }
       }
 
       success = true;
-      console.log("Auth context: Signup successful, will navigate to verify");
-
-      toast({
-        title: "Account created",
-        description: "Please verify your email to continue.",
-      });
 
       router.push("/verify");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Auth context: Signup error details:", {
         error,
-        response: error.response,
-        data: error.response?.data,
-        status: error.response?.status,
+        response: (error as any).response,
+        data: (error as any).response?.data,
+        status: (error as any).response?.status,
       });
 
       throw error;
@@ -480,209 +519,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     return success;
-  };
-
-  const requestPasswordReset = async (email: string) => {
-    try {
-      const response = await authAPI.requestPasswordReset(email);
-      console.log("Password reset response:", response);
-      return response;
-    } catch (error: any) {
-      console.error("Password reset request failed:", error);
-
-      if (error.response) {
-        console.error("Error Response Data:", error.response.data);
-      }
-
-      throw error;
-    }
-  };
-
-  const updateProfile = async (userData: Partial<User>): Promise<boolean> => {
-    setIsLoading(true);
-    let success = false;
-
-    try {
-      console.log("Auth context: Attempting update profile...");
-
-      const allowedFields: Partial<User> = {
-        username: userData.username,
-        first_name: userData.first_name,
-        last_name: userData.last_name,
-        avatar: userData.avatar,
-      };
-
-      Object.keys(allowedFields).forEach((key) => {
-        if (allowedFields[key as keyof Partial<User>] === undefined) {
-          delete allowedFields[key as keyof Partial<User>];
-        }
-      });
-
-      console.log("Auth context: Updating profile with fields:", allowedFields);
-
-      const response = await userAPI.updateProfile(allowedFields);
-      console.log("Auth context: Update profile response:", response);
-
-      if (!response) {
-        console.error("Auth context: Updated user data is null");
-        throw new Error("Updated user data is null");
-      }
-
-      setUser((prevUser) => {
-        if (!prevUser) return null;
-        return {
-          ...prevUser,
-          ...response,
-          avatar: response.avatar || prevUser.avatar,
-          subscription_type:
-            response.subscription_type || prevUser.subscription_type,
-          subscription_start_date:
-            response.subscription_start_date ||
-            prevUser.subscription_start_date,
-          subscription_end_date:
-            response.subscription_end_date || prevUser.subscription_end_date,
-          is_active:
-            response.is_active !== undefined
-              ? response.is_active
-              : prevUser.is_active,
-          agent_request: response.agent_request || prevUser.agent_request, // ← FIXED: Preserve agent_request
-        };
-      });
-
-      success = true;
-      console.log("Auth context: Update profile successful");
-    } catch (error: any) {
-      console.error("Auth context: Update profile error details:", {
-        error,
-        response: error.response,
-        data: error.response?.data,
-        status: error.response?.status,
-      });
-
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-
-    return success;
-  };
-
-  const updateProfileImage = async (avatarUrl: string): Promise<boolean> => {
-    setIsLoading(true);
-    let success = false;
-
-    try {
-      console.log("Auth context: Attempting to update profile image...");
-
-      const uploadedAvatarUrl = await userAPI.uploadAvatar(avatarUrl);
-      console.log("Auth context: Uploaded avatar URL:", uploadedAvatarUrl);
-
-      const response = await userAPI.updateProfile({
-        avatar: uploadedAvatarUrl,
-      });
-      console.log("Auth context: Update profile image response:", response);
-
-      if (!response) {
-        console.error("Auth context: Updated user data is null");
-        throw new Error("Updated user data is null");
-      }
-
-      setUser((prevUser) => {
-        if (!prevUser) return null;
-        return {
-          ...prevUser,
-          avatar: uploadedAvatarUrl,
-          agent_request: response.agent_request || prevUser.agent_request, // ← FIXED: Preserve agent_request
-        };
-      });
-
-      success = true;
-      console.log("Auth context: Update profile image successful");
-    } catch (error: any) {
-      console.error("Auth context: Update profile image error details:", {
-        error,
-        response: error.response,
-        data: error.response?.data,
-        status: error.response?.status,
-      });
-
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-
-    return success;
-  };
-
-  // 🔹 Submit agent request function
-  const submitAgentRequest = async (data: {
-    phone?: string;
-    verification_document?: string | File;
-  }): Promise<boolean> => {
-    setIsLoading(true);
-
-    try {
-      console.log("=== DEBUGGING SUBMIT AGENT REQUEST ===");
-      console.log("1. Input data:", data);
-
-      // Validate required data
-      if (!data.phone || !data.verification_document) {
-        throw new Error("Phone and verification document are required");
-      }
-
-      // Convert File to string if needed
-      let verificationDoc: string;
-      if (data.verification_document instanceof File) {
-        // If it's a File, you might need to upload it first or convert to base64
-        // For now, using the file name as a placeholder
-        verificationDoc = data.verification_document.name;
-      } else {
-        verificationDoc = data.verification_document;
-      }
-
-      // ONLY send what the backend expects
-      const requestData = {
-        phone: data.phone,
-        verification_document: verificationDoc,
-      };
-
-      console.log("2. Request data to API:", requestData);
-
-      const response = await landlordAPI.postAgentRequest(requestData);
-      console.log("3. API response:", response);
-
-      // Update user with pending status
-      setUser((prevUser) => {
-        if (!prevUser) return null;
-        return {
-          ...prevUser,
-          agent_request: {
-            id: response.id || "temp-id",
-            status: "pending" as const,
-            phone: data.phone,
-            verification_document:
-              typeof data.verification_document === "string"
-                ? data.verification_document
-                : data.verification_document?.name || undefined,
-            created_at: response.created_at || new Date().toISOString(),
-            updated_at: response.updated_at || new Date().toISOString(),
-          },
-        };
-      });
-
-      return true;
-    } catch (error) {
-      console.error("Agent request submission error:", error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   // 🔹 Logout function
   const logout = () => {
-    clearAuthToken();
-    localStorage.removeItem("refreshToken");
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("tokenData");
+      localStorage.removeItem("authUser");
+    }
     setUser(null);
     router.push("/");
   };
@@ -699,12 +545,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         login,
         signup,
         logout,
-        requestPasswordReset,
-        updateProfile,
-        updateProfileImage,
-        loginWithGoogle,
-        refreshAccessToken,
-        submitAgentRequest, // ← FIXED: Include submitAgentRequest
+        refreshAccessToken: refreshAccessTokenFunc,
       }}
     >
       {children}

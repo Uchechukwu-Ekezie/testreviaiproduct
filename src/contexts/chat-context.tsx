@@ -11,7 +11,7 @@ import {
 import { chatAPI } from "@/lib/api";
 import { toast } from "@/components/ui/use-toast";
 import { useAuth } from "./auth-context";
-import { Context } from "@/types/chatMessage";
+import type { ChatMessage as APIChatMessage } from "@/lib/api/types";
 
 // Define interfaces for chat data
 interface ChatSession {
@@ -23,23 +23,13 @@ interface ChatSession {
   unique_chat_id?: string;
 }
 
-interface ChatMessage {
-  id: string;
-  prompt: string;
-  response?: string;
-  classification?: string;
-  context?: Context[];
-  properties?: Property[] | string | null;
-  session: string;
-  created_at?: string;
-  updated_at?: string;
+// Extend API ChatMessage with UI-specific fields
+interface ChatMessage extends APIChatMessage {
   isLoading?: boolean;
   error?: string;
-
-  file?: string | null; // Server file path/URL after upload
-  image_url?: string | null; // Server image URL
   localFile?: File; // Local file for UI display during upload
   imageUrls?: string[]; // Client-side image URLs
+  context?: any[];
 }
 
 interface Property {
@@ -144,8 +134,13 @@ export function ChatProvider({ children }: ChatProviderProps) {
 
     try {
       const response = await chatAPI.getChatsBySession(sessionId);
-      setMessages(response);
-      return response;
+      // Type cast context property if needed
+      const typedResponse = response.map((msg) => ({
+        ...msg,
+        context: msg.context as any,
+      }));
+      setMessages(typedResponse);
+      return typedResponse;
     } catch (error) {
       console.error("Failed to fetch chat messages:", error);
       setError("Failed to fetch chat messages");
@@ -246,7 +241,11 @@ export function ChatProvider({ children }: ChatProviderProps) {
           setActiveSession(newSessionId);
           setSessions((prev) => [newSession, ...prev]);
 
-          const tempMessage: ChatMessage = {
+          const tempMessage: Partial<ChatMessage> & {
+            id: string;
+            prompt: string;
+            session: string;
+          } = {
             id: `temp-${Date.now()}`,
             prompt: message.trim(),
             session: newSessionId,
@@ -254,9 +253,13 @@ export function ChatProvider({ children }: ChatProviderProps) {
             // Show local file in UI while uploading
             localFile: options?.file,
             imageUrls: options?.imageUrls,
+            original_prompt: message.trim(),
+            response: "",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           };
 
-          setMessages([tempMessage]);
+          setMessages([tempMessage as ChatMessage]);
 
           // Simply pass the options directly to the API
           console.log("ChatProvider: Sending to API with options:", {
@@ -290,14 +293,22 @@ export function ChatProvider({ children }: ChatProviderProps) {
           return response;
         } else {
           // Existing session flow
-          const tempMessage: ChatMessage = {
+          const tempMessage: Partial<ChatMessage> & {
+            id: string;
+            prompt: string;
+            session: string;
+          } = {
             id: `temp-${Date.now()}`,
             prompt: message.trim(),
             session: targetSessionId,
             isLoading: true,
+            original_prompt: message.trim(),
+            response: "",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           };
 
-          setMessages((prev) => [...prev, tempMessage]);
+          setMessages((prev) => [...prev, tempMessage as ChatMessage]);
 
           // Make the API call
           const response = await chatAPI.postNewChat(message, targetSessionId, {
@@ -397,11 +408,14 @@ export function ChatProvider({ children }: ChatProviderProps) {
         const updatedMessage: ChatMessage = {
           id: messageId,
           prompt: newPrompt.trim(),
+          original_prompt: newPrompt.trim(),
           response: apiResponse?.response || existingMessage.response || "",
           session: targetSessionId,
-          created_at: existingMessage.created_at,
+          created_at: existingMessage.created_at || new Date().toISOString(),
           updated_at: existingMessage.updated_at || new Date().toISOString(),
-          context: apiResponse.context || existingMessage.context || [],
+          context: (apiResponse.context ||
+            existingMessage.context ||
+            []) as any,
           classification:
             apiResponse.classification || existingMessage.classification || "",
           isLoading: false,

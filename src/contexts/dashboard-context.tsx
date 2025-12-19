@@ -7,7 +7,7 @@ import React, {
   useState,
   ReactNode,
 } from "react";
-import { agentAPI } from "@/lib/api";
+import { dashboardAPI } from "@/lib/api";
 
 interface DashboardStats {
   totalProperties: number;
@@ -76,10 +76,10 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
     try {
       setIsLoading(true);
       setError(null);
-      const response = await agentAPI.getDashboardStats();
+      const response = await dashboardAPI.getStats();
 
       if (response) {
-        setStats(response);
+        setStats(response as any);
       }
     } catch (error) {
       console.error("Error fetching dashboard stats:", error);
@@ -97,7 +97,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
     try {
       setIsLoading(true);
       setError(null);
-      const response = await agentAPI.getAnalytics(period);
+      const response = await dashboardAPI.getAnalytics(period);
 
       if (response && stats) {
         // Merge analytics data with existing stats
