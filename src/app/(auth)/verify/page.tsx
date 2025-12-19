@@ -179,69 +179,105 @@ export default function VerifyPage() {
   const isCodeComplete = verificationCode.every(digit => digit !== "");
 
   return (
-    <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-[#212121] font-sf-pro">
-      <div className="flex flex-col items-center w-full gap-8 mx-auto lg:flex-row max-w-1440">
-        <Card className="w-full max-w-[503px] mx-auto lg:min-h-[96vh] bg-transparent border-transparent flex flex-col min-h-[100vh] justify-between p-4 sm:p-6">
+    <div className="flex items-center justify-center w-full min-h-screen p-4 mx-auto bg-gradient-to-br from-[#0f0f0f] via-[#1a1a1a] to-[#212121] font-sf-pro">
+      <div className="flex flex-col items-center w-full gap-8 mx-auto lg:flex-row max-w-7xl">
+        <Card className=" max-w-[502px] mx-auto lg:min-h-[96vh] bg-transparent border-transparent flex flex-col min-h-[100vh] justify-between p-4 sm:p-6">
           <CardHeader className="flex-shrink-0 space-y-3">
             <Logo />
           </CardHeader>
 
           <CardContent className="flex items-center justify-center flex-grow w-full py-4 sm:py-8">
-            <div className="space-y-4 w-full max-w-[450px] mx-auto">
-              <h2 className="text-center text-[25px] font-[500] text-white pt-[33.5px]">
-                Sign Up to Revi.ai
-              </h2>
-              <p className="text-center text-zinc-400 text-[18px] mb-8 font-[500] ">
-                Enter the code generated from the link we sent to{" "}
-                <span className="text-white">{user?.email}</span>
-              </p>
+            <div className="space-y-8 w-full max-w-[450px] mx-auto">
+                             {/* Header Section */}
+               <div className="text-center space-y-3">
+                 <div className="inline-flex items-center justify-center w-14 h-14 mb-3 bg-gradient-to-br from-[#FFD700] to-[#780991] rounded-full">
+                   <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                   </svg>
+                 </div>
+                 <h2 className="text-2xl font-bold text-white leading-tight">
+                   Verify Your Email
+                 </h2>
+                 <p className="text-base text-zinc-300 leading-relaxed max-w-sm mx-auto">
+                   We've sent a 6-digit verification code to{" "}
+                   <span className="font-semibold text-white bg-gradient-to-r from-[#FFD700] to-[#780991] bg-clip-text text-transparent">
+                     {user?.email}
+                   </span>
+                 </p>
+               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* 6-Box Verification Code Input */}
-                <div className="flex justify-center gap-3 sm:gap-4">
-                  {verificationCode.map((digit, index) => (
-                    <input
-                      key={index}
-                      ref={(el) => {
-                        inputRefs.current[index] = el;
-                      }}
-                      type="text"
-                      inputMode="numeric"
-                      pattern="\d"
-                      maxLength={1}
-                      value={digit}
-                      onChange={(e) => handleInputChange(index, e.target.value)}
-                      onKeyDown={(e) => handleKeyDown(index, e)}
-                      onPaste={handlePaste}
-                      disabled={isLoading}
-                      className="w-12 h-12 text-xl font-semibold text-center text-white transition-all duration-200 bg-transparent border rounded-lg sm:w-14 sm:h-14 sm:text-2xl border-white/15 focus:outline-none focus:ring-2 focus:ring-white/40 focus:border-transparent hover:border-white/30"
-                      autoComplete="off"
-                    />
-                  ))}
-                </div>
+               {/* Verification Form */}
+               <form onSubmit={handleSubmit} className="space-y-6">
+                 {/* 6-Box Verification Code Input */}
+                 <div className="space-y-3">
+                   <label className="text-sm font-medium text-zinc-400 text-center block">
+                     Enter verification code
+                   </label>
+                   <div className="flex justify-between w-full gap-2 sm:gap-3">
+                     {verificationCode.map((digit, index) => (
+                       <input
+                         key={index}
+                         ref={(el) => {
+                           inputRefs.current[index] = el;
+                         }}
+                         type="text"
+                         inputMode="numeric"
+                         pattern="\d"
+                         maxLength={1}
+                         value={digit}
+                         onChange={(e) => handleInputChange(index, e.target.value)}
+                         onKeyDown={(e) => handleKeyDown(index, e)}
+                         onPaste={handlePaste}
+                         disabled={isLoading}
+                         className="flex-1 w-full h-12 sm:h-14 text-xl sm:text-2xl font-bold text-center text-white transition-all duration-300 bg-gradient-to-br from-[#2a2a2a] to-[#1a1a1a] border-2 rounded-xl border-zinc-700 focus:outline-none focus:ring-4 focus:ring-[#FFD700]/20 focus:border-[#FFD700] hover:border-zinc-600 hover:shadow-lg hover:shadow-[#FFD700]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                         autoComplete="off"
+                       />
+                     ))}
+                   </div>
+                 </div>
 
+                {/* Submit Button */}
                 <Button
                   type="submit"
-                  className="w-full text-white h-11 bg-gradient-to-r from-[#FFD700] to-[#780991] hover:from-yellow-600 hover:to-pink-600 rounded-[15px] transition-all duration-200 disabled:opacity-50"
+                  className="w-full text-white h-14 bg-gradient-to-r from-[#FFD700] to-[#780991] hover:from-[#FFD700]/90 hover:to-[#780991]/90 rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-lg shadow-lg hover:shadow-xl hover:shadow-[#FFD700]/20 transform hover:scale-[1.02] active:scale-[0.98]"
                   disabled={!isCodeComplete || isLoading}
                 >
-                  {isLoading ? "Verifying..." : "Verify Email Address"}
+                  {isLoading ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Verifying...</span>
+                    </div>
+                  ) : (
+                    "Verify Email Address"
+                  )}
                 </Button>
               </form>
 
-              <div className="text-center">
-                <p className="text-[16px] font-[400] text-zinc-400">
-                  Not seeing the email in your inbox?{" "}
-                  <Button
-                    variant="link"
-                    onClick={handleResendCode}
-                    disabled={isResending}
-                    className="h-auto p-0 font-normal text-white hover:text-white hover:underline"
-                  >
-                    {isResending ? "Sending..." : "Try sending again"}
-                  </Button>
-                </p>
-              </div>
+                             {/* Resend Code Section */}
+               <div className="text-center space-y-3">
+                 <div className="w-full h-px bg-gradient-to-r from-transparent via-zinc-600 to-transparent"></div>
+                 <p className="text-base text-zinc-400">
+                   Didn't receive the code?{" "}
+                   <Button
+                     variant="link"
+                     onClick={handleResendCode}
+                     disabled={isResending}
+                     className="h-auto p-0 font-medium text-[#FFD700] hover:text-[#FFD700]/80 hover:underline transition-colors duration-200"
+                   >
+                     {isResending ? (
+                       <div className="flex items-center space-x-2">
+                         <div className="w-4 h-4 border-2 border-[#FFD700] border-t-transparent rounded-full animate-spin"></div>
+                         <span>Sending...</span>
+                       </div>
+                     ) : (
+                       "Resend Code"
+                     )}
+                   </Button>
+                 </p>
+                 <p className="text-sm text-zinc-500">
+                   Check your spam folder if you don't see it
+                 </p>
+               </div>
             </div>
           </CardContent>
 
@@ -251,7 +287,7 @@ export default function VerifyPage() {
         </Card>
 
         {!isMobile && (
-          <div className="w-full max-w-[720px] space-y-6 bg-[#262626] h-[800px] pt-[30px]">
+          <div className="w-full max-w-[720px] space-y-6 bg-gradient-to-br from-[#262626] to-[#1f1f1f] h-[800px] pt-[30px] rounded-2xl shadow-2xl">
             <Testimonial />
           </div>
         )}
