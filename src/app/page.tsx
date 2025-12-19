@@ -1,13 +1,19 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import React, {
+  Suspense,
+  useMemo,
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import type React from "react";
-import { useEffect, useRef, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { useMediaQuery } from "@/hooks/use-mobile";
 import { toast } from "@/components/ui/use-toast";
 import { chatAPI } from "@/lib/api";
+import { extractErrorMessage } from "@/utils/error-handler";
 import { cn } from "@/lib/utils";
 
 // Import components
@@ -17,7 +23,9 @@ import ChatMessages from "@/components/chatpage/chat-message";
 import RenameDialog from "@/components/chatpage/rename-dialog";
 import ChatInput from "@/components/chatpage/chat-input";
 
-import { Message } from "@/types/chatMessage";
+import { Message, Context } from "@/types/chatMessage";
+import type { ChatSubmitOptions, ChatSubmitLocation } from "@/types/chat";
+import { getUserLocation, formatCoordinates } from "@/utils/geolocation";
 
 interface ChatSession {
   id: string;
@@ -33,17 +41,23 @@ function ChatContent() {
   const id = searchParams?.get("id") || pathname?.split("/").pop() || null;
 
   // Use localStorage to persist sidebar state across navigation and refreshes
-  const [sidebarOpen, setSidebarOpen] = useState(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("sidebarState");
-      return stored ? stored === "true" : false;
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Hydration-safe initialization
+  useEffect(() => {
+    setIsHydrated(true);
+    const stored = localStorage.getItem("sidebarState");
+    if (stored) {
+      setSidebarOpen(stored === "true");
     }
-    return false;
-  });
+  }, []);
 
   useEffect(() => {
-    localStorage.setItem("sidebarState", String(sidebarOpen));
-  }, [sidebarOpen]);
+    if (isHydrated) {
+      localStorage.setItem("sidebarState", String(sidebarOpen));
+    }
+  }, [sidebarOpen, isHydrated]);
 
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -53,10 +67,25 @@ function ChatContent() {
   // FIXED: Ensure messages is always initialized as an array
   const [messagesState, setMessagesState] = useState<Message[]>([]);
 
+  // Message cache to avoid refetching messages for sessions we've already loaded
+  const [messageCache, setMessageCache] = useState<Record<string, Message[]>>(
+    {}
+  );
+  const [cacheTimestamps, setCacheTimestamps] = useState<
+    Record<string, number>
+  >({});
+  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
+
   // FIXED: Use useMemo for messages to avoid dependency issues
   const messages = useMemo(
     () => (Array.isArray(messagesState) ? messagesState : []),
     [messagesState]
+  );
+
+  // Use media queries for responsive behavior
+  const isLgScreen = useMediaQuery("(min-width: 1024px)");
+  const isMediumScreen = useMediaQuery(
+    "(min-width: 768px) and (max-width: 1023px)"
   );
 
   // FIXED: Create a safe setter that only accepts arrays
@@ -89,57 +118,146 @@ function ChatContent() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user, isAuthenticated, logout } = useAuth();
   const isMobile = useMediaQuery("(max-width: 768px)");
-  const isMediumScreen = useMediaQuery(
-    "(min-width: 768px) and (max-width: 1023px)"
-  );
-  const isLgScreen = useMediaQuery("(min-width: 1024px)");
   const isCreatingNewSession = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const sessionsLoadedRef = useRef(false);
+  const loadingSessionRef = useRef<string | null>(null);
+  const messagesRef = useRef<Message[]>([]);
+  const activeSessionRef = useRef<string | null>(null);
+  const loadingFromUrlRef = useRef(false);
+  const [isClient, setIsClient] = useState(false);
+  const pendingMessageRef = useRef<{
+    message: string;
+    imageUrls?: string[];
+    location?: ChatSubmitLocation;
+  } | null>(null);
+  const lastLocationRef = useRef<ChatSubmitLocation | null>(null);
+  const [lastLocationLabel, setLastLocationLabel] = useState<string | null>(
+    null
+  );
 
-  const actionCards = [
-    {
-      title: "Find a Property",
-      description: "Search for homes to rent or buy",
-      image: "🏡",
-      message: "I want to find a property.",
-    },
-    {
-      title: "Report your Landlord",
-      description: "Check credentials and reviews",
-      image: "🚨",
-      message: "Can I verify my landlord?",
-    },
-    {
-      title: "Tell your story",
-      description: "Share your experience with us",
-      image: "✍️",
-      message: "I want to tell my story.",
-    },
-    {
-      title: "Explore Neighborhoods",
-      description: "Discover nearby amenities and more",
-      image: "🧭",
-      message: "Tell me about my neighborhood.",
-    },
-  ];
+  // Fix hydration mismatch by ensuring client-side rendering
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
-  const getSessions = async () => {
+  // Check for pending chat message from social feed (only set input, don't submit yet)
+  useEffect(() => {
+    if (!isClient) return;
+
+    const pendingMessage = sessionStorage.getItem("pendingChatMessage");
+    if (pendingMessage) {
+      // Store in ref for later submission
+      const pendingImages = sessionStorage.getItem("pendingChatImages");
+      const pendingLocation = sessionStorage.getItem("pendingChatLocation");
+      let imageUrls: string[] | undefined;
+      let location: { latitude: number; longitude: number } | undefined;
+
+      if (pendingImages) {
+        try {
+          imageUrls = JSON.parse(pendingImages);
+        } catch (e) {
+          console.error("Error parsing pending images:", e);
+        }
+      }
+
+      if (pendingLocation) {
+        try {
+          location = JSON.parse(pendingLocation);
+        } catch (e) {
+          console.error("Error parsing pending location:", e);
+        }
+      }
+
+      pendingMessageRef.current = {
+        message: pendingMessage,
+        imageUrls,
+        location,
+      };
+
+      // Set the input with the pending message
+      setInput(pendingMessage);
+
+      // Clear from sessionStorage
+      sessionStorage.removeItem("pendingChatMessage");
+      sessionStorage.removeItem("pendingChatImages");
+      sessionStorage.removeItem("pendingChatFile");
+      sessionStorage.removeItem("pendingChatLocation");
+    }
+  }, [isClient, setInput]);
+
+  // Keep messagesRef in sync with messages state
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  // Keep activeSessionRef in sync with activeSession state
+  useEffect(() => {
+    activeSessionRef.current = activeSession;
+  }, [activeSession]);
+
+  // Memoize actionCards to prevent recreation on every render
+  const actionCards = useMemo(
+    () => [
+      {
+        title: "Find a Property",
+        description: "Search for homes to rent or buy",
+        image: "🏡",
+        message: "I want to find a property.",
+      },
+      {
+        title: "Report your Landlord",
+        description: "Check credentials and reviews",
+        image: "🚨",
+        message: "Can I verify my landlord?",
+      },
+      {
+        title: "Tell your story",
+        description: "Share your experience with us",
+        image: "✍️",
+        message: "I want to tell my story.",
+      },
+      {
+        title: "Explore Neighborhoods",
+        description: "Discover nearby amenities and more",
+        image: "🧭",
+        message: "Tell me about my neighborhood.",
+      },
+    ],
+    []
+  );
+
+  // Memoized getSessions function to prevent recreation
+  const getSessions = useCallback(async () => {
     try {
       if (!isAuthenticated) {
         setSessions([]);
+        sessionsLoadedRef.current = true;
         return [];
       }
 
       setIsLoadingSessions(true);
       const data = await chatAPI.getSessionsMine();
 
-      if (!data || !data.results || !Array.isArray(data.results)) {
+      // Handle paginated response
+      let sessions: any[] = [];
+      if (
+        data &&
+        typeof data === "object" &&
+        "results" in data &&
+        Array.isArray(data.results)
+      ) {
+        sessions = data.results;
+      } else if (Array.isArray(data)) {
+        sessions = data;
+      } else {
         console.warn("Unexpected response format from getSessionsMine:", data);
         setSessions([]);
+        sessionsLoadedRef.current = true;
         return [];
       }
 
-      const sortedSessions = [...data.results].sort((a, b) => {
+      const sortedSessions = [...sessions].sort((a, b) => {
         if (a.created_at && b.created_at) {
           return (
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -149,10 +267,16 @@ function ChatContent() {
       });
 
       setSessions(sortedSessions);
+      sessionsLoadedRef.current = true;
 
-      if (activeSession) {
+      // Preload messages for the first few sessions for faster navigation
+      // This will be handled by a separate useEffect after preloadSessionMessages is defined
+
+      // Use ref to get current activeSession without dependency
+      const currentActiveSession = activeSessionRef.current;
+      if (currentActiveSession && !loadingFromUrlRef.current) {
         const sessionExists = sortedSessions.some(
-          (session) => session.id === activeSession
+          (session) => session.id === currentActiveSession
         );
         if (!sessionExists) {
           setActiveSession(null);
@@ -183,15 +307,40 @@ function ChatContent() {
     } finally {
       setIsLoadingSessions(false);
     }
-  };
+  }, [isAuthenticated, setSessions, setActiveSession, setMessages]);
 
   const getChats = useCallback(
-    async (sessionId: string) => {
+    async (sessionId: string, forceRefresh = false) => {
       if (isCreatingNewSession.current) {
         return [];
       }
 
-      const hasPendingMessage = messages.some(
+      // Check cache first for faster loading
+      if (!forceRefresh && messageCache[sessionId]) {
+        const cacheTime = cacheTimestamps[sessionId] || 0;
+        const isCacheValid = Date.now() - cacheTime < CACHE_DURATION;
+
+        if (isCacheValid) {
+          // Load from cache instantly
+          setMessages(messageCache[sessionId]);
+          setTimeout(() => {
+            scrollToBottomWithAnchoring();
+          }, 50);
+          return messageCache[sessionId];
+        }
+      }
+
+      // Prevent duplicate API calls for the same session only if we're actually loading
+      if (
+        loadingSessionRef.current === sessionId &&
+        loadingSessionRef.current !== null
+      ) {
+        return [];
+      }
+
+      // Use ref to get current messages without causing dependency issues
+      const currentMessages = messagesRef.current;
+      const hasPendingMessage = currentMessages.some(
         (msg) => msg && msg.session === sessionId && !msg.response && !msg.error
       );
 
@@ -200,6 +349,7 @@ function ChatContent() {
       }
 
       try {
+        loadingSessionRef.current = sessionId; // Set loading ref here, not before calling
         const data: any = await chatAPI.getChatsBySession(sessionId);
 
         // FIXED: Better validation of API response - handle both array and object responses
@@ -228,103 +378,178 @@ function ChatContent() {
           (msg) => msg && typeof msg === "object" && msg.id
         );
 
-        const existingMessageIds = new Set(
-          messages.map((msg) => msg && msg.id).filter(Boolean)
-        );
-        const uniqueNewMessages = validMessages.filter(
-          (msg) => msg && !existingMessageIds.has(msg.id)
-        );
+        // Cache the messages for faster future loading
+        setMessageCache((prev) => ({
+          ...prev,
+          [sessionId]: validMessages,
+        }));
+        setCacheTimestamps((prev) => ({
+          ...prev,
+          [sessionId]: Date.now(),
+        }));
 
-        if (hasPendingMessage) {
-          const pendingMessages = messages.filter(
-            (msg) => msg && !msg.response && !msg.error
-          );
-          const nonPendingFetchedMessages = validMessages.filter(
-            (msg) =>
-              msg &&
-              !pendingMessages.some(
-                (pending) => pending && pending.id === msg.id
-              )
-          );
-          setMessages([...nonPendingFetchedMessages, ...pendingMessages]);
-        } else {
-          if (messages.length === 0 || uniqueNewMessages.length > 0) {
-            setMessages(validMessages);
-          }
-        }
+        // When switching sessions, always set the messages for the new session
+        // Don't try to merge with existing messages from other sessions
+        setMessages(validMessages);
 
         setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-        }, 100);
+          scrollToBottomWithAnchoring();
+        }, 50); // Reduced delay for faster perceived performance
 
         return validMessages;
       } catch (error: unknown) {
         console.error("Error fetching chats for session:", sessionId, error);
+        const errorMessage = extractErrorMessage(
+          error,
+          "Failed to fetch chat messages"
+        );
         toast({
           title: "Error",
-          description: "Failed to fetch chat messages",
+          description: errorMessage,
           variant: "destructive",
         });
         return [];
       }
     },
-    [messages, setMessages]
+    [setMessages, messageCache, cacheTimestamps, CACHE_DURATION] // Removed messages dependency to prevent infinite loops
   );
 
   useEffect(() => {
     if (isAuthenticated) {
       getSessions();
+    } else {
+      // Clear sessions and messages when user logs out
+      setSessions([]);
+      setMessages([]);
+      setActiveSession(null);
+      sessionsLoadedRef.current = false;
     }
-  }, [isAuthenticated, pathname]);
+  }, [isAuthenticated]); // Removed pathname dependency
 
-  useEffect(() => {
-    if (activeSession && !isCreatingNewSession.current) {
-      const hasMessagesForSession = messages.some(
-        (msg) => msg && msg.session === activeSession
-      );
-
-      // Only show loading and fetch messages if we don't have messages for this session
-      if (!hasMessagesForSession) {
-        setIsSessionLoading(true);
-        getChats(activeSession).finally(() => {
-          setIsSessionLoading(false);
-        });
-      }
-
-      // Update the previous active session tracker
-      if (previousActiveSession !== activeSession) {
-        setPreviousActiveSession(activeSession);
-      }
-    } else if (!activeSession) {
-      // Reset when no active session
-      setPreviousActiveSession(null);
-    }
-  }, [activeSession, messages, getChats, previousActiveSession]);
-
-  const refreshSessions = async () => {
+  // Memoized refreshSessions function
+  const refreshSessions = useCallback(async () => {
     if (isAuthenticated) {
       await getSessions();
     }
-  };
+  }, [isAuthenticated, getSessions]);
 
-  const scrollToBottom = () => {
+  // Clear message cache for a specific session or all sessions
+  const clearMessageCache = useCallback((sessionId?: string) => {
+    if (sessionId) {
+      setMessageCache((prev) => {
+        const newCache = { ...prev };
+        delete newCache[sessionId];
+        return newCache;
+      });
+      setCacheTimestamps((prev) => {
+        const newTimestamps = { ...prev };
+        delete newTimestamps[sessionId];
+        return newTimestamps;
+      });
+    } else {
+      // Clear all cache
+      setMessageCache({});
+      setCacheTimestamps({});
+    }
+  }, []);
+
+  // Preload messages for sessions to make navigation even faster
+  const preloadSessionMessages = useCallback(
+    async (sessionId: string) => {
+      if (!messageCache[sessionId] && !loadingSessionRef.current) {
+        try {
+          const data: any = await chatAPI.getChatsBySession(sessionId);
+          let results: any[];
+          if (Array.isArray(data)) {
+            results = data;
+          } else if (data && data.results && Array.isArray(data.results)) {
+            results = data.results;
+          } else {
+            return;
+          }
+
+          const sortedMessages = [...results].sort((a, b) => {
+            if (a.created_at && b.created_at) {
+              return (
+                new Date(a.created_at).getTime() -
+                new Date(b.created_at).getTime()
+              );
+            }
+            return 0;
+          });
+
+          const validMessages = sortedMessages.filter(
+            (msg) => msg && typeof msg === "object" && msg.id
+          );
+
+          // Cache the messages
+          setMessageCache((prev) => ({
+            ...prev,
+            [sessionId]: validMessages,
+          }));
+          setCacheTimestamps((prev) => ({
+            ...prev,
+            [sessionId]: Date.now(),
+          }));
+        } catch (error) {
+          // Silently fail for preloading
+          console.warn("Failed to preload session:", sessionId, error);
+        }
+      }
+    },
+    [messageCache]
+  );
+
+  // Preload messages for sessions when they're loaded
+  useEffect(() => {
+    if (sessions.length > 0 && isAuthenticated) {
+      const sessionsToPreload = sessions.slice(0, 3);
+      sessionsToPreload.forEach((session) => {
+        if (session.id !== activeSessionRef.current) {
+          preloadSessionMessages(session.id);
+        }
+      });
+    }
+  }, [sessions, isAuthenticated, preloadSessionMessages]);
+
+  const scrollToBottom = useCallback(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({
         behavior: "smooth",
         block: "end",
       });
     }
-  };
+  }, []);
 
+  // Enhanced scroll to bottom with viewport anchoring (new messages at bottom)
+  const scrollToBottomWithAnchoring = useCallback(() => {
+    if (messagesEndRef.current) {
+      // Scroll to bottom where new messages appear
+      messagesEndRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "end",
+        inline: "nearest",
+      });
+    }
+  }, []);
+
+  // Optimized scroll effect with debouncing
   useEffect(() => {
     if (messages.length > 0) {
-      scrollToBottom();
-    }
-  }, [messages]);
+      const timer = setTimeout(() => {
+        scrollToBottomWithAnchoring();
+      }, 50); // Small delay to prevent excessive scroll calls
 
+      return () => clearTimeout(timer);
+    }
+  }, [messages.length, scrollToBottomWithAnchoring]); // Only depend on length, not the entire messages array
+
+  // Update URL when activeSession changes (using pushState to avoid refreshes)
   useEffect(() => {
     if (activeSession && pathname !== `/chats/${activeSession}`) {
       window.history.pushState({}, "", `/chats/${activeSession}`);
+    } else if (!activeSession && pathname !== "/") {
+      window.history.pushState({}, "", "/");
     }
   }, [activeSession, pathname]);
 
@@ -345,39 +570,136 @@ function ChatContent() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
+  // URL-based session loading effect
   useEffect(() => {
-    if (id && !activeSession) {
+    if (id && id !== activeSessionRef.current && !loadingFromUrlRef.current) {
       const loadSessionFromUrl = async () => {
         try {
+          loadingFromUrlRef.current = true;
           setIsSessionLoading(true);
           const sessionId = id as string;
 
-          const sessionExists =
-            sessions.some((s) => s.id === sessionId) ||
-            (await chatAPI.getChatSession(sessionId).catch(() => false));
+          // First check if we have the session in our local list
+          const sessionInList = sessions.some((s) => s.id === sessionId);
 
-          if (sessionExists) {
+          if (sessionInList) {
+            // Session exists in our list, proceed to load it
             setActiveSession(sessionId);
             await getChats(sessionId);
           } else {
-            toast({
-              title: "Session not found",
-              description: "The requested chat session could not be found",
-              variant: "destructive",
-            });
-            router.push("/");
+            // Session not in our list, try to verify it exists on server
+            try {
+              await chatAPI.getChatSession(sessionId);
+              // If we get here, session exists but wasn't in our list
+              setActiveSession(sessionId);
+              await getChats(sessionId);
+            } catch (error) {
+              console.error("Error checking session existence:", error);
+
+              // Check if it's a 401 error (session exists but not authorized)
+              if (
+                error &&
+                typeof error === "object" &&
+                "response" in error &&
+                error.response &&
+                typeof error.response === "object" &&
+                "status" in error.response &&
+                error.response.status === 401
+              ) {
+                // Session exists but user is not authenticated
+                setActiveSession(sessionId);
+                await getChats(sessionId); // This will show the proper auth error
+              } else {
+                // Session truly doesn't exist
+                toast({
+                  title: "Session not found",
+                  description: "The requested chat session could not be found",
+                  variant: "destructive",
+                });
+                window.history.pushState({}, "", "/");
+                setActiveSession(null);
+              }
+            }
           }
         } catch (error) {
           console.error("Error loading session from URL:", error);
-          router.push("/");
+          window.history.pushState({}, "", "/");
+          setActiveSession(null);
         } finally {
           setIsSessionLoading(false);
+          loadingFromUrlRef.current = false;
         }
       };
 
       loadSessionFromUrl();
     }
-  }, [id]);
+  }, [id, sessions]); // Removed activeSession dependency to prevent URL switching loop
+
+  // Session switching effect (from sidebar clicks) - Optimized for faster loading
+  useEffect(() => {
+    if (
+      activeSession &&
+      !isCreatingNewSession.current &&
+      previousActiveSession !== activeSession &&
+      loadingSessionRef.current !== activeSession
+    ) {
+      // Check if we have cached messages for instant loading
+      if (messageCache[activeSession]) {
+        const cacheTime = cacheTimestamps[activeSession] || 0;
+        const isCacheValid = Date.now() - cacheTime < CACHE_DURATION;
+
+        if (isCacheValid) {
+          // Load from cache instantly - no loading state needed
+          setMessages(messageCache[activeSession]);
+          setPreviousActiveSession(activeSession);
+          setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+          }, 50);
+          return;
+        }
+      }
+
+      // Only show loading for uncached sessions
+      setIsSessionLoading(true);
+
+      // Call getChats directly - it's stable now
+      getChats(activeSession)
+        .then((messages) => {
+          setIsSessionLoading(false);
+          loadingSessionRef.current = null;
+        })
+        .catch((error) => {
+          console.error("getChats failed for session:", activeSession, error);
+          setIsSessionLoading(false);
+          loadingSessionRef.current = null;
+        });
+
+      // Update the previous active session tracker
+      setPreviousActiveSession(activeSession);
+    } else if (!activeSession && previousActiveSession !== null) {
+      // Reset when no active session (only if it actually changed)
+      setPreviousActiveSession(null);
+      setIsSessionLoading(false);
+    }
+  }, [
+    activeSession,
+    previousActiveSession,
+    getChats,
+    messageCache,
+    cacheTimestamps,
+    CACHE_DURATION,
+  ]); // Added cache dependencies
+
+  type PostChatWithImagesOptions = {
+    signal?: AbortSignal;
+    skipAddingTempMessage?: boolean;
+    file?: File;
+    tempId?: string;
+    locationDetails?: ChatSubmitLocation | null;
+    locationString?: string | null;
+    userLatitude?: number;
+    userLongitude?: number;
+  };
 
   // Enhanced postChat function with image support
   const postChatWithImages = useCallback(
@@ -385,25 +707,11 @@ function ChatContent() {
       input: string,
       activeSession?: string,
       imageUrls?: string[],
-      options?: {
-        signal?: AbortSignal;
-        skipAddingTempMessage?: boolean;
-        file?: File;
-      }
+      options?: PostChatWithImagesOptions
     ) => {
-      console.log("postChatWithImages: Received options:", options);
-      console.log("postChatWithImages: File received:", options?.file);
-      if (options?.file) {
-        console.log("postChatWithImages: File details:", {
-          name: options.file.name,
-          size: options.file.size,
-          type: options.file.type,
-          lastModified: options.file.lastModified,
-        });
-      }
-
       try {
-        const tempMessageId = "temp-" + Date.now();
+        // Use provided tempId if available, otherwise generate new one
+        const tempMessageId = options?.tempId || "temp-" + Date.now();
 
         const tempMessage: Message = {
           id: tempMessageId,
@@ -418,7 +726,13 @@ function ChatContent() {
 
         // Check if we should skip adding temp message (to avoid duplicates)
         if (!options?.skipAddingTempMessage) {
-          setMessages((prev) => [...prev, tempMessage]);
+          setMessages((prev) => {
+            // Avoid unnecessary re-renders by checking if message already exists
+            if (prev.some((msg) => msg.id === tempMessageId)) {
+              return prev;
+            }
+            return [...prev, tempMessage];
+          });
         }
 
         let sessionId = activeSession;
@@ -469,26 +783,10 @@ function ChatContent() {
           } catch (error) {
             console.error("Error creating session:", error);
 
-            const errorMessage =
-              error &&
-              typeof error === "object" &&
-              "response" in error &&
-              error.response &&
-              typeof error.response === "object" &&
-              "data" in error.response &&
-              error.response.data &&
-              typeof error.response.data === "object"
-                ? ("error" in error.response.data &&
-                  typeof error.response.data.error === "string"
-                    ? error.response.data.error
-                    : "") ||
-                  ("message" in error.response.data &&
-                  typeof error.response.data.message === "string"
-                    ? error.response.data.message
-                    : "")
-                : error instanceof Error
-                ? error.message
-                : "Failed to create session";
+            const errorMessage = extractErrorMessage(
+              error,
+              "Failed to create session"
+            );
 
             setMessages((prev) =>
               prev.map((msg) =>
@@ -506,12 +804,26 @@ function ChatContent() {
         }
 
         try {
+          const locationDetails = options?.locationDetails ?? null;
+          const resolvedLatitude =
+            options?.userLatitude ??
+            (locationDetails ? locationDetails.latitude : undefined);
+          const resolvedLongitude =
+            options?.userLongitude ??
+            (locationDetails ? locationDetails.longitude : undefined);
+          const resolvedLocationString =
+            options?.locationString ??
+            (locationDetails ? locationDetails.label ?? null : null);
+
           // Prepare message for API call with image URLs and files
           const apiOptions: {
             signal?: AbortSignal;
             imageUrls?: string[];
             image_url?: string;
             file?: File;
+            user_latitude?: number;
+            user_longitude?: number;
+            location?: string;
           } = options?.signal ? { signal: options.signal } : {};
 
           // Include image URLs properly
@@ -523,38 +835,55 @@ function ChatContent() {
           // Include file if provided from handleSubmit options
           if (options?.file) {
             apiOptions.file = options.file;
-            console.log("postChatWithImages: Adding file to apiOptions:", {
-              name: options.file.name,
-              size: options.file.size,
-              type: options.file.type,
-            });
-            console.log(
-              "postChatWithImages: File instanceof File:",
-              options.file instanceof File
-            );
-            console.log("postChatWithImages: File object:", options.file);
-          } else {
-            console.log(
-              "postChatWithImages: No file in options or file is falsy"
-            );
-            console.log(
-              "postChatWithImages: options.file value:",
-              options?.file
-            );
           }
 
-          console.log(
-            "postChatWithImages: Final apiOptions before API call:",
-            apiOptions
-          );
-          console.log(
-            "postChatWithImages: Final apiOptions.file:",
-            apiOptions.file
-          );
+          // Include location coordinates if provided
+          console.log("🔍 postChatWithImages - options received:", options);
+          if (
+            resolvedLatitude !== undefined &&
+            resolvedLongitude !== undefined
+          ) {
+            console.log("📍 Adding coordinates to API options:", {
+              latitude: resolvedLatitude,
+              longitude: resolvedLongitude,
+            });
+            apiOptions.user_latitude = resolvedLatitude;
+            apiOptions.user_longitude = resolvedLongitude;
+          } else {
+            console.log("⚠️ No coordinates resolved from options");
+          }
 
-          const data = await chatAPI.postNewChat(input, sessionId!, apiOptions);
-          console.log("API Response data:", data);
-          console.log("Original imageUrls:", imageUrls);
+          if (resolvedLocationString) {
+            console.log(
+              "🆔 Adding location string to API options:",
+              resolvedLocationString
+            );
+            apiOptions.location = resolvedLocationString;
+          }
+
+          // Use streaming API for ChatGPT-style response
+          const data = await chatAPI.postNewChatStreaming(input, sessionId!, {
+            ...apiOptions,
+            onChunk: (chunk: string, isComplete: boolean) => {
+              // Update the temp message with streaming content
+              setMessages((prev) => {
+                const tempIndex = prev.findIndex(
+                  (msg) => msg && msg.id === tempMessageId
+                );
+
+                if (tempIndex >= 0) {
+                  const newMessages = [...prev];
+                  newMessages[tempIndex] = {
+                    ...newMessages[tempIndex],
+                    response: chunk,
+                    isStreaming: !isComplete,
+                  };
+                  return newMessages;
+                }
+                return prev;
+              });
+            },
+          });
           setLatestMessageId(data.id);
 
           setMessages((prev) => {
@@ -574,8 +903,9 @@ function ChatContent() {
                 response: data.response,
                 session: sessionId,
                 classification: data.classification,
-                context: data.context,
+                context: data.context as Context[] | undefined,
                 image_url: data.image_url,
+                isStreaming: false, // Mark streaming as complete
                 // 🔥 PRESERVE FILE: Use backend file if available, otherwise keep temp file
                 file: data.file || tempMessage?.file || undefined,
                 attachments: tempMessage?.attachments || undefined, // Preserve attachments
@@ -607,8 +937,9 @@ function ChatContent() {
                   response: data.response,
                   session: sessionId,
                   classification: data.classification,
-                  context: data.context,
+                  context: data.context as Context[] | undefined,
                   image_url: data.image_url,
+                  isStreaming: false, // Mark streaming as complete
                   file: data.file,
                   imageUrls:
                     imageUrls && imageUrls.length > 0 ? imageUrls : undefined,
@@ -633,8 +964,9 @@ function ChatContent() {
                   response: data.response,
                   session: sessionId,
                   classification: data.classification,
-                  context: data.context,
+                  context: data.context as Context[] | undefined,
                   image_url: data.image_url,
+                  isStreaming: false, // Mark streaming as complete
                   file: data.file,
                   imageUrls:
                     imageUrls && imageUrls.length > 0 ? imageUrls : undefined,
@@ -653,6 +985,11 @@ function ChatContent() {
               }
             }
           });
+
+          // Invalidate cache for this session since we have new messages
+          if (sessionId) {
+            clearMessageCache(sessionId);
+          }
 
           if (newSessionData) {
             setSessions((prev) => {
@@ -676,7 +1013,7 @@ function ChatContent() {
             }, 100);
           }
 
-          setTimeout(scrollToBottom, 100);
+          setTimeout(scrollToBottomWithAnchoring, 100);
           return data;
         } catch (error) {
           console.error("Error posting chat:", error);
@@ -729,13 +1066,12 @@ function ChatContent() {
       }
     },
     [
-      messages,
       user,
       setMessages,
       setSessions,
       setActiveSession,
       setLatestMessageId,
-      scrollToBottom,
+      scrollToBottomWithAnchoring,
     ]
   );
 
@@ -744,40 +1080,51 @@ function ChatContent() {
     async (
       input: string,
       activeSession?: string,
-      options?: { signal?: AbortSignal; skipAddingTempMessage?: boolean }
+      options?: ChatSubmitOptions & {
+        signal?: AbortSignal;
+        skipAddingTempMessage?: boolean;
+        tempId?: string;
+      }
     ) => {
-      return postChatWithImages(input, activeSession, undefined, options);
+      const imageUrls = options?.imageUrls;
+      const locationDetails =
+        options?.locationDetails ??
+        (options?.userLatitude !== undefined &&
+        options?.userLongitude !== undefined
+          ? {
+              latitude: options.userLatitude,
+              longitude: options.userLongitude,
+              label: options.locationLabel ?? options.location ?? undefined,
+            }
+          : null);
+      const locationString =
+        options?.location ?? options?.locationLabel ?? null;
+
+      return postChatWithImages(
+        input,
+        activeSession,
+        imageUrls,
+        options
+          ? {
+              signal: options.signal,
+              skipAddingTempMessage: options.skipAddingTempMessage,
+              tempId: options.tempId,
+              file: options.file,
+              locationDetails,
+              locationString,
+              userLatitude: options.userLatitude,
+              userLongitude: options.userLongitude,
+            }
+          : undefined
+      );
     },
     [postChatWithImages]
   );
 
   // Enhanced handleSubmit with image and file support
   const handleSubmit = useCallback(
-    async (
-      e: React.FormEvent,
-      options?: { imageUrls?: string[]; file?: File }
-    ) => {
+    async (e: React.FormEvent, options?: ChatSubmitOptions) => {
       e.preventDefault();
-      console.log("Page handleSubmit: Received options:", options);
-      console.log("Page handleSubmit: File received:", options?.file);
-      console.log("Page handleSubmit: typeof file:", typeof options?.file);
-      console.log(
-        "Page handleSubmit: file instanceof File:",
-        options?.file instanceof File
-      );
-      if (options?.file) {
-        console.log("Page handleSubmit: File details:", {
-          name: options.file.name,
-          size: options.file.size,
-          type: options.file.type,
-          lastModified: options.file.lastModified,
-          constructor: options.file.constructor.name,
-        });
-        console.log(
-          "Page handleSubmit: File stringified:",
-          JSON.stringify(options.file)
-        );
-      }
 
       if (
         !input.trim() &&
@@ -788,38 +1135,70 @@ function ChatContent() {
 
       const imageUrls = options?.imageUrls || [];
       const file = options?.file;
+      const locationDetails = options?.locationDetails;
+      const userLatitude =
+        options?.userLatitude ??
+        (locationDetails ? locationDetails.latitude : undefined);
+      const userLongitude =
+        options?.userLongitude ??
+        (locationDetails ? locationDetails.longitude : undefined);
+      const locationLabel =
+        options?.location ??
+        options?.locationLabel ??
+        (locationDetails ? locationDetails.label : undefined);
+
+      console.log("🚀 handleSubmit called with:", {
+        input,
+        imageUrls,
+        file,
+        userLatitude,
+        userLongitude,
+        locationLabel,
+        locationDetails,
+      });
+
+      // Clear input immediately for better UX
+      setInput("");
 
       const controller = new AbortController();
       abortControllerRef.current = controller;
+
+      // Set loading state immediately for better perceived performance
       setIsLoading(true);
 
       try {
-        // Pass both imageUrls and file to postChatWithImages
+        // Pass imageUrls, file, and location to postChatWithImages
+        console.log("📤 Calling postChatWithImages with location details:", {
+          userLatitude,
+          userLongitude,
+          locationLabel,
+          locationDetails,
+        });
         await postChatWithImages(input, activeSession || undefined, imageUrls, {
           signal: controller.signal,
           skipAddingTempMessage: false, // Let postChatWithImages handle the temp message
           file: file, // Pass the file option
+          locationDetails:
+            locationDetails ??
+            (userLatitude !== undefined && userLongitude !== undefined
+              ? {
+                  latitude: userLatitude,
+                  longitude: userLongitude,
+                  label: locationLabel,
+                }
+              : null),
+          locationString: locationLabel ?? null,
+          userLatitude: userLatitude,
+          userLongitude: userLongitude,
         });
       } catch (error: unknown) {
         if (error instanceof Error && error.name !== "AbortError") {
           console.error("Error submitting chat:", error);
 
-          const errorMessage = (() => {
-            if (
-              error instanceof Error &&
-              "response" in error &&
-              typeof error.response === "object" &&
-              error.response &&
-              "data" in error.response &&
-              typeof error.response.data === "object" &&
-              error.response.data &&
-              "message" in error.response.data &&
-              typeof error.response.data.message === "string"
-            ) {
-              return error.response.data.message;
-            }
-            return "Failed to send message";
-          })();
+          const errorMessage = extractErrorMessage(
+            error,
+            "Failed to send message"
+          );
 
           toast({
             title: "Error",
@@ -832,11 +1211,45 @@ function ChatContent() {
           setIsLoading(false);
         }
         abortControllerRef.current = null;
-        setInput("");
       }
     },
-    [input, activeSession, postChatWithImages, setIsLoading]
+    [input, activeSession, postChatWithImages, setIsLoading, setInput]
   );
+
+  // Auto-submit pending message from social feed after handleSubmit is ready
+  useEffect(() => {
+    if (pendingMessageRef.current && !isLoading) {
+      const pending = pendingMessageRef.current;
+      pendingMessageRef.current = null; // Clear it so we only submit once
+
+      // Small delay to ensure everything is ready
+      setTimeout(() => {
+        const syntheticEvent = new Event("submit", {
+          bubbles: true,
+          cancelable: true,
+        }) as unknown as React.FormEvent;
+        const options: ChatSubmitOptions = {};
+
+        if (pending.imageUrls && pending.imageUrls.length > 0) {
+          options.imageUrls = pending.imageUrls;
+        }
+
+        if (pending.location) {
+          options.locationDetails = pending.location;
+          options.userLatitude = pending.location.latitude;
+          options.userLongitude = pending.location.longitude;
+          options.locationLabel = pending.location.label;
+          options.location = pending.location.label;
+          console.log("📍 Auto-submitting with location:", pending.location);
+        }
+
+        handleSubmit(
+          syntheticEvent,
+          Object.keys(options).length > 0 ? options : undefined
+        );
+      }, 300);
+    }
+  }, [isLoading, handleSubmit]);
 
   const handleStop = useCallback(() => {
     if (abortControllerRef.current) {
@@ -865,53 +1278,62 @@ function ChatContent() {
       setMessages((prev) => [...prev, initialMessage]);
 
       try {
+        let locationDetails = lastLocationRef.current;
+        let locationLabel = lastLocationLabel ?? locationDetails?.label ?? null;
+
+        if (!locationDetails) {
+          try {
+            const freshLocation = await getUserLocation({
+              enableHighAccuracy: false,
+              timeout: 7000,
+              maximumAge: 300000,
+            });
+
+            locationDetails = {
+              latitude: freshLocation.latitude,
+              longitude: freshLocation.longitude,
+              label: formatCoordinates(
+                freshLocation.latitude,
+                freshLocation.longitude
+              ),
+            };
+
+            lastLocationRef.current = locationDetails;
+            setLastLocationLabel(locationDetails.label ?? null);
+            locationLabel = locationDetails.label ?? locationLabel;
+          } catch (error) {
+            console.warn(
+              "handleCardSubmit: Unable to obtain user location",
+              error
+            );
+          }
+        }
+
+        if (locationDetails && !locationLabel) {
+          locationLabel =
+            locationDetails.label ??
+            formatCoordinates(
+              locationDetails.latitude,
+              locationDetails.longitude
+            );
+        }
+
         await postChat(card.message, activeSession || undefined, {
           skipAddingTempMessage: true,
+          tempId: tempId, // Pass the tempId so it can update the correct message
+          locationDetails: locationDetails ?? undefined,
+          locationLabel: locationLabel ?? undefined,
+          location: locationLabel ?? undefined,
+          userLatitude: locationDetails?.latitude,
+          userLongitude: locationDetails?.longitude,
         });
       } catch (error: unknown) {
         console.error("Error submitting card message:", error);
 
-        let errorMessage =
-          "The server encountered an error. Please try again later.";
-
-        if (
-          error &&
-          typeof error === "object" &&
-          "response" in error &&
-          error.response &&
-          typeof error.response === "object" &&
-          "status" in error.response
-        ) {
-          const status = error.response.status as number;
-          if (status === 401) {
-            errorMessage =
-              "Authentication required. Please log in to continue.";
-          } else if (status === 403) {
-            errorMessage = "You don't have permission to perform this action.";
-          } else if (status === 404) {
-            errorMessage =
-              "Resource not found. The session may have been deleted.";
-          } else if (status === 500) {
-            errorMessage = "Server error. Please try again later.";
-          }
-
-          // Also try to get the specific error message from the response
-          if (
-            "data" in error.response &&
-            error.response.data &&
-            typeof error.response.data === "object"
-          ) {
-            const responseData = error.response.data as any;
-            if (responseData.error && typeof responseData.error === "string") {
-              errorMessage = responseData.error;
-            } else if (
-              responseData.message &&
-              typeof responseData.message === "string"
-            ) {
-              errorMessage = responseData.message;
-            }
-          }
-        }
+        const errorMessage = extractErrorMessage(
+          error,
+          "The server encountered an error. Please try again later."
+        );
 
         setMessages((prev) =>
           prev.map((msg) =>
@@ -934,7 +1356,7 @@ function ChatContent() {
         setIsLoading(false);
       }
     },
-    [activeSession, isLoading, postChat, toast]
+    [activeSession, isLoading, postChat, toast, lastLocationLabel]
   );
 
   const handleRename = useCallback(
@@ -1000,11 +1422,7 @@ function ChatContent() {
   // Memoize callbacks
   const handleSetActiveSession = useCallback((sessionId: string | null) => {
     setActiveSession(sessionId);
-    if (sessionId) {
-      window.history.pushState({}, "", `/chats/${sessionId}`);
-    } else {
-      window.history.pushState({}, "", "/");
-    }
+    // URL will be updated by the useEffect that watches activeSession
   }, []);
 
   const handleSetSidebarOpen = useCallback((open: boolean) => {
@@ -1016,11 +1434,19 @@ function ChatContent() {
     setActiveSession(null);
     setMessages([]);
     setInput("");
-    window.history.pushState({}, "", "/");
     isCreatingNewSession.current = false;
-  }, [setMessages, setInput]);
+    // URL will be updated by the useEffect that watches activeSession
+  }, []);
 
-  // Memoize child components' props
+  const handleLocationUpdate = useCallback(
+    (location: ChatSubmitLocation | null, label?: string) => {
+      lastLocationRef.current = location;
+      setLastLocationLabel(label ?? location?.label ?? null);
+    },
+    []
+  );
+
+  // Memoized sidebar props to prevent unnecessary re-renders
   const sidebarProps = useMemo(
     () => ({
       sidebarOpen,
@@ -1042,23 +1468,30 @@ function ChatContent() {
     }),
     [
       sidebarOpen,
+      handleSetSidebarOpen,
       sessions,
+      setSessions,
       activeSession,
+      handleSetActiveSession,
+      setMessages,
       isAuthenticated,
+      logout,
       isMobile,
+      setShowRenameDialog,
+      setSelectedSessionId,
+      setNewTitle,
       isLgScreen,
       isMediumScreen,
-      handleSetSidebarOpen,
-      handleSetActiveSession,
-      logout,
+      isLoadingSessions,
     ]
   );
 
+  // Memoized chat input props to prevent unnecessary re-renders
   const chatInputProps = useMemo(
     () => ({
       input,
       setInput,
-      handleSubmit, // This now supports image URLs
+      handleSubmit,
       isLoading,
       isMobile,
       activeSession,
@@ -1069,32 +1502,84 @@ function ChatContent() {
       refreshSessions,
       sidebarCollapsed: !sidebarOpen,
       handleStop,
-      user: user?.id ? { id: user.id } : null, // Fix type issue
+      user: user?.id ? { id: user.id } : null,
+      onLocationUpdate: handleLocationUpdate,
     }),
     [
       input,
+      setInput,
+      handleSubmit,
       isLoading,
       isMobile,
       activeSession,
       isAuthenticated,
-      sidebarOpen,
+      setMessages,
       handleSetActiveSession,
-      handleSubmit,
+      setSessions,
+      refreshSessions,
+      sidebarOpen,
       handleStop,
-      user,
+      user?.id,
+      handleLocationUpdate,
+    ]
+  );
+
+  // Memoized chat messages props to prevent unnecessary re-renders
+  const chatMessagesProps = useMemo(
+    () => ({
+      messages,
+      isLoading,
+      setIsLoading,
+      isSessionLoading,
+      latestMessageId,
+      setLatestMessageId,
+      messagesEndRef: messagesEndRef as React.RefObject<HTMLDivElement>,
+      activeSession,
+      setActiveSession,
+      sessions,
+      setSessions,
+      actionCards,
+      handleCardClick: handleCardSubmit,
+      isAuthenticated,
+      user: user?.id ? user : null,
+      setMessages,
+      refreshSessions,
+      sidebarCollapsed: !sidebarOpen,
+      sidebarOpen,
+      isLgScreen,
+    }),
+    [
+      messages,
+      isLoading,
+      setIsLoading,
+      isSessionLoading,
+      latestMessageId,
+      setLatestMessageId,
+      activeSession,
+      setActiveSession,
+      sessions,
+      setSessions,
+      actionCards,
+      handleCardSubmit,
+      isAuthenticated,
+      user?.id,
+      setMessages,
+      refreshSessions,
+      sidebarOpen,
+      isLgScreen,
     ]
   );
 
   return (
     <div className="flex h-screen bg-gradient-to-b from-[#121212] to-[#1a1a1a]">
-      {(sidebarOpen || (isMobile && isLgScreen)) && (
+      {isClient && (sidebarOpen || (isMobile && isLgScreen)) && (
         <ChatSidebar {...sidebarProps} />
       )}
 
       <div
         className={cn(
-          "flex flex-col flex-1 h-screen w-full transition-all duration-300 bg-",
-          !isMobile && (sidebarOpen ? "" : "")
+          "flex flex-col flex-1 h-screen w-full",
+          isClient && !isMobile && (sidebarOpen ? "" : "")
         )}
       >
         <ChatHeader
@@ -1105,37 +1590,21 @@ function ChatContent() {
           sidebarOpen={sidebarOpen}
           startNewChat={handleStartNewChat}
           isMediumScreen={isMediumScreen}
+          isClient={isHydrated}
         />
 
-        <ChatMessages
-          messages={messages}
-          isLoading={isLoading}
-          setIsLoading={setIsLoading}
-          isSessionLoading={isSessionLoading}
-          latestMessageId={latestMessageId}
-          setLatestMessageId={setLatestMessageId}
-          messagesEndRef={messagesEndRef as React.RefObject<HTMLDivElement>}
-          activeSession={activeSession}
-          setActiveSession={(value) => {
-            if (typeof value === "function") {
-              handleSetActiveSession(value(activeSession));
-            } else {
-              handleSetActiveSession(value);
-            }
-          }}
-          sessions={sessions}
-          setSessions={setSessions}
-          actionCards={actionCards}
-          handleCardClick={handleCardSubmit}
-          isAuthenticated={isAuthenticated}
-          user={user?.id ? user : null}
-          setMessages={setMessages}
-          refreshSessions={refreshSessions}
-          isLgScreen={isLgScreen}
-          sidebarOpen={sidebarOpen}
-        />
+        {/* Viewport Container - Bottom-anchored with new messages at bottom */}
+        <div className="flex-1 flex flex-col min-h-0">
+          {/* Messages Area - Scrollable, new messages at bottom */}
+          <div className="flex-1 overflow-y-auto min-h-0 pt-14 bg-background">
+            <ChatMessages {...chatMessagesProps} />
+          </div>
 
-        <ChatInput {...chatInputProps} />
+          {/* Input Area - Fixed at bottom */}
+          <div className="flex-shrink-0">
+            <ChatInput {...chatInputProps} />
+          </div>
+        </div>
       </div>
 
       <RenameDialog
