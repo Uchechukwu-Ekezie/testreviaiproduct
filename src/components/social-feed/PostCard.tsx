@@ -54,7 +54,6 @@ interface PostCardProps {
   // NEW: Follow props
   isFollowing?: boolean;
   onFollowToggle?: (authorId: string, authorData: any) => Promise<void>;
-  isFollowLoading?: boolean;
   // Image lightbox handler
   onOpenLightbox?: (images: string[], startIndex: number) => void;
 }
@@ -93,7 +92,6 @@ export default function PostCard({
   // NEW: Follow props
   isFollowing = false,
   onFollowToggle,
-  isFollowLoading = false,
   // Image lightbox handler
   onOpenLightbox,
 }: PostCardProps) {
@@ -279,16 +277,53 @@ export default function PostCard({
     if (!content.trim()) return;
     setCommentError(null);
 
+    // Create optimistic comment
+    const optimisticComment: CommentType = {
+      id: `temp-${Date.now()}`,
+      post: localPost.id,
+      author: {
+        id: user?.id || 'temp-user',
+        username: user?.username,
+        first_name: user?.first_name,
+        last_name: user?.last_name,
+        email: user?.email || '',
+        avatar: user?.avatar,
+        type: user?.user_type || 'user',
+      },
+      content,
+      parent: null,
+      like_count: 0,
+      reply_count: 0,
+      is_liked: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      replies: [],
+      isPending: true, // Mark as pending
+    };
+
+    // Add optimistic comment immediately
+    setComments((prev) => [optimisticComment, ...prev]);
+    setLocalPost((prev) => ({
+      ...prev,
+      comment_count: (prev.comment_count || 0) + 1,
+    }));
+
     try {
       const newComment = await createComment(localPost.id, content);
       if (newComment) {
-        setComments((prev) => [newComment, ...prev]);
-        setLocalPost((prev) => ({
-          ...prev,
-          comment_count: (prev.comment_count || 0) + 1,
-        }));
+        // Replace optimistic comment with real one
+        setComments((prev) => 
+          prev.map(c => c.id === optimisticComment.id ? newComment : c)
+        );
       }
     } catch (error) {
+      // Remove optimistic comment on error
+      setComments((prev) => prev.filter(c => c.id !== optimisticComment.id));
+      setLocalPost((prev) => ({
+        ...prev,
+        comment_count: Math.max((prev.comment_count || 0) - 1, 0),
+      }));
+      
       const message =
         error instanceof Error
           ? error.message
@@ -474,9 +509,8 @@ export default function PostCard({
                 });
             }
           } else {
-            // Video is out of viewport, pause it ONLY if it's autoplaying (muted)
-            // Don't pause if user manually unmuted and is watching
-            if (!video.paused && video.muted) {
+            // Video is out of viewport, pause it
+            if (!video.paused) {
               video.pause();
               setIsVideoPlaying(false);
               // Reset interaction flag when scrolling away
@@ -563,11 +597,26 @@ export default function PostCard({
           <Avatar className="w-10 h-10 sm:w-12 sm:h-12 ring-2 ring-gray-700/50 ring-offset-2 ring-offset-[#141414]">
             <AvatarImage src={localPost.author.avatar} />
             <AvatarFallback className="bg-gradient-to-br from-gray-700 to-gray-900 text-white">
-              {(
-                localPost.author.username?.[0] ||
-                localPost.author.first_name?.[0] ||
-                "?"
-              ).toUpperCase()}
+              {(() => {
+                const firstName = localPost.author.first_name?.trim();
+                const lastName = localPost.author.last_name?.trim();
+                const username = localPost.author.username?.trim();
+                
+                // Try to get initials from first + last name
+                if (firstName && lastName) {
+                  return (firstName[0] + lastName[0]).toUpperCase();
+                }
+                // Fallback to first name initial
+                if (firstName) {
+                  return firstName[0].toUpperCase();
+                }
+                // Fallback to username initial
+                if (username) {
+                  return username[0].toUpperCase();
+                }
+                // Final fallback
+                return "?";
+              })()}
             </AvatarFallback>
           </Avatar>
         </div>
@@ -613,30 +662,21 @@ export default function PostCard({
             </div>
 
             {/* Follow Button */}
-            {!isOwnPost && (
+            {!isOwnPost && !localIsFollowing && (
               <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0 ml-1">
                 <button
                   className={cn(
                     "text-white rounded-full px-2.5 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-[13px] font-medium transition-all duration-200 flex items-center gap-0.5 sm:gap-1 shadow-sm",
-                    localIsFollowing
-                      ? "bg-white/10 hover:bg-white/20 border border-white/20"
-                      : "bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 shadow-blue-500/20",
-                    (localIsFollowLoading || isFollowLoading) &&
+                    "bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 shadow-blue-500/20",
+                    localIsFollowLoading &&
                       "opacity-50 cursor-not-allowed"
                   )}
                   onClick={handleFollowToggle}
-                  disabled={localIsFollowLoading || isFollowLoading}
-                  title={`Click to ${
-                    localIsFollowing ? "unfollow" : "follow"
-                  } ${localPost.author.username || "this user"}`}
+                  disabled={localIsFollowLoading}
+                  title={`Click to follow ${localPost.author.username || "this user"}`}
                 >
-                  {localIsFollowLoading || isFollowLoading ? (
+                  {localIsFollowLoading ? (
                     <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : localIsFollowing ? (
-                    <>
-                      <UserCheck className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                      <span className="hidden sm:inline">Following</span>
-                    </>
                   ) : (
                     <>
                       <UserPlus className="w-2.5 h-2.5 sm:w-3 sm:h-3" />

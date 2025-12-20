@@ -241,7 +241,7 @@ export default function AgentProfilePage({
   return (
     <div className="min-h-screen bg-background font-sans pt-10 sm:pt-10 pb-20 sm:pb-8">
       {/* Header */}
-      <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
+      <div className="sticky pt-6 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="max-w-5xl mx-auto px-2 sm:px-4 py-2 sm:py-4">
           <Button
             variant="ghost"

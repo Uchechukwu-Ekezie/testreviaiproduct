@@ -71,6 +71,7 @@ export interface Comment {
   created_at: string;
   updated_at: string;
   replies?: Comment[];
+  isPending?: boolean; // For optimistic updates
 }
 
 interface CommentResponse {

@@ -232,11 +232,12 @@ export default function CommentsModal({
     const paddingLeft = depth > 0 ? "pl-6 border-l border-gray-700/60" : "";
     const hasReplies = comment.replies && comment.replies.length > 0;
     const isExpanded = expandedReplies.has(comment.id);
+    const isPending = comment.isPending; // Check if comment is pending
 
     return (
       <div
         key={comment.id}
-        className={`${marginLeft} ${paddingLeft} space-y-3`}
+        className={`${marginLeft} ${paddingLeft} space-y-3 ${isPending ? 'opacity-50 animate-pulse' : ''}`}
       >
         <div className="flex gap-3 items-start">
           <button
@@ -276,7 +277,7 @@ export default function CommentsModal({
               )}
               <span className="text-xs text-gray-400">•</span>
               <span className="text-xs text-gray-400">
-                {new Date(comment.created_at).toLocaleTimeString([], {
+                {isPending ? 'Sending...' : new Date(comment.created_at).toLocaleTimeString([], {
                   hour: "numeric",
                   minute: "2-digit",
                 })}
@@ -556,7 +557,7 @@ export default function CommentsModal({
                 autoCorrect="on"
                 spellCheck="true"
                 inputMode="text"
-                className="w-full pl-12 pr-3 py-2 bg-transparent border border-[#2E2E2E] rounded-[20px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-white placeholder-gray-400 disabled:opacity-60 disabled:cursor-not-allowed touch-manipulation"
+                className="w-full pl-12 pr-16 py-2 bg-transparent border border-[#2E2E2E] rounded-[20px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-white placeholder-gray-400 disabled:opacity-60 disabled:cursor-not-allowed touch-manipulation"
                 disabled={isSubmitting}
               />
               <Avatar className="absolute left-2 top-1/2 transform -translate-y-1/2 w-6 h-6">
@@ -565,6 +566,14 @@ export default function CommentsModal({
                   {currentUserName?.[0]?.toUpperCase() || "U"}
                 </AvatarFallback>
               </Avatar>
+              <Button
+                size="sm"
+                onClick={handleNewCommentSubmit}
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 h-6"
+                disabled={isSubmitting || newCommentText.trim().length === 0}
+              >
+                Send
+              </Button>
             </div>
           )}
           {errorMessage && (

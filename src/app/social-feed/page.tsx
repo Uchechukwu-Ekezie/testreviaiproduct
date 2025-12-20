@@ -574,8 +574,6 @@ export default function SocialFeed() {
 
               {isMounted && combinedPosts.map((post) => {
                 const isFollowing = followStatusMap[post.author.id] || false;
-                const isFollowLoading =
-                  followLoadingMap[post.author.id] || false;
 
                 return (
                   <PostCard
@@ -589,7 +587,6 @@ export default function SocialFeed() {
                     // NEW: Pass follow props
                     isFollowing={isFollowing}
                     onFollowToggle={handleFollowToggle}
-                    isFollowLoading={isFollowLoading}
                     // Image lightbox handler
                     onOpenLightbox={handleOpenLightbox}
                   />

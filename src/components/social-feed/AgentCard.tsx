@@ -44,7 +44,10 @@ export default function AgentCard({ agent, onViewAgent }: AgentCardProps) {
     <div className="rounded-2xl p-6 hover:border-primary/50 transition-all duration-300  ">
       {/* Profile Picture */}
       <div className="flex justify-center mb-4 relative">
-        <Avatar className="w-20 h-20">
+        <Avatar 
+          className="w-20 h-20 cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={() => onViewAgent(agent.id)}
+        >
           <AvatarImage src={avatarSrc} alt={displayName} />
           <AvatarFallback className="bg-muted text-card-foreground text-lg font-semibold">
             {displayName
