@@ -602,7 +602,11 @@ export default function SocialFeed() {
                   ref={loadMoreTriggerRef}
                   className="h-20 flex items-center justify-center"
                 >
-                  {isLoadingPosts && <PostCardSkeleton />}
+                  {isLoadingPosts && (
+                    <p className="text-center text-gray-400 py-8 text-sm">
+                      Loading more content...
+                    </p>
+                  )}
                 </div>
               )}
 
