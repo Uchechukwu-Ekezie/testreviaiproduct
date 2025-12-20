@@ -89,6 +89,7 @@ export default function MediaViewPage({
   const [allPostsLoaded, setAllPostsLoaded] = useState(false);
   const [isLoadingSinglePost, setIsLoadingSinglePost] = useState(false);
   const [postFetchAttempted, setPostFetchAttempted] = useState(false);
+  const [isMounted, setIsMounted] = useState(false); // Prevent hydration mismatch
 
   // Follow states
   const [followStatusMap, setFollowStatusMap] = useState<
@@ -146,6 +147,7 @@ export default function MediaViewPage({
   const scrollEndTimeout = useRef<NodeJS.Timeout | null>(null);
   const isLoadingPostsRef = useRef(false); // Track if we're currently loading more posts
   const preservedScrollPost = useRef<string | null>(null); // Preserve which post user was viewing during load
+  const hasScrolledToInitialPost = useRef(false); // Track if we've scrolled to initial post on page load
 
   // Helper function to check if a post has a video
   const checkUrlForVideo = (url?: string | null) => {
@@ -223,6 +225,32 @@ export default function MediaViewPage({
     }
   }, [posts.length, allPostsLoaded]);
 
+  // Load all available posts upfront (eliminates pagination issues)
+  useEffect(() => {
+    const loadAllPosts = async () => {
+      // Keep loading posts until there are no more
+      let attempts = 0;
+      const maxAttempts = 50; // Safety limit to prevent infinite loops
+      
+      while (hasMore && !isLoading && attempts < maxAttempts) {
+        console.log(`[MediaView] Loading all posts - attempt ${attempts + 1}, current count: ${posts.length}`);
+        await loadMorePosts();
+        attempts++;
+        // Small delay to prevent overwhelming the server
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
+      if (attempts > 0) {
+        console.log(`[MediaView] Finished loading all posts. Total: ${posts.length}`);
+      }
+    };
+
+    // Only start loading if we have some posts and there are more to load
+    if (posts.length > 0 && hasMore && !isLoadingMore.current) {
+      loadAllPosts();
+    }
+  }, [posts.length, hasMore, isLoading, loadMorePosts]);
+
   // Initialize follow status when posts load (only once)
   useEffect(() => {
     if (posts.length > 0 && currentUser && !followStatusInitialized.current) {
@@ -230,6 +258,11 @@ export default function MediaViewPage({
       initializeFollowStatus();
     }
   }, [posts.length, currentUser, initializeFollowStatus]);
+
+  // Prevent hydration mismatch by only rendering after mount
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Check if current post needs to be fetched (when posts array changes or currentPostId changes)
   useEffect(() => {
@@ -305,16 +338,32 @@ export default function MediaViewPage({
       console.log(`📌 Preserving scroll position at post: ${currentPostId}`);
       
       loadMorePosts().finally(() => {
-        // Wait a bit before allowing state updates again to let DOM settle
+        // Wait for DOM to update, then restore scroll position
         setTimeout(() => {
+          const preservedPostId = preservedScrollPost.current;
+          
+          if (preservedPostId) {
+            const preservedElement = document.querySelector(`[data-postid="${preservedPostId}"]`);
+            
+            if (preservedElement) {
+              console.log(`✅ Restoring scroll position to post: ${preservedPostId}`);
+              
+              // Scroll to the preserved post
+              preservedElement.scrollIntoView({
+                behavior: 'instant' as ScrollBehavior,
+                block: 'start',
+              });
+            }
+          }
+          
           isLoadingMore.current = false;
           isLoadingPostsRef.current = false;
-          console.log(`✅ Posts loaded, scroll position preserved at: ${preservedScrollPost.current}`);
-          // Clear after a bit longer to ensure stability
+          
+          // Clear preserved post after a delay
           setTimeout(() => {
             preservedScrollPost.current = null;
           }, 1000);
-        }, 500);
+        }, 300); // Wait for React to finish rendering
       });
     }
   }, [currentIdx, posts.length, hasMore, isLoading, loadMorePosts, currentPostId]);
@@ -332,14 +381,38 @@ export default function MediaViewPage({
       ) {
         console.log("[MediaView] Triggering loadMorePosts - scroll position");
         isLoadingMore.current = true;
+        isLoadingPostsRef.current = true;
+        preservedScrollPost.current = currentPostId;
+        
         loadMorePosts().finally(() => {
-          isLoadingMore.current = false;
+          setTimeout(() => {
+            const preservedPostId = preservedScrollPost.current;
+            
+            if (preservedPostId) {
+              const preservedElement = document.querySelector(`[data-postid="${preservedPostId}"]`);
+              
+              if (preservedElement) {
+                console.log(`✅ Restoring scroll position to post: ${preservedPostId}`);
+                preservedElement.scrollIntoView({
+                  behavior: 'instant' as ScrollBehavior,
+                  block: 'start',
+                });
+              }
+            }
+            
+            isLoadingMore.current = false;
+            isLoadingPostsRef.current = false;
+            
+            setTimeout(() => {
+              preservedScrollPost.current = null;
+            }, 1000);
+          }, 300);
         });
       }
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [hasMore, isLoading, loadMorePosts]);
+  }, [hasMore, isLoading, loadMorePosts, currentPostId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -598,6 +671,51 @@ export default function MediaViewPage({
     },
     [videoErrorMap, videoVolumeMap, videoMutedMap]
   );
+
+  // FIX: Scroll to the correct post when page loads (Issue 1)
+  useEffect(() => {
+    // Only run if:
+    // 1. We haven't scrolled to initial post yet
+    // 2. We have a currentPostId
+    // 3. The post exists in videoPosts array
+    // 4. We're not currently loading
+    if (
+      !hasScrolledToInitialPost.current &&
+      currentPostId &&
+      videoPosts.length > 0 &&
+      !isLoadingPostsRef.current &&
+      !isLoadingSinglePost
+    ) {
+      const postExists = videoPosts.some((p) => p.id === currentPostId);
+      
+      if (postExists) {
+        // Find the post element
+        const postElement = document.querySelector(`[data-postid="${currentPostId}"]`);
+        
+        if (postElement) {
+          console.log(`📍 Scrolling to initial post: ${currentPostId}`);
+          
+          // Scroll to the post
+          postElement.scrollIntoView({
+            behavior: 'instant' as ScrollBehavior,
+            block: 'start',
+          });
+          
+          hasScrolledToInitialPost.current = true;
+          
+          // Autoplay the video after scrolling
+          setTimeout(() => playVideo(currentPostId, false), 300);
+        }
+      }
+    }
+  }, [currentPostId, videoPosts, isLoadingSinglePost, playVideo]);
+
+  // Reset scroll flag when navigating to a new route
+  useEffect(() => {
+    return () => {
+      hasScrolledToInitialPost.current = false;
+    };
+  }, [routePostId]);
 
   const toggleVideoPlayback = useCallback(
     async (postId: string, e?: React.MouseEvent) => {
@@ -1841,8 +1959,8 @@ export default function MediaViewPage({
                                 el.src === window.location.href ||
                                 el.currentSrc === window.location.href
                               ) {
-                                console.error(
-                                  `❌ Video src is page URL for ${post.id}, fixing to:`,
+                                console.log(
+                                  `🔧 Fixed video src for ${post.id}:`,
                                   validVideoSrc
                                 );
                                 el.src = validVideoSrc;
@@ -2520,7 +2638,7 @@ export default function MediaViewPage({
         }}
       >
         {/* Render all video posts for proper navigation */}
-        {videoPosts.map((post, index) => (
+        {isMounted && videoPosts.map((post, index) => (
           <div key={post.id} className="h-screen snap-start">
             {renderSinglePost(post)}
           </div>
