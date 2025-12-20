@@ -429,7 +429,6 @@ export default function UserProfilePage({
                   onFollowToggle={async (authorId, authorData) => {
                     await handleFollowToggle();
                   }}
-                  isFollowLoading={isFollowLoading}
                   onOpenLightbox={handleOpenLightbox}
                 />
               ))
