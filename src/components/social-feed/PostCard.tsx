@@ -554,10 +554,10 @@ export default function PostCard({
   /* ------------------------------------------------------------- */
   /* Render helpers                                                */
   /* ------------------------------------------------------------- */
-  const authorFullName = `${localPost.author.first_name || ""} ${
-    localPost.author.last_name || ""
+  const authorFullName = `${localPost.author?.first_name || ""} ${
+    localPost.author?.last_name || ""
   }`.trim();
-  const authorDisplayName = authorFullName || localPost.author.username || "?";
+  const authorDisplayName = authorFullName || localPost.author?.username || "?";
 
   const postDate = new Date(localPost.created_at);
   const relativeTime = formatRelativeTime(postDate);
@@ -565,11 +565,11 @@ export default function PostCard({
   const timestampLabel = isPending ? "Posting…" : relativeTime;
 
   const isVerifiedAgent =
-    localPost.author.user_type === "agent" &&
-    localPost.author.verification_status === "verified";
+    localPost.author?.user_type === "agent" &&
+    localPost.author?.verification_status === "verified";
 
   // Check if current user is the post author
-  const isOwnPost = user && localPost.author.id === user.id;
+  const isOwnPost = user && localPost.author?.id === user.id;
 
   return (
     <div
