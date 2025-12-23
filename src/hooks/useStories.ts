@@ -87,6 +87,9 @@ export function useStories() {
     const storyMap = new Map<string, Story>();
 
     posts.forEach((post) => {
+      // Skip posts without valid author data
+      if (!post.author || !post.author.id) return;
+      
       const userId = post.author.id;
       const mediaUrl = post.images?.[0] || post.media_url || "";
       

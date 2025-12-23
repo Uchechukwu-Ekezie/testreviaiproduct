@@ -311,9 +311,31 @@ export function usePosts() {
           lastFetchTime.current = now;
         }
 
+        // Transform posts to include author object from author_id, author_username, author_avatar
+        const transformedPosts = response.data.results.map((post: any) => {
+          // If post already has author object, use it
+          if (post.author && typeof post.author === 'object') {
+            return post;
+          }
+          
+          // Otherwise, create author object from separate fields
+          return {
+            ...post,
+            author: {
+              id: post.author_id || '',
+              username: post.author_username || '',
+              email: post.author_username || '', // Use username as fallback for email
+              avatar: post.author_avatar || undefined,
+              first_name: post.author_first_name || undefined,
+              last_name: post.author_last_name || undefined,
+              user_type: post.author_user_type || undefined,
+            }
+          };
+        });
+
         // Deduplicate posts based on ID
         setPosts((prev) => {
-          const newPosts = response.data.results.filter(
+          const newPosts = transformedPosts.filter(
             (newPost) =>
               !prev.some((existingPost) => existingPost.id === newPost.id)
           );
@@ -321,7 +343,7 @@ export function usePosts() {
           if (reset) {
             // When resetting, preserve any individually fetched posts that aren't in the new results
             const preservedPosts = prev.filter(
-              (prevPost) => !response.data.results.some((newPost) => newPost.id === prevPost.id)
+              (prevPost) => !transformedPosts.some((newPost) => newPost.id === prevPost.id)
             );
             
             if (preservedPosts.length > 0) {
@@ -592,7 +614,33 @@ export function usePosts() {
           "[usePosts] Comments fetched:",
           response.data.results.length
         );
-        return response.data;
+        
+        // Transform comments to include author object from author_id, author_username, author_avatar
+        const transformedComments = response.data.results.map((comment: any) => {
+          // If comment already has author object, use it
+          if (comment.author && typeof comment.author === 'object') {
+            return comment;
+          }
+          
+          // Otherwise, create author object from separate fields
+          return {
+            ...comment,
+            author: {
+              id: comment.author_id || '',
+              username: comment.author_username || '',
+              email: comment.author_username || '',
+              avatar: comment.author_avatar || undefined,
+              first_name: comment.author_first_name || undefined,
+              last_name: comment.author_last_name || undefined,
+              type: comment.author_user_type || undefined,
+            }
+          };
+        });
+        
+        return {
+          ...response.data,
+          results: transformedComments
+        };
       } catch (err) {
         const error = err as AxiosError<PostError>;
         const errorMsg =

@@ -309,7 +309,6 @@ function ChatContent() {
     }
   }, [isAuthenticated, setSessions, setActiveSession, setMessages]);
 
-
   const getChats = useCallback(
     async (sessionId: string, forceRefresh = false) => {
       if (isCreatingNewSession.current) {
@@ -737,22 +736,71 @@ function ChatContent() {
         }
 
         let sessionId = activeSession;
-        let isNewSession = false;
+        let newSessionData: ChatSession | null = null;
 
-        // If no active session, mark as new session but don't create it yet
-        // The backend will create the session automatically
         if (!sessionId) {
           isCreatingNewSession.current = true;
-          isNewSession = true;
-          sessionId = ""; // Empty string for new sessions
 
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg && msg.id === tempMessageId
-                ? { ...msg, isNewSession: true }
-                : msg
-            )
-          );
+          const userId = user?.id || "guest";
+          const sessionData = {
+            chat_title: input.substring(0, 30),
+            user: userId,
+          };
+
+          try {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg && msg.id === tempMessageId
+                  ? { ...msg, isNewSession: true }
+                  : msg
+              )
+            );
+
+            newSessionData = await chatAPI.createChatSession(sessionData);
+
+            if (!newSessionData) {
+              throw new Error("Failed to create new chat session");
+            }
+
+            sessionId = newSessionData.id;
+
+            setSessions((prev: ChatSession[]) => {
+              if (prev.some((s) => s.id === newSessionData!.id)) {
+                return prev;
+              }
+              return [newSessionData!, ...prev];
+            });
+
+            setActiveSession(sessionId);
+
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === tempMessageId
+                  ? { ...msg, session: sessionId, isNewSession: true }
+                  : msg
+              )
+            );
+          } catch (error) {
+            console.error("Error creating session:", error);
+
+            const errorMessage = extractErrorMessage(
+              error,
+              "Failed to create session"
+            );
+
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === tempMessageId
+                  ? {
+                      ...msg,
+                      error: true,
+                      errorMessage: errorMessage,
+                    }
+                  : msg
+              )
+            );
+            throw error;
+          }
         }
 
         try {
@@ -838,33 +886,6 @@ function ChatContent() {
           });
           setLatestMessageId(data.id);
 
-          // 🔥 CRITICAL: Extract session_id from backend response for new sessions
-          const backendSessionId = data.session || sessionId;
-          
-          // If this was a new session, the backend created it and returned the session_id
-          // Check if sessionId is empty string (new session) and we got a session back
-          if (isNewSession && backendSessionId && sessionId === "") {
-            sessionId = backendSessionId;
-            
-            // Add the new session to the sessions list
-            setSessions((prev: ChatSession[]) => {
-              // Check if session already exists
-              if (prev.some((s) => s.id === sessionId)) {
-                return prev;
-              }
-              
-              // Create new session object
-              const newSession: ChatSession = {
-                id: sessionId!,
-                chat_title: input.substring(0, 30),
-                user: user?.id || "guest",
-                created_at: new Date().toISOString(),
-              };
-              
-              return [newSession, ...prev];
-            });
-          }
-
           setMessages((prev) => {
             const tempIndex = prev.findIndex(
               (msg) => msg && msg.id === tempMessageId
@@ -880,7 +901,7 @@ function ChatContent() {
                 id: data.id,
                 prompt: data.prompt,
                 response: data.response,
-                session: backendSessionId, // Use backend session_id
+                session: sessionId,
                 classification: data.classification,
                 context: data.context as Context[] | undefined,
                 image_url: data.image_url,
@@ -914,7 +935,7 @@ function ChatContent() {
                   id: data.id,
                   prompt: data.prompt,
                   response: data.response,
-                  session: backendSessionId, // Use backend session_id
+                  session: sessionId,
                   classification: data.classification,
                   context: data.context as Context[] | undefined,
                   image_url: data.image_url,
@@ -941,7 +962,7 @@ function ChatContent() {
                   id: data.id,
                   prompt: data.prompt,
                   response: data.response,
-                  session: backendSessionId, // Use backend session_id
+                  session: sessionId,
                   classification: data.classification,
                   context: data.context as Context[] | undefined,
                   image_url: data.image_url,
@@ -965,20 +986,31 @@ function ChatContent() {
             }
           });
 
-          // For new sessions, set as active session AFTER messages are updated
-          if (isNewSession && backendSessionId && sessionId === "") {
-            setActiveSession(backendSessionId);
-            
-            // Reset flag after a delay to prevent getChats from running
-            setTimeout(() => {
-              isCreatingNewSession.current = false;
-            }, 1000);
+          // Invalidate cache for this session since we have new messages
+          if (sessionId) {
+            clearMessageCache(sessionId);
           }
 
-          // Invalidate cache for this session since we have new messages  
-          // (but don't clear for brand new sessions)
-          if (backendSessionId && !isNewSession) {
-            clearMessageCache(backendSessionId);
+          if (newSessionData) {
+            setSessions((prev) => {
+              const existingSession = prev.find((s) => s.id === sessionId);
+              if (!existingSession) {
+                return [
+                  {
+                    ...newSessionData!,
+                    chat_title: newSessionData!.chat_title,
+                    first_message: input,
+                  },
+                  ...prev,
+                ];
+              }
+              return prev;
+            });
+
+            setTimeout(() => {
+              setActiveSession(sessionId);
+              isCreatingNewSession.current = false;
+            }, 100);
           }
 
           setTimeout(scrollToBottomWithAnchoring, 100);
@@ -1013,12 +1045,16 @@ function ChatContent() {
                 ? {
                     ...msg,
                     error: true,
-                    session: sessionId || undefined,
+                    session: sessionId,
                     errorMessage: postErrorMessage,
                   }
                 : msg
             )
           );
+
+          if (newSessionData && sessionId) {
+            setActiveSession(sessionId);
+          }
 
           isCreatingNewSession.current = false;
           throw error;
@@ -1558,9 +1594,9 @@ function ChatContent() {
         />
 
         {/* Viewport Container - Bottom-anchored with new messages at bottom */}
-        <div className="flex flex-col flex-1 min-h-0">
+        <div className="flex-1 flex flex-col min-h-0">
           {/* Messages Area - Scrollable, new messages at bottom */}
-          <div className="flex-1 min-h-0 overflow-y-auto pt-14 bg-background">
+          <div className="flex-1 overflow-y-auto min-h-0 pt-14 bg-background">
             <ChatMessages {...chatMessagesProps} />
           </div>
 
@@ -1597,4 +1633,3 @@ export default function ChatPage() {
       <ChatContent />
     </Suspense>
   );
-}

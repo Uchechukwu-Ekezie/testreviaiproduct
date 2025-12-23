@@ -773,8 +773,20 @@ const ChatMessages: React.FC<ChatMessagesProps> = React.memo(
 
     // Filter messages by active session - simplified approach
     const messages = useMemo(() => {
-      if (!activeSession) return [];
-      return allMessages.filter((msg) => msg && msg.session === activeSession);
+      console.log("🎭 ChatMessages filtering:", {
+        activeSession,
+        allMessagesCount: allMessages.length,
+        allMessages: allMessages.map(m => ({ id: m?.id, session: m?.session }))
+      });
+      
+      if (!activeSession) {
+        console.log("⚠️ No active session, returning empty array");
+        return [];
+      }
+      
+      const filtered = allMessages.filter((msg) => msg && msg.session === activeSession);
+      console.log("✅ Filtered messages count:", filtered.length);
+      return filtered;
     }, [allMessages, activeSession]);
 
     const router = useRouter();
