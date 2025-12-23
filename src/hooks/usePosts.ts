@@ -442,9 +442,24 @@ export function usePosts() {
         // Update cache timestamp since we have new data
         lastFetchTime.current = Date.now();
 
+        // Transform the created post to include author object
+        const createdPost: any = response.data;
+        const transformedPost = {
+          ...createdPost,
+          author: createdPost.author || {
+            id: createdPost.author_id || '',
+            username: createdPost.author_username || '',
+            email: createdPost.author_username || '',
+            avatar: createdPost.author_avatar || undefined,
+            first_name: createdPost.author_first_name || undefined,
+            last_name: createdPost.author_last_name || undefined,
+            user_type: createdPost.author_user_type || undefined,
+          }
+        };
+
         setPosts((prev) => [
-          response.data,
-          ...prev.filter((post) => post.id !== response.data.id),
+          transformedPost,
+          ...prev.filter((post) => post.id !== transformedPost.id),
         ]);
         return true;
       } catch (err) {
