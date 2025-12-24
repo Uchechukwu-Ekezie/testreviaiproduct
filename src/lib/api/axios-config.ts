@@ -30,6 +30,7 @@ let isRefreshing = false;
 let failedQueue: {
   resolve: (value: AxiosResponse<unknown>) => void;
   reject: (error: AxiosError) => void;
+  config: AxiosRequestConfig; // Store original request config for retry
 }[] = [];
 
 /**
@@ -39,12 +40,30 @@ const processQueue = (
   error: AxiosError | null,
   token: string | null = null
 ): void => {
-  failedQueue.forEach((prom) => {
+  console.log(`🔄 Processing ${failedQueue.length} queued requests...`);
+  
+  failedQueue.forEach((prom, index) => {
     if (error) {
+      console.log(`❌ Rejecting queued request ${index + 1}`);
       prom.reject(error);
     } else if (token) {
-      api.defaults.headers.common.Authorization = `Bearer ${token}`;
-      prom.resolve(api as unknown as AxiosResponse<unknown>);
+      // Ensure headers object exists and update with new token
+      const headers = prom.config.headers || {};
+      headers.Authorization = `Bearer ${token}`;
+      prom.config.headers = headers as any;
+      
+      console.log(`🔄 Retrying queued request ${index + 1} with new token`);
+      
+      // Retry the original request with the new token
+      api(prom.config)
+        .then((response) => {
+          console.log(`✅ Queued request ${index + 1} succeeded`);
+          prom.resolve(response);
+        })
+        .catch((err) => {
+          console.log(`❌ Queued request ${index + 1} failed:`, err.response?.status);
+          prom.reject(err);
+        });
     }
   });
 
@@ -88,16 +107,22 @@ const refreshAccessToken = async (): Promise<string | null> => {
   }
 
   try {
-    const response = await axios.post<{ access: string; refresh?: string }>(
+    const response = await axios.post<{ 
+      access_token: string; 
+      refresh_token?: string;
+      token_type?: string;
+    }>(
       `${BASE_URL}/auth/refresh`,
       {
         refresh_token: refreshToken,
       }
     );
 
-    const newAccessToken = response.data.refresh || response.data.access;
+    const newAccessToken = response.data.access_token;
 
     if (newAccessToken) {
+      console.log('🔄 Token refresh successful, updating tokens...');
+      
       // Save the new token with timestamp
       localStorage.setItem("authToken", newAccessToken);
 
@@ -108,14 +133,23 @@ const refreshAccessToken = async (): Promise<string | null> => {
       };
 
       localStorage.setItem("tokenData", JSON.stringify(tokenData));
+      
+      // Update axios default headers
       api.defaults.headers.common["Authorization"] = `Bearer ${newAccessToken}`;
+      
+      console.log('✅ Axios headers updated with new token');
+      
+      // Update refresh token if provided
+      if (response.data.refresh_token) {
+        localStorage.setItem("refreshToken", response.data.refresh_token);
+      }
 
       return newAccessToken;
     }
 
     return null;
   } catch (error) {
-    console.error("Failed to refresh access token", error);
+    console.error("❌ Failed to refresh access token", error);
     // In case of failure, clear stored tokens
     localStorage.removeItem("authToken");
     localStorage.removeItem("refreshToken");
@@ -187,13 +221,14 @@ api.interceptors.response.use(
       !isAuthEndpoint(originalRequest.url)
     ) {
       if (isRefreshing) {
-        try {
-          return new Promise((resolve, reject) => {
-            failedQueue.push({ resolve, reject });
-          }).then(() => api(originalRequest));
-        } catch (err) {
-          return Promise.reject(err);
-        }
+        // Queue this request to be retried after token refresh completes
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ 
+            resolve, 
+            reject,
+            config: originalRequest // Store the original request config
+          });
+        });
       }
 
       originalRequest._retry = true;
