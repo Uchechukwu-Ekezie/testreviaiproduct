@@ -141,6 +141,11 @@ export default function PostCard({
         return;
       }
 
+      // Early return if author is undefined
+      if (!localPost.author) {
+        return;
+      }
+
       // Don't allow following yourself
       if (localPost.author.id === user.id) {
         return;
@@ -554,10 +559,10 @@ export default function PostCard({
   /* ------------------------------------------------------------- */
   /* Render helpers                                                */
   /* ------------------------------------------------------------- */
-  const authorFullName = `${localPost.author.first_name || ""} ${
-    localPost.author.last_name || ""
+  const authorFullName = `${localPost.author?.first_name || ""} ${
+    localPost.author?.last_name || ""
   }`.trim();
-  const authorDisplayName = authorFullName || localPost.author.username || "?";
+  const authorDisplayName = authorFullName || localPost.author?.username || "?";
 
   const postDate = new Date(localPost.created_at);
   const relativeTime = formatRelativeTime(postDate);
@@ -565,11 +570,11 @@ export default function PostCard({
   const timestampLabel = isPending ? "Posting…" : relativeTime;
 
   const isVerifiedAgent =
-    localPost.author.user_type === "agent" &&
-    localPost.author.verification_status === "verified";
+    localPost.author?.user_type === "agent" &&
+    localPost.author?.verification_status === "verified";
 
   // Check if current user is the post author
-  const isOwnPost = user && localPost.author.id === user.id;
+  const isOwnPost = user && localPost.author?.id === user.id;
 
   return (
     <div
@@ -595,12 +600,12 @@ export default function PostCard({
         {/* Avatar */}
         <div className="flex-shrink-0">
           <Avatar className="w-10 h-10 sm:w-12 sm:h-12 ring-2 ring-gray-700/50 ring-offset-2 ring-offset-[#141414]">
-            <AvatarImage src={localPost.author.avatar} />
+            <AvatarImage src={localPost.author?.avatar} />
             <AvatarFallback className="bg-gradient-to-br from-gray-700 to-gray-900 text-white">
               {(() => {
-                const firstName = localPost.author.first_name?.trim();
-                const lastName = localPost.author.last_name?.trim();
-                const username = localPost.author.username?.trim();
+                const firstName = localPost.author?.first_name?.trim();
+                const lastName = localPost.author?.last_name?.trim();
+                const username = localPost.author?.username?.trim();
                 
                 // Try to get initials from first + last name
                 if (firstName && lastName) {
@@ -631,7 +636,7 @@ export default function PostCard({
                   className="font-semibold text-white text-sm sm:text-[15px] hover:text-blue-400 cursor-pointer truncate transition-colors"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (!localPost.isPending && localPost.author.id) {
+                    if (!localPost.isPending && localPost.author?.id) {
                       router.push(`/social-feed/user/${localPost.author.id}`);
                     }
                   }}
@@ -642,12 +647,12 @@ export default function PostCard({
                   <BadgeCheck className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-white fill-bg-r  flex-shrink-0" />
                 )}
               </div>
-              {localPost.author.username && (
+              {localPost.author?.username && (
                 <span
                   className="text-gray-400 text-xs sm:text-[15px] cursor-pointer hover:text-blue-400 truncate transition-colors"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (!localPost.isPending && localPost.author.id) {
+                    if (!localPost.isPending && localPost.author?.id) {
                       router.push(`/social-feed/user/${localPost.author.id}`);
                     }
                   }}
@@ -673,7 +678,7 @@ export default function PostCard({
                   )}
                   onClick={handleFollowToggle}
                   disabled={localIsFollowLoading}
-                  title={`Click to follow ${localPost.author.username || "this user"}`}
+                  title={`Click to follow ${localPost.author?.username || "this user"}`}
                 >
                   {localIsFollowLoading ? (
                     <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />

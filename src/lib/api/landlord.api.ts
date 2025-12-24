@@ -20,6 +20,8 @@ export interface AgentRequestPayload {
   phone: string;
   /** URL or path to verification document (e.g., business license, ID) */
   verification_document: string;
+  /** User ID (optional - will be auto-filled from auth token if not provided) */
+  user_id?: string;
 }
 
 /**
@@ -77,9 +79,26 @@ export const landlordAPI = {
         );
       }
 
+      // Get user ID from token if not provided
+      let userId: string | undefined = data.user_id;
+      if (!userId) {
+        const { getUserIdFromToken } = await import("./utils");
+        const userIdFromToken = getUserIdFromToken();
+        if (!userIdFromToken) {
+          throw new Error("Unable to get user ID. Please ensure you are logged in.");
+        }
+        userId = userIdFromToken;
+      }
+
+      const requestPayload = {
+        phone: data.phone,
+        verification_document: data.verification_document,
+        user_id: userId,
+      };
+
       const response = await api.post<AgentRequestResponse>(
-        "/auth/agent-requests/",
-        data
+        "/auth/agent-request",
+        requestPayload
       );
       console.log(
         "API: Agent request posted successfully, response:",

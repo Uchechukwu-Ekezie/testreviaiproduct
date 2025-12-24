@@ -59,6 +59,8 @@ interface ChatSidebarProps {
   isLoadingSessions: boolean;
   showDeleteConfirmation?: (sessionId: string, sessionTitle: string) => void;
   isDeleting?: string | null;
+  navigateToHome?: () => void;
+  onSessionDeleted?: (sessionId: string) => void;
 }
 
 // Memoized SessionItem component to prevent unnecessary re-renders
@@ -678,14 +680,28 @@ const ChatSidebarWithModal: React.FC<ChatSidebarProps> = (props) => {
     setIsDeleting(sessionToDelete.id);
 
     try {
+      // Mark session as deleted BEFORE making the API call
+      if (props.onSessionDeleted) {
+        props.onSessionDeleted(sessionToDelete.id);
+      }
+
       await chatAPI.deleteChatSession(sessionToDelete.id);
+      
+      // Remove session from local state
       props.setSessions((prev) =>
         prev.filter((s) => s.id !== sessionToDelete.id)
       );
 
+      // If deleting the currently active session, navigate away and clear messages
       if (props.activeSession === sessionToDelete.id) {
         props.setActiveSession(null);
         props.setMessages([]);
+        // Use Next.js router navigation if available, otherwise fallback to window.history
+        if (props.navigateToHome) {
+          props.navigateToHome();
+        } else {
+          window.history.pushState({}, "", "/");
+        }
       }
 
       toast({

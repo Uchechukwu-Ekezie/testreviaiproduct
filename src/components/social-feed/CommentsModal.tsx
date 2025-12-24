@@ -241,34 +241,34 @@ export default function CommentsModal({
       >
         <div className="flex gap-3 items-start">
           <button
-            onClick={() => handleUserClick(comment.author.id)}
+            onClick={() => comment.author && handleUserClick(comment.author.id)}
             className="cursor-pointer hover:opacity-80 transition-opacity"
           >
             <Avatar className={depth === 0 ? "w-[30px] h-[30px]" : "w-6 h-6"}>
-              <AvatarImage src={comment.author.avatar} />
+              <AvatarImage src={comment.author?.avatar} />
               <AvatarFallback className="bg-gray-600 text-white text-xs">
-                {getAuthorDisplayName(comment.author)[0]?.toUpperCase() || "?"}
+                {comment.author ? (getAuthorDisplayName(comment.author)[0]?.toUpperCase() || "?") : "?"}
               </AvatarFallback>
             </Avatar>
           </button>
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <button
-                onClick={() => handleUserClick(comment.author.id)}
+                onClick={() => comment.author && handleUserClick(comment.author.id)}
                 className={`font-medium text-white ${
                   depth === 0 ? "text-sm" : "text-xs"
                 } flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity`}
               >
-                {getAuthorDisplayName(comment.author)}
-                {comment.author.type === "agent" && (
+                {comment.author ? getAuthorDisplayName(comment.author) : "Unknown"}
+                {comment.author?.type === "agent" && (
                   <BadgeCheck className="w-4 h-4 text-white fill-blue-500" />
                 )}
               </button>
-              {getAuthorHandle(comment.author) && (
+              {comment.author && getAuthorHandle(comment.author) && (
                 <>
                   <span className="text-xs text-gray-400">•</span>
                   <button
-                    onClick={() => handleUserClick(comment.author.id)}
+                    onClick={() => comment.author && handleUserClick(comment.author.id)}
                     className="text-xs text-gray-400 hover:text-gray-300 cursor-pointer transition-colors"
                   >
                     @{getAuthorHandle(comment.author)}
@@ -310,7 +310,7 @@ export default function CommentsModal({
               <button
                 className="text-xs text-white cursor-pointer hover:text-gray-300"
                 onClick={() =>
-                  handleReplyToUser(
+                  comment.author && handleReplyToUser(
                     getAuthorDisplayName(comment.author),
                     comment.id,
                     getAuthorHandle(comment.author)
@@ -319,7 +319,7 @@ export default function CommentsModal({
               >
                 Reply
               </button>
-              {currentUserId && currentUserId === comment.author.id && (
+              {currentUserId && comment.author && currentUserId === comment.author.id && (
                 <button
                   onClick={() => handleDeleteComment(comment.id)}
                   disabled={deletingComments.has(comment.id)}

@@ -176,7 +176,19 @@ export default function SocialFeed() {
   // NEW: Initialize follow status for all posts - only check NEW authors
   const postsAuthorIds = useMemo(() => {
     if (posts.length === 0) return [];
-    return [...new Set(posts.map((post) => post.author.id).filter(Boolean))];
+    
+    // Debug: Log posts to see their structure
+    console.log('[SocialFeed] Total posts:', posts.length);
+    console.log('[SocialFeed] Sample post structure:', posts[0]);
+    
+    const postsWithAuthor = posts.filter(post => post.author);
+    console.log('[SocialFeed] Posts with author:', postsWithAuthor.length);
+    
+    if (postsWithAuthor.length === 0 && posts.length > 0) {
+      console.warn('[SocialFeed] No posts have author property! Sample post:', posts[0]);
+    }
+    
+    return [...new Set(postsWithAuthor.map((post) => post.author.id).filter(Boolean))];
   }, [posts]);
 
   useEffect(() => {
@@ -573,7 +585,7 @@ export default function SocialFeed() {
               )}
 
               {isMounted && combinedPosts.map((post) => {
-                const isFollowing = followStatusMap[post.author.id] || false;
+                const isFollowing = post.author ? (followStatusMap[post.author.id] || false) : false;
 
                 return (
                   <PostCard

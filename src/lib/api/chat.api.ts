@@ -10,7 +10,7 @@
 
 import type { AxiosRequestConfig, AxiosError } from "axios";
 import api from "./axios-config";
-import { getAuthToken, setAuthToken } from "./utils";
+import { getAuthToken, setAuthToken, getUserIdFromToken } from "./utils";
 import type {
   ChatSession,
   ChatSessionCreate,
@@ -95,7 +95,7 @@ export const chatAPI = {
    */
   getChatsBySession: async (sessionId: string): Promise<ChatMessage[]> => {
     // Don't use withErrorHandling to preserve raw server errors
-    const response = await api.get<unknown>(`/chats/session/${sessionId}/`);
+    const response = await api.get<unknown>(`/chats/session/${sessionId}`);
 
     // Handle different response structures
     let chats = response.data;
@@ -112,8 +112,24 @@ export const chatAPI = {
       }
     }
 
-    // Ensure we always return an array
-    return Array.isArray(chats) ? (chats as ChatMessage[]) : [];
+    // Ensure we have an array
+    const chatArray = Array.isArray(chats) ? chats : [];
+    
+    // Transform chats to convert session_id to session
+    const transformedChats = chatArray.map((chat: any) => {
+      // If chat already has session field, use it
+      if (chat.session) {
+        return chat;
+      }
+      
+      // Otherwise, use session_id as session
+      return {
+        ...chat,
+        session: chat.session_id || sessionId, // Use session_id from response or fallback to the sessionId parameter
+      };
+    });
+
+    return transformedChats as ChatMessage[];
   },
 
   /**
@@ -157,7 +173,9 @@ export const chatAPI = {
       "name" in options.file &&
       "size" in options.file &&
       "type" in options.file;
-    const shouldUseFormData = hasFile || looksLikeFile;
+    
+    // Always use FormData since backend expects multipart/form-data
+    const shouldUseFormData = true;
 
     const userLatitudeValue =
       options?.user_latitude ??
@@ -174,16 +192,15 @@ export const chatAPI = {
       // Use FormData for file uploads
       requestData = new FormData();
       requestData.append("prompt", message.trim());
-      requestData.append("original_prompt", message.trim());
+      // requestData.append("original_prompt", message.trim());
 
-      if (sessionId) {
-        requestData.append("session", sessionId);
-      }
+      // Always send session_id (empty string for new chats, actual ID for existing)
+      requestData.append("session_id", sessionId || "");
 
-      // Add image URL if provided
-      if (options?.image_url) {
+      // Add image URL if provided (only if non-empty)
+      if (options?.image_url && options.image_url.trim()) {
         requestData.append("image_url", options.image_url);
-      } else if (options?.imageUrls && options.imageUrls.length > 0) {
+      } else if (options?.imageUrls && options.imageUrls.length > 0 && options.imageUrls[0].trim()) {
         requestData.append("image_url", options.imageUrls[0]);
       }
 
@@ -200,26 +217,26 @@ export const chatAPI = {
         }
       }
 
-      // Add other optional fields
-      if (options?.properties) {
+      // Add other optional fields (only if non-empty)
+      if (options?.properties && options.properties.trim()) {
         requestData.append("properties", options.properties);
       }
-      if (options?.classification) {
+      if (options?.classification && options.classification.trim()) {
         requestData.append("classification", options.classification);
       }
 
       // Add location coordinates if provided
-      if (userLatitudeValue !== undefined) {
-        requestData.append("user_latitude", userLatitudeValue.toString());
-      }
-      if (userLongitudeValue !== undefined) {
-        requestData.append("user_longitude", userLongitudeValue.toString());
-      }
+      // if (userLatitudeValue !== undefined) {
+      //   requestData.append("user_latitude", userLatitudeValue.toString());
+      // }
+      // if (userLongitudeValue !== undefined) {
+      //   requestData.append("user_longitude", userLongitudeValue.toString());
+      // }
 
       // Add city-level location if provided (fallback)
-      if (locationStringValue) {
-        requestData.append("location", locationStringValue);
-      }
+      // if (locationStringValue) {
+      //   requestData.append("location", locationStringValue);
+      // }
 
       // Add stream flag if provided
       if (options?.stream !== undefined) {
@@ -238,8 +255,8 @@ export const chatAPI = {
       // Use JSON for regular requests without files
       requestData = {
         prompt: message.trim(),
-        original_prompt: message.trim(),
-        ...(sessionId && { session: sessionId }),
+        // original_prompt: message.trim(),
+        ...(sessionId && { session_id: sessionId }),
       };
 
       // Add image URL if provided
@@ -258,19 +275,19 @@ export const chatAPI = {
       }
 
       // Add location coordinates if provided
-      if (userLatitudeValue !== undefined) {
-        console.log('✅ Adding user_latitude to JSON request:', userLatitudeValue);
-        requestData.user_latitude = userLatitudeValue;
-      }
-      if (userLongitudeValue !== undefined) {
-        console.log('✅ Adding user_longitude to JSON request:', userLongitudeValue);
-        requestData.user_longitude = userLongitudeValue;
-      }
+      // if (userLatitudeValue !== undefined) {
+      //   console.log('✅ Adding user_latitude to JSON request:', userLatitudeValue);
+      //   requestData.user_latitude = userLatitudeValue;
+      // }
+      // if (userLongitudeValue !== undefined) {
+      //   console.log('✅ Adding user_longitude to JSON request:', userLongitudeValue);
+      //   requestData.user_longitude = userLongitudeValue;
+      // }
 
       // Add city-level location if provided (fallback)
-      if (locationStringValue) {
-        requestData.location = locationStringValue;
-      }
+      // if (locationStringValue) {
+      //   requestData.location = locationStringValue;
+      // }
 
       // Add stream flag if provided
       if (options?.stream !== undefined) {
@@ -343,13 +360,14 @@ export const chatAPI = {
     // Create response object
     const responseData = response.data as ChatMessageResponse & {
       message?: string;
+      session_id?: string; // Backend returns session_id (with underscore)
     };
     const messageObj: ChatMessageResponse = {
       id: responseData.id,
       prompt: message.trim(),
       original_prompt: responseData.original_prompt || message.trim(),
       response: responseData.response || responseData.message || "",
-      session: sessionId || responseData.session,
+      session: responseData.session_id || sessionId || responseData.session, // Check session_id first
       context: responseData.context || [],
       classification: responseData.classification || "",
       created_at: responseData.created_at || new Date().toISOString(),
@@ -417,21 +435,51 @@ export const chatAPI = {
   },
 
   /**
-   * Update reaction for a chat message
+   * React to a chat message
    * @param chatId - Chat message ID
-   * @param reaction - Reaction type (like, dislike, neutral)
-   * @param sessionId - Session ID
-   * @returns Updated chat message
+   * @param reactionType - Reaction type (like, dislike, love)
+   * @returns Updated chat message with reaction
    */
-  updateReaction: async (
+  reactToChat: async (
     chatId: string,
-    reaction: ReactionType,
-    sessionId: string
-  ): Promise<unknown> => {
-    // Don't use withErrorHandling to preserve raw server errors
-    const response = await api.put(`/chats/ai-chat/${chatId}/`, {
-      reaction,
-      session: sessionId,
+    reactionType: ReactionType
+  ): Promise<ChatMessage> => {
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error("Authentication token is missing");
+    }
+
+    // Try to get user ID from token using the utility function
+    let userId = getUserIdFromToken();
+    
+    // If that fails, try decoding manually and check for alternative field names
+    if (!userId) {
+      try {
+        const decoded = JSON.parse(atob(token.split('.')[1])) as any;
+        console.log('Decoded token:', decoded);
+        
+        // Try different possible field names
+        userId = decoded.user_id || decoded.userId || decoded.sub || decoded.id;
+        
+        if (!userId) {
+          console.error('Token payload:', decoded);
+          throw new Error("Unable to extract user ID from token. Token fields: " + Object.keys(decoded).join(', '));
+        }
+      } catch (error) {
+        console.error('Error decoding token:', error);
+        throw new Error("Unable to get user ID from token");
+      }
+    }
+
+    const response = await api.post<ChatMessage>(`/chats/${chatId}/react`, {
+      reaction_type: reactionType,
+      chat_id: chatId,
+      user_id: userId,
+    }, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
     });
     return response.data;
   },

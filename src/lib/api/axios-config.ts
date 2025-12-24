@@ -89,9 +89,9 @@ const refreshAccessToken = async (): Promise<string | null> => {
 
   try {
     const response = await axios.post<{ access: string; refresh?: string }>(
-      `${BASE_URL}/auth/token/refresh`,
+      `${BASE_URL}/auth/refresh`,
       {
-        refresh: refreshToken,
+        refresh_token: refreshToken,
       }
     );
 
