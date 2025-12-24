@@ -10,7 +10,7 @@
 
 import type { AxiosRequestConfig, AxiosError } from "axios";
 import api from "./axios-config";
-import { getAuthToken, setAuthToken } from "./utils";
+import { getAuthToken, setAuthToken, getUserIdFromToken } from "./utils";
 import type {
   ChatSession,
   ChatSessionCreate,
@@ -435,21 +435,51 @@ export const chatAPI = {
   },
 
   /**
-   * Update reaction for a chat message
+   * React to a chat message
    * @param chatId - Chat message ID
-   * @param reaction - Reaction type (like, dislike, neutral)
-   * @param sessionId - Session ID
-   * @returns Updated chat message
+   * @param reactionType - Reaction type (like, dislike, love)
+   * @returns Updated chat message with reaction
    */
-  updateReaction: async (
+  reactToChat: async (
     chatId: string,
-    reaction: ReactionType,
-    sessionId: string
-  ): Promise<unknown> => {
-    // Don't use withErrorHandling to preserve raw server errors
-    const response = await api.put(`/chats/ai-chat/${chatId}/`, {
-      reaction,
-      session: sessionId,
+    reactionType: ReactionType
+  ): Promise<ChatMessage> => {
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error("Authentication token is missing");
+    }
+
+    // Try to get user ID from token using the utility function
+    let userId = getUserIdFromToken();
+    
+    // If that fails, try decoding manually and check for alternative field names
+    if (!userId) {
+      try {
+        const decoded = JSON.parse(atob(token.split('.')[1])) as any;
+        console.log('Decoded token:', decoded);
+        
+        // Try different possible field names
+        userId = decoded.user_id || decoded.userId || decoded.sub || decoded.id;
+        
+        if (!userId) {
+          console.error('Token payload:', decoded);
+          throw new Error("Unable to extract user ID from token. Token fields: " + Object.keys(decoded).join(', '));
+        }
+      } catch (error) {
+        console.error('Error decoding token:', error);
+        throw new Error("Unable to get user ID from token");
+      }
+    }
+
+    const response = await api.post<ChatMessage>(`/chats/${chatId}/react`, {
+      reaction_type: reactionType,
+      chat_id: chatId,
+      user_id: userId,
+    }, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
     });
     return response.data;
   },

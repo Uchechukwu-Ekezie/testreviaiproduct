@@ -161,7 +161,20 @@ export const getUserIdFromToken = (): string | null => {
   if (!token) return null;
 
   const decoded = decodeToken(token);
-  return decoded?.user_id || null;
+  if (!decoded) return null;
+
+  // Try different possible field names for user ID
+  // Common JWT claims: user_id, userId, sub (subject), id
+  const userId = (decoded as any).user_id || 
+                 (decoded as any).userId || 
+                 (decoded as any).sub || 
+                 (decoded as any).id;
+
+  if (!userId) {
+    console.warn('No user ID found in token. Available fields:', Object.keys(decoded));
+  }
+
+  return userId || null;
 };
 
 // ============================================================================

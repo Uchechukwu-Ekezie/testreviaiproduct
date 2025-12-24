@@ -768,6 +768,9 @@ const ChatMessages: React.FC<ChatMessagesProps> = React.memo(
     refreshSessions,
     sidebarCollapsed = false,
     sidebarOpen = false,
+    feedbackGiven: feedbackGivenProp,
+    setFeedbackGiven: setFeedbackGivenProp,
+    handleFeedback: handleFeedbackProp,
   }) => {
     const allMessages = Array.isArray(messagesProp) ? messagesProp : [];
 
@@ -840,9 +843,12 @@ const ChatMessages: React.FC<ChatMessagesProps> = React.memo(
     const [retryingMessageId, setRetryingMessageId] = useState<string | null>(
       null
     );
-    const [feedbackGiven, setFeedbackGiven] = useState<
+    // Use props if provided, otherwise use local state as fallback
+    const [localFeedbackGiven, setLocalFeedbackGiven] = useState<
       Record<string, "up" | "down" | null>
     >({});
+    const feedbackGiven = feedbackGivenProp ?? localFeedbackGiven;
+    const setFeedbackGiven = setFeedbackGivenProp ?? setLocalFeedbackGiven;
     const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
 
     // Simplified state management
@@ -1552,18 +1558,42 @@ const ChatMessages: React.FC<ChatMessagesProps> = React.memo(
       }
     };
 
-    const handleFeedback = (messageId: string, type: "up" | "down") => {
-      setFeedbackGiven((prev) => ({ ...prev, [messageId]: type }));
+    // Use prop if provided, otherwise create local implementation
+    const handleFeedback = handleFeedbackProp ?? (async (messageId: string, type: "up" | "down") => {
+      try {
+        // Map UI feedback to API reaction types
+        const reactionType = type === "up" ? "like" : "dislike";
 
-      toast({
-        title:
-          type === "up"
-            ? "Thanks for the positive feedback!"
-            : "Thanks for your feedback",
-        description: "Your input helps us improve our responses.",
-        variant: type === "up" ? "default" : "destructive",
-      });
-    };
+        // Call API to submit reaction
+        await chatAPI.reactToChat(messageId, reactionType);
+
+        // Update local message state with the reaction
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === messageId
+              ? { ...msg, reaction: reactionType }
+              : msg
+          )
+        );
+
+        // Update feedback state for UI highlighting
+        setFeedbackGiven((prev) => ({
+          ...prev,
+          [messageId]: type,
+        }));
+
+        toast({
+          description: `Feedback submitted: ${type === "up" ? "👍" : "👎"}`,
+        });
+      } catch (error) {
+        console.error("Error submitting feedback:", error);
+        toast({
+          title: "Error",
+          description: "Failed to submit feedback",
+          variant: "destructive",
+        });
+      }
+    });
 
     const copyToClipboard = (text: string) => {
       navigator.clipboard.writeText(text);

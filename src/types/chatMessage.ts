@@ -111,4 +111,7 @@ export interface ChatMessagesProps {
   isLgScreen: boolean;
   sidebarCollapsed?: boolean;
   sidebarOpen?: boolean;
+  feedbackGiven?: Record<string, "up" | "down" | null>;
+  setFeedbackGiven?: React.Dispatch<React.SetStateAction<Record<string, "up" | "down" | null>>>;
+  handleFeedback?: (messageId: string, type: "up" | "down") => void;
 }

@@ -228,7 +228,7 @@ export type ChatMessageResponse = ChatMessage;
 /**
  * Reaction types for chat messages
  */
-export type ReactionType = "like" | "dislike" | "neutral" | string;
+export type ReactionType = "like" | "dislike" | "love";
 
 /**
  * Chat message creation options

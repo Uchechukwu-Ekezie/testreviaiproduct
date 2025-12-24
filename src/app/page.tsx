@@ -126,6 +126,7 @@ function ChatContent() {
   const activeSessionRef = useRef<string | null>(null);
   const loadingFromUrlRef = useRef(false);
   const [isClient, setIsClient] = useState(false);
+  const deletedSessionsRef = useRef<Set<string>>(new Set()); // Track recently deleted sessions to prevent 404 errors
   const pendingMessageRef = useRef<{
     message: string;
     imageUrls?: string[];
@@ -135,6 +136,7 @@ function ChatContent() {
   const [lastLocationLabel, setLastLocationLabel] = useState<string | null>(
     null
   );
+  const [feedbackGiven, setFeedbackGiven] = useState<Record<string, "up" | "down" | null>>({});
 
   // Fix hydration mismatch by ensuring client-side rendering
   useEffect(() => {
@@ -574,6 +576,12 @@ function ChatContent() {
   // URL-based session loading effect
   useEffect(() => {
     if (id && id !== activeSessionRef.current && !loadingFromUrlRef.current) {
+      // Check if this session was recently deleted
+      if (deletedSessionsRef.current.has(id)) {
+        console.log('⚠️ Skipping load for recently deleted session:', id);
+        return;
+      }
+
       const loadSessionFromUrl = async () => {
         try {
           loadingFromUrlRef.current = true;
@@ -841,9 +849,21 @@ function ChatContent() {
           // 🔥 CRITICAL: Extract session_id from backend response for new sessions
           const backendSessionId = data.session || sessionId;
           
+          // Check if this was a new session BEFORE modifying sessionId
+          const wasNewSession = isNewSession && backendSessionId && sessionId === "";
+          
+          // 🚀 Navigate IMMEDIATELY for new sessions (before state updates to prevent flash)
+          if (wasNewSession) {
+            console.log('🚀 Navigating to new session:', backendSessionId);
+            router.push(`/chats/${backendSessionId}`);
+            
+            // Set active session immediately
+            setActiveSession(backendSessionId);
+          }
+          
           // If this was a new session, the backend created it and returned the session_id
           // Check if sessionId is empty string (new session) and we got a session back
-          if (isNewSession && backendSessionId && sessionId === "") {
+          if (wasNewSession) {
             sessionId = backendSessionId;
             
             // Add the new session to the sessions list
@@ -863,6 +883,11 @@ function ChatContent() {
               
               return [newSession, ...prev];
             });
+            
+            // Reset flag after state updates
+            setTimeout(() => {
+              isCreatingNewSession.current = false;
+            }, 100);
           }
 
           setMessages((prev) => {
@@ -964,16 +989,6 @@ function ChatContent() {
               }
             }
           });
-
-          // For new sessions, set as active session AFTER messages are updated
-          if (isNewSession && backendSessionId && sessionId === "") {
-            setActiveSession(backendSessionId);
-            
-            // Reset flag after a delay to prevent getChats from running
-            setTimeout(() => {
-              isCreatingNewSession.current = false;
-            }, 1000);
-          }
 
           // Invalidate cache for this session since we have new messages  
           // (but don't clear for brand new sessions)
@@ -1383,6 +1398,45 @@ function ChatContent() {
     ]
   );
 
+  const handleFeedback = useCallback(
+    async (messageId: string, type: "up" | "down") => {
+      try {
+        // Map UI feedback to API reaction types
+        const reactionType = type === "up" ? "like" : "dislike";
+
+        // Call API to submit reaction
+        const updatedMessage = await chatAPI.reactToChat(messageId, reactionType);
+
+        // Update local message state with the reaction
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === messageId
+              ? { ...msg, reaction: reactionType }
+              : msg
+          )
+        );
+
+        // Update feedback state for UI highlighting
+        setFeedbackGiven((prev) => ({
+          ...prev,
+          [messageId]: type,
+        }));
+
+        toast({
+          description: `Feedback submitted: ${type === "up" ? "👍" : "👎"}`,
+        });
+      } catch (error) {
+        console.error("Error submitting feedback:", error);
+        toast({
+          title: "Error",
+          description: "Failed to submit feedback",
+          variant: "destructive",
+        });
+      }
+    },
+    [setMessages, setFeedbackGiven, toast]
+  );
+
   // Memoize callbacks
   const handleSetActiveSession = useCallback((sessionId: string | null) => {
     setActiveSession(sessionId);
@@ -1410,6 +1464,20 @@ function ChatContent() {
     []
   );
 
+  // Navigation callback for sidebar to use Next.js router
+  const navigateToHome = useCallback(() => {
+    router.push("/");
+  }, [router]);
+
+  // Callback to track deleted sessions
+  const handleSessionDeleted = useCallback((sessionId: string) => {
+    deletedSessionsRef.current.add(sessionId);
+    // Clear the deleted session from the set after navigation completes
+    setTimeout(() => {
+      deletedSessionsRef.current.delete(sessionId);
+    }, 2000); // 2 seconds should be enough for navigation to complete
+  }, []);
+
   // Memoized sidebar props to prevent unnecessary re-renders
   const sidebarProps = useMemo(
     () => ({
@@ -1429,6 +1497,8 @@ function ChatContent() {
       isLgScreen,
       isMediumScreen,
       isLoadingSessions,
+      navigateToHome,
+      onSessionDeleted: handleSessionDeleted,
     }),
     [
       sidebarOpen,
@@ -1447,6 +1517,8 @@ function ChatContent() {
       isLgScreen,
       isMediumScreen,
       isLoadingSessions,
+      navigateToHome,
+      handleSessionDeleted,
     ]
   );
 
@@ -1511,6 +1583,9 @@ function ChatContent() {
       sidebarCollapsed: !sidebarOpen,
       sidebarOpen,
       isLgScreen,
+      feedbackGiven,
+      setFeedbackGiven,
+      handleFeedback,
     }),
     [
       messages,
@@ -1531,6 +1606,8 @@ function ChatContent() {
       refreshSessions,
       sidebarOpen,
       isLgScreen,
+      feedbackGiven,
+      handleFeedback,
     ]
   );
 
