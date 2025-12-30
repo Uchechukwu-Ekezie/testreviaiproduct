@@ -43,8 +43,8 @@ export default function Footer() {
                   rel="noopener noreferrer">
                   <FaTiktok />
                 </Link>
-                <Link href="https://x.com/ReviTechnology?t=xjr3NRCFpuuiavLo_QO60Q&s=09
-" className="hover:text-white/70"
+                <Link href="https://x.com/ReviAiTech"
+ className="hover:text-white/70"
                   target="_blank"
                   rel="noopener noreferrer">
 

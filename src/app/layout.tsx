@@ -101,8 +101,8 @@ export const metadata: Metadata = {
     description:
       "Transform your real estate experience with Revi.ai. Get instant property insights, market analysis, and personalized recommendations powered by advanced AI technology.",
     images: ["/images/twitter-image.jpg"],
-    creator: "@reviai",
-    site: "@reviai",
+    creator: "@ReviAiTech",
+    site: "@ReviAiTech",
   },
   alternates: {
     canonical: "https://revi.ai",
@@ -162,7 +162,7 @@ export default function RootLayout({
                               description:
                                 "AI-powered real estate assistant providing instant property insights, market analysis, and personalized recommendations.",
                               sameAs: [
-                                "https://twitter.com/reviai",
+                                "https://x.com/ReviAiTech",
                                 "https://linkedin.com/company/reviai",
                                 "https://facebook.com/reviai",
                               ],

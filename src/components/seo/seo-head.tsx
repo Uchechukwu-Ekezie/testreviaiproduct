@@ -101,8 +101,8 @@ export default function SEOHead({
       <meta name="twitter:title" content={seoTitle} />
       <meta name="twitter:description" content={seoDescription} />
       <meta name="twitter:image" content={absoluteImage} />
-      <meta name="twitter:site" content="@reviai" />
-      <meta name="twitter:creator" content="@reviai" />
+      <meta name="twitter:site" content="@ReviAiTech" />
+      <meta name="twitter:creator" content="@ReviAiTech" />
 
       {/* Article Meta Tags */}
       {type === "article" && (

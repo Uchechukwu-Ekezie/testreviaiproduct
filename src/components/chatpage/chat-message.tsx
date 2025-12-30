@@ -776,19 +776,24 @@ const ChatMessages: React.FC<ChatMessagesProps> = React.memo(
 
     // Filter messages by active session - simplified approach
     const messages = useMemo(() => {
-      console.log("🎭 ChatMessages filtering:", {
-        activeSession,
-        allMessagesCount: allMessages.length,
-        allMessages: allMessages.map(m => ({ id: m?.id, session: m?.session }))
-      });
-      
+      // If we have no active session but we have messages, it means we're creating a new chat
+      // (User just typed a message on the home page)
       if (!activeSession) {
-        console.log("⚠️ No active session, returning empty array");
+        if (allMessages.length > 0) {
+          console.log("🆕 New chat creation detected, showing optimistic messages");
+          return allMessages;
+        }
+        console.log("⚠️ No active session and no messages, returning empty array");
         return [];
       }
       
+      console.log("🎭 ChatMessages filtering:", {
+        activeSession,
+        allMessagesCount: allMessages.length,
+        filteredCount: allMessages.filter((msg) => msg && msg.session === activeSession).length
+      });
+      
       const filtered = allMessages.filter((msg) => msg && msg.session === activeSession);
-      console.log("✅ Filtered messages count:", filtered.length);
       return filtered;
     }, [allMessages, activeSession]);
 

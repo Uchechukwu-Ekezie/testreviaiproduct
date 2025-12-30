@@ -52,7 +52,7 @@ export const metadata: Metadata = {
     description:
       "Browse thousands of properties with AI-powered search and intelligent recommendations.",
     images: [siteConfig.ogImage],
-    creator: "@reviai_tech",
+    creator: "@ReviAiTech",
   },
 };
 

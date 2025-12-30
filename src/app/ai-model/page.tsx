@@ -49,7 +49,7 @@ export const metadata: Metadata = {
     description:
       "Revolutionary AI model for intelligent property search and automated real estate insights.",
     images: [siteConfig.ogImage],
-    creator: "@reviai_tech",
+    creator: "@ReviAiTech",
   },
 };
 

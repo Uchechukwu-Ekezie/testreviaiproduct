@@ -60,8 +60,8 @@ export const metadata: Metadata = {
     description:
       "Transform your real estate experience with Revi.ai. Get instant property insights, market analysis, and personalized recommendations powered by advanced AI technology.",
     images: ["/images/twitter-image.jpg"],
-    creator: "@reviai",
-    site: "@reviai",
+    creator: "@ReviAiTech",
+    site: "@ReviAiTech",
   },
   alternates: { canonical: "https://revi.ai" },
   verification: {
