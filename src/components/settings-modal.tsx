@@ -64,9 +64,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   // Password change state
   const [passwordState, setPasswordState] = useState({
     isChanging: false,
+    showOld: false,
     showNew: false,
     showConfirm: false,
-    form: { new_password1: "", new_password2: "" }
+    form: { old_password: "", new_password1: "", new_password2: "" }
   });
 
   // Modal states
@@ -134,19 +135,24 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       return;
     }
 
-    setLoadingStates(prev => ({ ...prev, isVerificationLoading: true }));
+    // First, try to use local user data to avoid slow API call
+    const localStatus = determineVerificationStatus(user);
+    setVerificationStatus(localStatus);
 
-    try {
-      const userData = await userAPI.getProfile();
-      const status = determineVerificationStatus(userData);
-      setVerificationStatus(status);
-    } catch (error) {
-      console.error("Failed to fetch verification status:", error);
-      // Fallback to local user data
-      const status = determineVerificationStatus(user);
-      setVerificationStatus(status);
-    } finally {
-      setLoadingStates(prev => ({ ...prev, isVerificationLoading: false }));
+    // Only fetch from API if we don't have agent_info or agent_request in local user data
+    if (!user.agent_info && !user.agent_request) {
+      setLoadingStates(prev => ({ ...prev, isVerificationLoading: true }));
+
+      try {
+        const userData = await userAPI.getProfile();
+        const status = determineVerificationStatus(userData);
+        setVerificationStatus(status);
+      } catch (error) {
+        console.error("Failed to fetch verification status:", error);
+        // Keep using local status on error
+      } finally {
+        setLoadingStates(prev => ({ ...prev, isVerificationLoading: false }));
+      }
     }
   }, [user?.id, user, determineVerificationStatus]);
 
@@ -275,7 +281,16 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const handlePasswordChange = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    const { new_password1, new_password2 } = passwordState.form;
+    const { old_password, new_password1, new_password2 } = passwordState.form;
+
+    if (!old_password) {
+      toast({
+        title: "Error",
+        description: "Please enter your current password",
+        variant: "destructive",
+      });
+      return;
+    }
 
     if (new_password1 !== new_password2) {
       toast({
@@ -296,7 +311,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     }
 
     try {
-      await authAPI.passwordChange(new_password1, new_password2);
+      await authAPI.passwordChange(old_password, new_password1);
 
       toast({
         title: "Success",
@@ -305,9 +320,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       
       setPasswordState({
         isChanging: false,
+        showOld: false,
         showNew: false,
         showConfirm: false,
-        form: { new_password1: "", new_password2: "" }
+        form: { old_password: "", new_password1: "", new_password2: "" }
       });
     } catch (error: unknown) {
       console.error("Password change error:", error);
@@ -480,6 +496,38 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 >
                   <div className="space-y-1 sm:space-y-2">
                     <label className="text-xs sm:text-sm text-zinc-400">
+                      Current Password
+                    </label>
+                    <div className="relative">
+                      <Input
+                        type={passwordState.showOld ? "text" : "password"}
+                        value={passwordState.form.old_password}
+                        onChange={(e) =>
+                          setPasswordState((prev) => ({
+                            ...prev,
+                            form: { ...prev.form, old_password: e.target.value }
+                          }))
+                        }
+                        className="pr-10 text-xs text-white bg-zinc-800/50 border-zinc-700 sm:text-sm"
+                        placeholder="Enter current password"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setPasswordState(prev => ({ ...prev, showOld: !prev.showOld }))}
+                        className="absolute -translate-y-1/2 right-3 top-1/2 text-zinc-400 hover:text-zinc-300"
+                      >
+                        {passwordState.showOld ? (
+                          <EyeOff className="w-3 h-3 sm:w-4 sm:h-4" />
+                        ) : (
+                          <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1 sm:space-y-2">
+                    <label className="text-xs sm:text-sm text-zinc-400">
                       New Password
                     </label>
                     <div className="relative">
@@ -554,6 +602,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       type="submit"
                       className="flex-1 bg-gradient-to-r from-yellow-500 to-pink-500 hover:from-yellow-600 hover:to-pink-600 text-white rounded-[10px] text-xs sm:text-sm"
                       disabled={
+                        !passwordState.form.old_password ||
                         !passwordState.form.new_password1 ||
                         !passwordState.form.new_password2
                       }
@@ -566,9 +615,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       onClick={() => {
                         setPasswordState({
                           isChanging: false,
+                          showOld: false,
                           showNew: false,
                           showConfirm: false,
-                          form: { new_password1: "", new_password2: "" }
+                          form: { old_password: "", new_password1: "", new_password2: "" }
                         });
                       }}
                       className="flex-1 border-zinc-700 hover:bg-zinc-800 text-zinc-400 rounded-[10px] text-xs sm:text-sm"
