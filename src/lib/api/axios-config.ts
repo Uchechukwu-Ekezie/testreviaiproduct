@@ -6,6 +6,7 @@ import axios, {
   AxiosResponse,
 } from "axios";
 import { TokenData } from "./types";
+import { isTokenExpired } from "./utils";
 
 // Define base API URL (replace with your actual backend URL)
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
@@ -196,8 +197,32 @@ api.interceptors.request.use(
       config.headers["Authorization"] = `Bearer ${token}`;
     }
 
-    // Skip proactive token refresh for better performance
-    // Token will be refreshed on 401 response if needed
+    // Proactive token refresh
+    // Check if token is expired or about to expire (within 60 seconds)
+    if (token && isTokenExpired(token)) {
+      if (!isRefreshing) {
+        console.log("🔄 Token expired, refreshing proactively...");
+        isRefreshing = true;
+        
+        try {
+          const newToken = await refreshAccessToken();
+          if (newToken && config.headers) {
+            config.headers["Authorization"] = `Bearer ${newToken}`;
+            console.log("✅ Proactive refresh successful, updated request header");
+          }
+        } catch (error) {
+          console.error("❌ Proactive refresh failed:", error);
+          // Let the request proceed, it will likely fail with 401 and trigger the response interceptor logic
+        } finally {
+          isRefreshing = false;
+        }
+      } else {
+        // If already refreshing, wait for it to complete
+        // Implementation note: Ideally we should queue this request, but for simplicity
+        // we'll let it fail and be handled by the response interceptor
+        console.log("⏳ Token refresh already in progress, proceeding...");
+      }
+    }
 
     return config;
   },

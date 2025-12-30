@@ -60,8 +60,8 @@ export default function HeroSection() {
               </div>
             ))}
           </div>
-          ;{/* Refresh Button */}
-          <div className="flex items-center justify-center md:justify-start space-x-2 text-[#7F7F7F] ">
+          {/* Refresh Button */}
+          <div className="flex items-center justify-center md:justify-start space-x-2 text-[#7F7F7F] mt-2 ">
             <RefreshCcw className="w-[22px] h-[22px]" />
             <Button label="Refresh Prompts" onClick={() => {}} />
           </div>

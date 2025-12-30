@@ -54,7 +54,7 @@ export const metadata: Metadata = {
     description:
       "Transform your property search with ReviAI's AI technology. Discover intelligent property insights and automated booking systems.",
     images: [siteConfig.ogImage],
-    creator: "@reviai_tech",
+    creator: "@ReviAiTech",
   },
 };
 

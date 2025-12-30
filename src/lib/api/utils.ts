@@ -138,7 +138,8 @@ export const isTokenExpired = (token: string): boolean => {
   if (!decoded) return true;
 
   const currentTime = Date.now() / 1000; // Convert to seconds
-  return decoded.exp < currentTime;
+  // Check if token is expired or expires in less than 60 seconds
+  return decoded.exp < currentTime + 60;
 };
 
 /**

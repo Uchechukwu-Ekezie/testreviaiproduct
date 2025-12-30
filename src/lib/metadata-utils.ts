@@ -69,7 +69,7 @@ export function generatePageMetadata({
       title: metaTitle,
       description,
       images: [metaImage],
-      creator: "@reviai_tech",
+      creator: "@ReviAiTech",
     },
     robots: {
       index: !noIndex,

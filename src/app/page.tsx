@@ -855,6 +855,17 @@ function ChatContent() {
           // 🚀 Navigate IMMEDIATELY for new sessions (before state updates to prevent flash)
           if (wasNewSession) {
             console.log('🚀 Navigating to new session:', backendSessionId);
+            
+            // 🔥 CRITICAL FIX: Update the optimistically added message with the new session ID
+            // BEFORE navigating/setting active session, so it doesn't get filtered out
+            setMessages((prev) => 
+              prev.map((msg) => 
+                msg.id === tempMessageId 
+                  ? { ...msg, session: backendSessionId } 
+                  : msg
+              )
+            );
+            
             router.push(`/chats/${backendSessionId}`);
             
             // Set active session immediately

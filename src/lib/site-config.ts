@@ -7,7 +7,7 @@ export const siteConfig = {
   url: "https://reviai.tech",
   ogImage: "/Image/Revi.ai Technology.png",
   links: {
-    twitter: "https://x.com/ReviTechnology?t=xjr3NRCFpuuiavLo_QO60Q&s=09",
+    twitter: "https://x.com/ReviAiTech",
     instagram:
       "https://www.instagram.com/reviai_technologies?igsh=cWh5bzYzNWV6ZTU=",
     tiktok:

@@ -91,7 +91,7 @@ export async function generateMetadata({
         card: "summary_large_image",
         title: title.slice(0, 70), // Twitter title limit
         description: description.slice(0, 200), // Twitter description limit
-        creator: "@reviai_tech",
+        creator: "@ReviAiTech",
         images: images
           .slice(0, 1)
           .map((imageUrl) =>
