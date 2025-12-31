@@ -303,18 +303,18 @@ export const authAPI = {
 
   /**
    * Change password for authenticated user
-   * @param new_password1 - New password
-   * @param new_password2 - New password confirmation
+   * @param old_password - Current password
+   * @param new_password - New password
    * @returns Password change response
    */
   passwordChange: async (
-    new_password1: string,
-    new_password2: string
+    old_password: string,
+    new_password: string
   ): Promise<unknown> => {
     // Don't use withAuthErrorHandling to preserve raw server errors
     const response = await api.post("/auth/password/change/", {
-      new_password1,
-      new_password2,
+      old_password,
+      new_password,
     });
     return response.data;
   },
