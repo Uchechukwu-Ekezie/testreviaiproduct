@@ -26,6 +26,11 @@ import { AgentReviewCard } from "@/components/agent-review-card";
 import { AgentReviewForm } from "@/components/agent-review-form";
 import { AgentReviewsEmptyState } from "@/components/agent-reviews-empty-state";
 import AgentProfileSkeleton from "@/components/social-feed/AgentProfileSkeleton";
+import { usePosts } from "@/hooks/usePosts";
+import PostCard from "@/components/social-feed/PostCard";
+import ImageLightbox from "@/components/social-feed/ImageLightbox";
+import PostCardSkeleton from "@/components/social-feed/PostCardSkeleton";
+import type { Post as PostType } from "@/hooks/usePosts";
 
 export default function AgentProfilePage({
   params,
@@ -45,6 +50,7 @@ export default function AgentProfilePage({
     properties: agentProperties,
     isLoading: isLoadingProperties,
   } = useProperties();
+  const { likePost, fetchComments, createComment, replyToComment } = usePosts();
 
   const [agent, setAgent] = useState<any>(null);
   const [agentId, setAgentId] = useState<string | null>(null);
@@ -62,10 +68,19 @@ export default function AgentProfilePage({
   const [followersCount, setFollowersCount] = useState(0);
   const [isFollowLoading, setIsFollowLoading] = useState(false);
 
+  // Posts state
+  const [agentPosts, setAgentPosts] = useState<PostType[]>([]);
+  const [isLoadingPosts, setIsLoadingPosts] = useState(false);
+
   // Reviews state
   const [reviews, setReviews] = useState<any[]>([]);
   const [isLoadingReviews, setIsLoadingReviews] = useState(false);
   const [reviewsCount, setReviewsCount] = useState(0);
+
+  // Image lightbox state
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   // Resolve URL param
   useEffect(() => {
@@ -194,6 +209,89 @@ export default function AgentProfilePage({
     } finally {
       setIsFollowLoading(false);
     }
+  };
+
+  // Fetch agent posts
+  useEffect(() => {
+    if (!agentId || activeTab !== "posts") return;
+
+    const fetchAgentPosts = async () => {
+      setIsLoadingPosts(true);
+      try {
+        const token = localStorage.getItem("authToken");
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_BASE_URL}/posts/user/${agentId}/`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          const posts = data.results || data || [];
+          
+          // Transform posts to include author object (same as main feed)
+          const transformedPosts = posts.map((post: any) => {
+            if (post.author && typeof post.author === 'object') {
+              return post;
+            }
+            
+            return {
+              ...post,
+              author: {
+                id: post.author_id || '',
+                username: post.author_username || '',
+                email: post.author_username || '',
+                avatar: post.author_avatar || undefined,
+                first_name: post.author_first_name || undefined,
+                last_name: post.author_last_name || undefined,
+                user_type: post.author_user_type || undefined,
+              }
+            };
+          });
+          
+          setAgentPosts(transformedPosts);
+        }
+      } catch (error) {
+        console.error("Failed to fetch agent posts:", error);
+      } finally {
+        setIsLoadingPosts(false);
+      }
+    };
+
+    fetchAgentPosts();
+  }, [agentId, activeTab]);
+
+  // Handle post actions
+  const handleLike = async (postId: string) => {
+    const post = agentPosts.find((p) => p.id === postId);
+    if (!post) return;
+    await likePost(postId, post.is_liked ? "unlike" : "like");
+
+    // Update local state
+    setAgentPosts((prev) =>
+      prev.map((p) =>
+        p.id === postId
+          ? {
+              ...p,
+              is_liked: !p.is_liked,
+              like_count: p.is_liked ? p.like_count - 1 : p.like_count + 1,
+            }
+          : p
+      )
+    );
+  };
+
+  const handleShare = (postId: string) => {
+    console.log("Shared:", postId);
+  };
+
+  const handleOpenLightbox = (images: string[], startIndex: number) => {
+    setLightboxImages(images);
+    setLightboxIndex(startIndex);
+    setIsLightboxOpen(true);
   };
 
   // Search filter
@@ -453,8 +551,35 @@ export default function AgentProfilePage({
 
         {/* Other tabs */}
         {activeTab === "posts" && (
-          <div className="text-center py-20">
-            <p className="text-xl text-muted-foreground">Coming soon</p>
+          <div className="space-y-4">
+            {isLoadingPosts ? (
+              <>
+                <PostCardSkeleton />
+                <PostCardSkeleton />
+                <PostCardSkeleton />
+              </>
+            ) : agentPosts.length > 0 ? (
+              agentPosts.map((post) => (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  onLike={handleLike}
+                  onShare={handleShare}
+                  fetchComments={fetchComments}
+                  createComment={createComment}
+                  replyToComment={replyToComment}
+                  isFollowing={isFollowing}
+                  onFollowToggle={async (authorId, authorData) => {
+                    await handleFollowToggle();
+                  }}
+                  onOpenLightbox={handleOpenLightbox}
+                />
+              ))
+            ) : (
+              <div className="text-center py-20">
+                <p className="text-xl text-muted-foreground">No posts yet.</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -525,6 +650,20 @@ export default function AgentProfilePage({
           </div>
         )}
       </div>
+
+      {/* Image Lightbox */}
+      <ImageLightbox
+        images={lightboxImages}
+        currentIndex={lightboxIndex}
+        isOpen={isLightboxOpen}
+        onClose={() => setIsLightboxOpen(false)}
+        onNext={() =>
+          setLightboxIndex((prev) =>
+            Math.min(prev + 1, lightboxImages.length - 1)
+          )
+        }
+        onPrev={() => setLightboxIndex((prev) => Math.max(prev - 1, 0))}
+      />
     </div>
   );
 }
