@@ -395,7 +395,7 @@ export default function AgentProfilePage({
           {/* Stats */}
           <div className="grid grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-10">
             <div>
-              <div className="text-xl sm:text-3xl font-bold">0</div>
+              <div className="text-xl sm:text-3xl font-bold">{agentPosts.length}</div>
               <div className="text-xs sm:text-sm text-muted-foreground">
                 Posts
               </div>
