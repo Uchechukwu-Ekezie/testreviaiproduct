@@ -24,6 +24,8 @@ import Image from "next/image";
 import { useProperties } from "@/contexts/properties-context";
 import { useReviews } from "@/contexts/reviews-context";
 import PropertyChatWidget from "@/components/property/PropertyChatWidget";
+import { PropertyReviewForm } from "@/components/property-review-form";
+import { useAuth } from "@/contexts/auth-context";
 
 const amenityIcons: { [key: string]: React.ReactNode } = {
   "Swimming Pool": <Waves className="w-5 h-5" />,
@@ -39,6 +41,7 @@ export default function PropertyDetailsPage() {
   const params = useParams();
   const { getPropertyById } = useProperties();
   const { getReviewsByPropertyId } = useReviews();
+  const { user, isAuthenticated } = useAuth();
 
   const [property, setProperty] = useState<any>(null);
   const [reviews, setReviews] = useState<any[]>([]);
@@ -60,42 +63,42 @@ export default function PropertyDetailsPage() {
   }, [id, getPropertyById]);
 
   // Load reviews - fetch directly by property ID
-  useEffect(() => {
+  const loadReviews = async () => {
     if (!id) return;
+    
+    setIsLoadingReviews(true);
+    console.log("Loading reviews for property:", id);
+    const loadedReviews = await getReviewsByPropertyId(id);
+    console.log("Loaded reviews:", loadedReviews.length, loadedReviews);
 
-    const loadReviews = async () => {
-      setIsLoadingReviews(true);
-      console.log("Loading reviews for property:", id);
-      const loadedReviews = await getReviewsByPropertyId(id);
-      console.log("Loaded reviews:", loadedReviews.length, loadedReviews);
+    const validReviews = loadedReviews
+      .filter((r: any) => {
+        // Filter approved or pending reviews
+        if (!r || (r.status !== "approved" && r.status !== "pending")) {
+          console.log("Filtered out review:", r?.id, r?.status);
+          return false;
+        }
+        // Ensure user exists or provide a fallback
+        if (!r.user) {
+          r.user = {
+            id: null,
+            name: "Anonymous",
+            email: null,
+          };
+        }
+        return true;
+      })
+      .sort(
+        (a: any, b: any) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
 
-      const validReviews = loadedReviews
-        .filter((r: any) => {
-          // Filter approved or pending reviews
-          if (!r || (r.status !== "approved" && r.status !== "pending")) {
-            console.log("Filtered out review:", r?.id, r?.status);
-            return false;
-          }
-          // Ensure user exists or provide a fallback
-          if (!r.user) {
-            r.user = {
-              id: null,
-              name: "Anonymous",
-              email: null,
-            };
-          }
-          return true;
-        })
-        .sort(
-          (a: any, b: any) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
+    console.log("Valid reviews after filtering:", validReviews.length);
+    setReviews(validReviews);
+    setIsLoadingReviews(false);
+  };
 
-      console.log("Valid reviews after filtering:", validReviews.length);
-      setReviews(validReviews);
-      setIsLoadingReviews(false);
-    };
-
+  useEffect(() => {
     loadReviews();
   }, [id, getReviewsByPropertyId]);
 
@@ -538,8 +541,30 @@ export default function PropertyDetailsPage() {
                   ))}
                 </div>
               ) : reviews.length === 0 ? (
-                <div className="bg-card rounded-lg p-6 border border-border text-center text-muted-foreground">
-                  <p>No reviews yet. Be the first to review!</p>
+                <div className="space-y-6">
+                  <div className="bg-card rounded-lg p-6 border border-border text-center">
+                    <p className="text-muted-foreground mb-4">No reviews yet. Be the first to review!</p>
+                    {!isAuthenticated && (
+                      <Button
+                        variant="outline"
+                        onClick={() => router.push("/signin")}
+                        className="mt-4"
+                      >
+                        Sign in to write a review
+                      </Button>
+                    )}
+                  </div>
+                  {isAuthenticated && (
+                    <PropertyReviewForm
+                      propertyId={id}
+                      propertyAddress={
+                        property?.address
+                          ? `${property.address}${property.city ? `, ${property.city}` : ""}${property.state ? `, ${property.state}` : ""}`
+                          : undefined
+                      }
+                      onReviewSubmitted={loadReviews}
+                    />
+                  )}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

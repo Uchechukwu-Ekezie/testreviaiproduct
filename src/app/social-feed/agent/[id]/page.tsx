@@ -22,6 +22,7 @@ import { useAgents } from "@/hooks/useAgents";
 import { useProperties } from "@/contexts/properties-context";
 import { useAuth } from "@/contexts/auth-context";
 import { followAPI } from "@/lib/api/follow.api";
+import api from "@/lib/api/axios-config";
 import { AgentReviewCard } from "@/components/agent-review-card";
 import { AgentReviewForm } from "@/components/agent-review-form";
 import { AgentReviewsEmptyState } from "@/components/agent-reviews-empty-state";
@@ -218,44 +219,42 @@ export default function AgentProfilePage({
     const fetchAgentPosts = async () => {
       setIsLoadingPosts(true);
       try {
-        const token = localStorage.getItem("authToken");
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_BASE_URL}/posts/user/${agentId}/`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+        // Use the authenticated API client which handles token refresh automatically
+        const response = await api.get(`/posts/user/${agentId}/`);
+        const data = response.data;
+        const posts = data.results || data || [];
+        
+        // Transform posts to include author object (same as main feed)
+        const transformedPosts = posts.map((post: any) => {
+          if (post.author && typeof post.author === 'object') {
+            return post;
           }
-        );
-
-        if (response.ok) {
-          const data = await response.json();
-          const posts = data.results || data || [];
           
-          // Transform posts to include author object (same as main feed)
-          const transformedPosts = posts.map((post: any) => {
-            if (post.author && typeof post.author === 'object') {
-              return post;
+          return {
+            ...post,
+            author: {
+              id: post.author_id || '',
+              username: post.author_username || '',
+              email: post.author_username || '',
+              avatar: post.author_avatar || undefined,
+              first_name: post.author_first_name || undefined,
+              last_name: post.author_last_name || undefined,
+              user_type: post.author_user_type || undefined,
             }
-            
-            return {
-              ...post,
-              author: {
-                id: post.author_id || '',
-                username: post.author_username || '',
-                email: post.author_username || '',
-                avatar: post.author_avatar || undefined,
-                first_name: post.author_first_name || undefined,
-                last_name: post.author_last_name || undefined,
-                user_type: post.author_user_type || undefined,
-              }
-            };
-          });
-          
-          setAgentPosts(transformedPosts);
-        }
-      } catch (error) {
+          };
+        });
+        
+        setAgentPosts(transformedPosts);
+      } catch (error: any) {
         console.error("Failed to fetch agent posts:", error);
+        // Set empty array on error to prevent UI issues
+        setAgentPosts([]);
+        
+        // If it's a 401, the axios interceptor should have handled token refresh
+        // If it still fails, the user might need to sign in again
+        if (error.response?.status === 401) {
+          console.error("Authentication failed - token refresh may have failed");
+        }
       } finally {
         setIsLoadingPosts(false);
       }

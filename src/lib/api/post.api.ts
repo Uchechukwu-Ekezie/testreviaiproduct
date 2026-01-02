@@ -261,7 +261,7 @@ export const postAPI = {
     return withErrorHandling(async () => {
       console.log("API: Liking/unliking comment:", commentId, data);
       const response = await api.post<{ id: string; like_count: number; action: string }>(
-        `${BASEURL}/api/comments/${commentId}/like/`,
+        `${BASEURL}/api/posts/comments/${commentId}/like`,
         data
       );
       console.log("API: Comment like action successful, response:", response.data);

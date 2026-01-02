@@ -50,6 +50,7 @@ interface PostCardProps {
     commentId: string,
     content: string
   ) => Promise<CommentType | null>;
+  onLikeComment?: (commentId: string, isLiked: boolean) => Promise<any>;
   onClick?: () => void;
   // NEW: Follow props
   isFollowing?: boolean;
@@ -88,6 +89,7 @@ export default function PostCard({
   fetchComments,
   createComment,
   replyToComment,
+  onLikeComment,
   onClick,
   // NEW: Follow props
   isFollowing = false,
@@ -412,6 +414,43 @@ export default function PostCard({
       }
     },
     [replyToComment, prependReplyToComments]
+  );
+
+  const handleLikeComment = useCallback(
+    async (commentId: string, isLiked: boolean) => {
+      if (!onLikeComment) return;
+
+      try {
+        const result = await onLikeComment(commentId, isLiked);
+        if (result && typeof result === "object" && "like_count" in result) {
+          // Update the comment in the local state
+          const updateCommentLikeStatus = (
+            comment: CommentType
+          ): CommentType => {
+            if (comment.id === commentId) {
+              return {
+                ...comment,
+                like_count: result.like_count,
+                is_liked: !isLiked,
+              };
+            }
+            if (comment.replies && comment.replies.length > 0) {
+              return {
+                ...comment,
+                replies: comment.replies.map(updateCommentLikeStatus),
+              };
+            }
+            return comment;
+          };
+
+          setComments((prev) => prev.map(updateCommentLikeStatus));
+        }
+      } catch (error) {
+        console.error("Failed to like comment:", error);
+        throw error;
+      }
+    },
+    [onLikeComment]
   );
 
   const stopPropagation = (e: React.MouseEvent) => {
@@ -928,6 +967,7 @@ export default function PostCard({
         isLoading={isLoadingComments}
         errorMessage={commentError ?? undefined}
         onReply={handleReplyCreated}
+        onLikeComment={handleLikeComment}
         currentUserId={user?.id}
         currentUserAvatar={user?.avatar}
         currentUserName={

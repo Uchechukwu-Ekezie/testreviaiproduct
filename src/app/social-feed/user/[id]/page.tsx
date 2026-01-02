@@ -59,51 +59,41 @@ export default function UserProfilePage({
     const fetchUserData = async () => {
       setIsLoading(true);
       try {
-        const token = localStorage.getItem("authToken");
+        // Fetch user follow stats using the new endpoint
+        const statsData = await followAPI.getUserFollowStats(userId);
+        console.log("👤 User follow stats received:", statsData);
 
-        // Fetch user profile
-        const userResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_BASE_URL}/auth/users/${userId}/`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        if (!userResponse.ok) {
-          throw new Error("Failed to fetch user data");
-        }
-
-        const userData = await userResponse.json();
-        console.log("👤 User data received:", userData);
-
-        const fullName = `${userData.first_name || ""} ${
-          userData.last_name || ""
+        const fullName = `${statsData.first_name || ""} ${
+          statsData.last_name || ""
         }`.trim();
         const displayName =
-          fullName || userData.username?.split("@")[0] || "User";
+          fullName || statsData.username?.split("@")[0] || "User";
 
         setUser({
-          ...userData,
+          id: statsData.id,
+          username: statsData.username,
+          email: statsData.email,
+          first_name: statsData.first_name,
+          last_name: statsData.last_name,
+          avatar: statsData.avatar,
           name: displayName,
-          verified: userData.verification_status === "verified",
+          verified: false, // This would need to come from another endpoint if needed
         });
 
-        // Set follow status from user data
-        setIsFollowing(!!userData.is_following);
+        // Set follow status from stats data
+        setIsFollowing(!!statsData.is_following);
 
-        // Set followers and following counts from user data
-        setFollowersCount(userData.followers_count ?? 0);
-        setFollowingCount(userData.following_count ?? 0);
+        // Set followers and following counts from stats data
+        setFollowersCount(statsData.followers_count ?? 0);
+        setFollowingCount(statsData.following_count ?? 0);
 
-        console.log("📊 User data with counts:", {
-          followers: userData.followers_count,
-          following: userData.following_count,
-          isFollowing: userData.is_following,
+        console.log("📊 User follow stats:", {
+          followers: statsData.followers_count,
+          following: statsData.following_count,
+          isFollowing: statsData.is_following,
         });
       } catch (error) {
-        console.error("Failed to fetch user:", error);
+        console.error("Failed to fetch user follow stats:", error);
       } finally {
         setIsLoading(false);
       }
@@ -131,7 +121,29 @@ export default function UserProfilePage({
 
         if (response.ok) {
           const data = await response.json();
-          setUserPosts(data.results || data || []);
+          const posts = data.results || data || [];
+          
+          // Transform posts to include author object (same as agent profile and main feed)
+          const transformedPosts = posts.map((post: any) => {
+            if (post.author && typeof post.author === 'object') {
+              return post;
+            }
+            
+            return {
+              ...post,
+              author: {
+                id: post.author_id || '',
+                username: post.author_username || '',
+                email: post.author_username || '',
+                avatar: post.author_avatar || undefined,
+                first_name: post.author_first_name || undefined,
+                last_name: post.author_last_name || undefined,
+                user_type: post.author_user_type || undefined,
+              }
+            };
+          });
+          
+          setUserPosts(transformedPosts);
         }
       } catch (error) {
         console.error("Failed to fetch user posts:", error);
@@ -194,6 +206,12 @@ export default function UserProfilePage({
       return;
     }
 
+    // Don't allow following yourself
+    if (userId === currentUser.id) {
+      console.log("❌ Cannot follow yourself");
+      return;
+    }
+
     setIsFollowLoading(true);
     try {
       console.log(
@@ -204,18 +222,49 @@ export default function UserProfilePage({
         const result = await followAPI.unfollow(userId);
         console.log("✅ Unfollow successful:", result);
         setIsFollowing(false);
-        setFollowersCount((c) => (c ?? 0) - 1);
+        setFollowersCount((c) => Math.max(0, (c ?? 0) - 1));
+        // Refresh stats to get accurate counts
+        try {
+          const stats = await followAPI.getUserFollowStats(userId);
+          setIsFollowing(stats.is_following);
+          setFollowersCount(stats.followers_count);
+          setFollowingCount(stats.following_count);
+        } catch (refreshError) {
+          console.error("Failed to refresh stats:", refreshError);
+        }
       } else {
         try {
           const result = await followAPI.follow(userId);
           console.log("✅ Follow successful:", result);
           setIsFollowing(true);
           setFollowersCount((c) => (c ?? 0) + 1);
+          // Refresh stats to get accurate counts
+          try {
+            const stats = await followAPI.getUserFollowStats(userId);
+            setIsFollowing(stats.is_following);
+            setFollowersCount(stats.followers_count);
+            setFollowingCount(stats.following_count);
+          } catch (refreshError) {
+            console.error("Failed to refresh stats:", refreshError);
+          }
         } catch (error: any) {
           // If already following, just update the UI
           if (error?.response?.data?.detail?.includes("already following")) {
             console.log("⚠️ Already following, updating UI");
             setIsFollowing(true);
+            // Refresh stats to get accurate counts
+            try {
+              const stats = await followAPI.getUserFollowStats(userId);
+              setIsFollowing(stats.is_following);
+              setFollowersCount(stats.followers_count);
+              setFollowingCount(stats.following_count);
+            } catch (refreshError) {
+              console.error("Failed to refresh stats:", refreshError);
+            }
+          } else if (error?.response?.data?.detail?.includes("Cannot follow yourself") || 
+                     error?.response?.data?.detail?.includes("follow yourself")) {
+            console.log("❌ Cannot follow yourself");
+            // Don't update UI state for this error
           } else {
             throw error;
           }
@@ -258,6 +307,18 @@ export default function UserProfilePage({
     setIsLightboxOpen(true);
   };
 
+  // Check if this is the current user's own profile - MUST be before any early returns
+  const isOwnProfile = React.useMemo(() => {
+    if (!currentUser || !userId) return false;
+    const isOwn = String(currentUser.id) === String(userId);
+    console.log("🔍 Profile check:", {
+      currentUserId: currentUser.id,
+      profileUserId: userId,
+      isOwnProfile: isOwn,
+    });
+    return isOwn;
+  }, [currentUser, userId]);
+
   // Loading
   if (isLoading) {
     return <UserProfileSkeleton />;
@@ -296,8 +357,6 @@ export default function UserProfilePage({
       .toUpperCase()
       .slice(0, 2);
   };
-
-  const isOwnProfile = currentUser && currentUser.id === userId;
 
   return (
     <div className="min-h-screen bg-[#141414] font-sans pt-10">
@@ -364,8 +423,8 @@ export default function UserProfilePage({
             )}
           </div>
 
-          {/* Follow Button */}
-          {currentUser && !isOwnProfile && (
+          {/* Follow Button - Only show if not own profile */}
+          {currentUser && userId && !isOwnProfile && (
             <Button
               onClick={handleFollowToggle}
               disabled={isFollowLoading}

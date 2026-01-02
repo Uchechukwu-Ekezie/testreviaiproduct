@@ -232,24 +232,47 @@ export function usePosts() {
         }
 
         console.log("🔄 Fetching post from API:", postId);
-        const response = await axiosInstance.get<Post>(`posts/${postId}/`);
+        const response = await axiosInstance.get<any>(`posts/${postId}/`);
         console.log("[usePosts] Post fetched successfully:", response.data);
 
+        // Transform post to include author object from author_id, author_username, author_avatar
+        let transformedPost: Post;
+        const postData = response.data;
+        
+        // If post already has author object, use it
+        if (postData.author && typeof postData.author === 'object') {
+          transformedPost = postData;
+        } else {
+          // Otherwise, create author object from separate fields
+          transformedPost = {
+            ...postData,
+            author: {
+              id: postData.author_id || '',
+              username: postData.author_username || '',
+              email: postData.author_username || '', // Use username as fallback for email
+              avatar: postData.author_avatar || undefined,
+              first_name: postData.author_first_name || undefined,
+              last_name: postData.author_last_name || undefined,
+              user_type: postData.author_user_type || undefined,
+            }
+          };
+        }
+
         // Cache for 2 minutes
-        postsCache.set(cacheKey, response.data, 120);
+        postsCache.set(cacheKey, transformedPost, 120);
 
         // Update posts array if post exists
         setPosts((prev) => {
           const existingIndex = prev.findIndex((p) => p.id === postId);
           if (existingIndex >= 0) {
             const updated = [...prev];
-            updated[existingIndex] = response.data;
+            updated[existingIndex] = transformedPost;
             return updated;
           }
-          return [response.data, ...prev];
+          return [transformedPost, ...prev];
         });
 
-        return response.data;
+        return transformedPost;
       } catch (err) {
         const error = err as AxiosError<PostError>;
         const errorMsg =
@@ -702,7 +725,23 @@ export function usePosts() {
               : post
           )
         );
-        return response.data;
+        
+        // Transform comment to include author object
+        const comment: any = response.data;
+        const transformedComment = {
+          ...comment,
+          author: comment.author || {
+            id: comment.author_id || '',
+            username: comment.author_username || '',
+            email: comment.author_username || '',
+            avatar: comment.author_avatar || undefined,
+            first_name: comment.author_first_name || undefined,
+            last_name: comment.author_last_name || undefined,
+            type: comment.author_user_type || undefined,
+          }
+        };
+        
+        return transformedComment;
       } catch (err) {
         const error = err as AxiosError<PostError>;
         const errorMsg =
@@ -741,7 +780,7 @@ export function usePosts() {
           id: string;
           like_count: number;
           action: string;
-        }>(`comments/${commentId}/like/`, { action });
+        }>(`posts/comments/${commentId}/like`, { action });
         console.log("[usePosts] Comment liked/unliked:", response.data);
         return response.data;
       } catch (err) {
@@ -783,7 +822,23 @@ export function usePosts() {
           { content }
         );
         console.log("[usePosts] Reply created:", response.data);
-        return response.data;
+        
+        // Transform reply to include author object
+        const reply: any = response.data;
+        const transformedReply = {
+          ...reply,
+          author: reply.author || {
+            id: reply.author_id || '',
+            username: reply.author_username || '',
+            email: reply.author_username || '',
+            avatar: reply.author_avatar || undefined,
+            first_name: reply.author_first_name || undefined,
+            last_name: reply.author_last_name || undefined,
+            type: reply.author_user_type || undefined,
+          }
+        };
+        
+        return transformedReply;
       } catch (err) {
         const error = err as AxiosError<PostError>;
         const errorMsg =
@@ -868,12 +923,34 @@ export function usePosts() {
           `posts/by-location/?${queryParams.toString()}`
         );
 
-        if (response.data.results) {
-          setPosts(response.data.results);
+        // Transform posts to include author object from author_id, author_username, author_avatar
+        const transformedPosts = (response.data.results || []).map((post: any) => {
+          // If post already has author object, use it
+          if (post.author && typeof post.author === 'object') {
+            return post;
+          }
+          
+          // Otherwise, create author object from separate fields
+          return {
+            ...post,
+            author: {
+              id: post.author_id || '',
+              username: post.author_username || '',
+              email: post.author_username || '', // Use username as fallback for email
+              avatar: post.author_avatar || undefined,
+              first_name: post.author_first_name || undefined,
+              last_name: post.author_last_name || undefined,
+              user_type: post.author_user_type || undefined,
+            }
+          };
+        });
+
+        if (transformedPosts.length > 0) {
+          setPosts(transformedPosts);
           setNextPage(response.data.next);
         }
 
-        return response.data.results || [];
+        return transformedPosts;
       } catch (err: unknown) {
         const errorMsg = "Failed to fetch posts by location";
         console.error(errorMsg, err);

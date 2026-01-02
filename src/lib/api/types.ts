@@ -322,12 +322,16 @@ export interface Review {
  * Review creation payload
  */
 export interface ReviewCreate {
-  rating: number;
+  rating: string | number;
   address: string;
   review_text: string;
   status?: ReviewStatus;
   evidence?: string | string[];
   property?: string;
+  property_id?: string;
+  user_id?: string;
+  title?: string;
+  content?: string;
   embeddings?: string;
 }
 

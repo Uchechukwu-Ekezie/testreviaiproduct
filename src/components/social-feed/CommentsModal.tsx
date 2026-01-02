@@ -292,11 +292,13 @@ export default function CommentsModal({
             </p>
             <div className="flex items-center gap-4">
               <button
-                onClick={() =>
-                  handleLikeComment(comment.id, comment.is_liked || false)
-                }
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  handleLikeComment(comment.id, comment.is_liked || false);
+                }}
                 disabled={likingComments.has(comment.id)}
-                className="flex items-center gap-1 hover:opacity-80 transition-opacity disabled:opacity-50"
+                className="flex items-center gap-1 hover:opacity-80 transition-opacity disabled:opacity-50 cursor-pointer"
               >
                 <Heart
                   className={`${depth === 0 ? "w-4 h-4" : "w-3 h-3"} ${
