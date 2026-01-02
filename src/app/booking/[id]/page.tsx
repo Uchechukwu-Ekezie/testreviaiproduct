@@ -17,7 +17,7 @@ import house from "../../../../public/Image/house.jpeg";
 import AuthGuard from "@/components/AuthGuard";
 import { propertiesAPI } from "@/lib/api";
 
-// Sample property data - replace with your actual data source
+// Sample property data - replace w
 const propertyData = [
   {
     id: "0010fa44-a6eb-4b41-a472-e3087a013cfe",
