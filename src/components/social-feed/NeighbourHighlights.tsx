@@ -8,6 +8,8 @@ import { usePosts } from "@/hooks/usePosts";
 import { useAgents } from "@/hooks/useAgents";
 import { useProperties } from "@/contexts/properties-context";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/auth-context";
+import { useFollow } from "@/hooks/useFollow";
 import { MapPin, AlertCircle, Star, Loader2 } from "lucide-react";
 import { getUserLocation, reverseGeocodeLocation } from "@/utils/geolocation";
 import Image from "next/image";
@@ -25,6 +27,8 @@ interface LocationData {
 
 export default function NeighborhoodHighlights() {
   const router = useRouter();
+  const { user } = useAuth();
+  const { toggleFollow, checkFollowStatus } = useFollow();
 
   const {
     fetchPostsByLocation,
@@ -32,6 +36,7 @@ export default function NeighborhoodHighlights() {
     fetchComments,
     createComment,
     replyToComment,
+    likeComment,
   } = usePosts();
 
   const { agents, isLoading: agentsLoading, fetchAgents } = useAgents();
@@ -46,11 +51,51 @@ export default function NeighborhoodHighlights() {
   const [locationBasedProperties, setLocationBasedProperties] = useState<Property[]>([]);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
+  
+  // Follow state
+  const [followStatusMap, setFollowStatusMap] = useState<Record<string, boolean>>({});
+  const [followLoadingMap, setFollowLoadingMap] = useState<Record<string, boolean>>({});
+  const checkedAuthorIdsRef = React.useRef<Set<string>>(new Set());
 
   // Fetch agents
   useEffect(() => {
     if (agents.length === 0 && !agentsLoading) fetchAgents();
   }, [agents.length, agentsLoading, fetchAgents]);
+
+  // Initialize follow status for posts
+  useEffect(() => {
+    if (locationBasedPosts.length === 0 || !user) return;
+
+    const postsAuthorIds = [
+      ...new Set(locationBasedPosts.map((post) => post.author?.id).filter(Boolean)),
+    ] as string[];
+
+    if (postsAuthorIds.length === 0) return;
+
+    const newAuthorIds = postsAuthorIds.filter(
+      (id) => !checkedAuthorIdsRef.current.has(id)
+    );
+
+    if (newAuthorIds.length === 0) return;
+
+    newAuthorIds.forEach((id) => checkedAuthorIdsRef.current.add(id));
+
+    const initializeFollowStatus = async () => {
+      try {
+        const followStatus = await checkFollowStatus(newAuthorIds);
+        setFollowStatusMap((prev) => ({ ...prev, ...followStatus }));
+      } catch (error) {
+        console.error("Failed to initialize follow status:", error);
+        newAuthorIds.forEach((id) => checkedAuthorIdsRef.current.delete(id));
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      initializeFollowStatus();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [locationBasedPosts.map((p) => p.author?.id).join(","), user, checkFollowStatus]);
 
   // Detect location and fetch location-based data
   useEffect(() => {
@@ -150,7 +195,80 @@ export default function NeighborhoodHighlights() {
     const post = locationBasedPosts.find((p) => p.id === postId);
     if (!post || post.isPending) return;
     await likePostAction(postId, post.is_liked ? "unlike" : "like");
+    
+    // Update local state
+    setLocationBasedPosts((prev) =>
+      prev.map((p) =>
+        p.id === postId
+          ? {
+              ...p,
+              is_liked: !p.is_liked,
+              like_count: p.is_liked ? p.like_count - 1 : p.like_count + 1,
+            }
+          : p
+      )
+    );
   };
+
+  const handleFollowToggle = useCallback(
+    async (
+      authorId: string,
+      authorData: {
+        username?: string;
+        email?: string;
+        first_name?: string;
+        last_name?: string;
+        avatar?: string;
+        user_type?: string;
+      }
+    ) => {
+      if (!user) {
+        router.push("/signin");
+        return;
+      }
+
+      if (authorId === user.id) {
+        return;
+      }
+
+      const currentStatus = followStatusMap[authorId] || false;
+      setFollowLoadingMap((prev) => ({ ...prev, [authorId]: true }));
+
+      try {
+        await toggleFollow(
+          {
+            id: authorId,
+            username: authorData.username || "",
+            email: authorData.email || "",
+            first_name: authorData.first_name || "",
+            last_name: authorData.last_name || "",
+            avatar: authorData.avatar || "",
+            type: authorData.user_type || "user",
+          },
+          currentStatus
+        );
+
+        setFollowStatusMap((prev) => ({
+          ...prev,
+          [authorId]: !currentStatus,
+        }));
+      } catch (error) {
+        console.error("Failed to toggle follow:", error);
+      } finally {
+        setFollowLoadingMap((prev) => ({ ...prev, [authorId]: false }));
+      }
+    },
+    [user, router, followStatusMap, toggleFollow]
+  );
+
+  const handleLikeComment = useCallback(
+    async (commentId: string, isLiked: boolean) => {
+      const action = isLiked ? "unlike" : "like";
+      const result = await likeComment(commentId, action);
+      return result;
+    },
+    [likeComment]
+  );
 
   // Calculate agent rating (you can replace this with actual rating data from your API)
   const getAgentRating = (agentId: string) => {
@@ -172,6 +290,20 @@ export default function NeighborhoodHighlights() {
               (p) => p.created_by === agent.id
             ).length;
             const agentRating = getAgentRating(agent.id);
+            
+            // Get display name with proper fallback
+            const displayName = agent.name || 
+              `${agent.first_name || ""} ${agent.last_name || ""}`.trim() || 
+              agent.username || 
+              "Agent";
+            
+            // Get initials for avatar fallback
+            const initials = displayName
+              .split(" ")
+              .map((n) => n[0])
+              .join("")
+              .toUpperCase()
+              .slice(0, 2) || "A";
 
             return (
               <button
@@ -185,14 +317,14 @@ export default function NeighborhoodHighlights() {
                       {agent.avatar ? (
                         <Image
                           src={agent.avatar || "/image/profile.jpg"}
-                          alt={agent.first_name || ""}
+                          alt={displayName}
                           width={60}
                           height={60}
                           className="w-full h-full object-cover"
                         />
                       ) : (
                         <div className="w-full h-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center text-lg font-bold">
-                          {agent.first_name?.[0]}
+                          {initials}
                         </div>
                       )}
                     </div>
@@ -202,7 +334,7 @@ export default function NeighborhoodHighlights() {
                   )}
                 </div>
                 <p className="text-xs mt-1 max-w-16 truncate text-gray-300 group-hover:text-white transition">
-                  {agent.first_name}
+                  {displayName}
                 </p>
 
                 {/* Agent Rating */}
@@ -261,15 +393,21 @@ export default function NeighborhoodHighlights() {
           <div className="space-y-4 sm:space-y-6">
             {feedItems.map(item => {
               if (item.type === 'post') {
+                const isFollowing = item.post.author ? (followStatusMap[item.post.author.id] || false) : false;
                 return (
                   <PostCard
                     key={`post-${item.post.id}`}
                     post={item.post}
                     onLike={handleLike}
-                    onShare={() => console.log('Share')}
+                    onShare={(postId: string) => {
+                      console.log('Share post:', postId);
+                    }}
                     fetchComments={fetchComments}
                     createComment={createComment}
                     replyToComment={replyToComment}
+                    onLikeComment={handleLikeComment}
+                    isFollowing={isFollowing}
+                    onFollowToggle={handleFollowToggle}
                     onClick={() => router.push(`/social-feed/post/${item.post.id}`)}
                   />
                 );

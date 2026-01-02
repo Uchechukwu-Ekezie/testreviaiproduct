@@ -197,7 +197,7 @@ export default function MediaViewPage({
 
     // Get unique author IDs from all posts
     const authorIds = [
-      ...new Set(posts.map((post) => post.author.id).filter(Boolean)),
+      ...new Set(posts.map((post) => post.author?.id).filter(Boolean)),
     ];
 
     if (authorIds.length === 0) {
@@ -1788,6 +1788,24 @@ export default function MediaViewPage({
   // -----------------------------------------------------------------
 
   const renderSinglePost = (post: PostType) => {
+    // Safety check: ensure post has author object
+    if (!post.author) {
+      console.error("Post missing author object:", post);
+      // Create a fallback author object if missing
+      post = {
+        ...post,
+        author: {
+          id: (post as any).author_id || '',
+          username: (post as any).author_username || 'Unknown',
+          email: (post as any).author_username || '',
+          avatar: (post as any).author_avatar || undefined,
+          first_name: (post as any).author_first_name || undefined,
+          last_name: (post as any).author_last_name || undefined,
+          user_type: (post as any).author_user_type || undefined,
+        }
+      };
+    }
+
     // Get media items - prioritize images, then media_url
     const mediaItems = post.images?.length
       ? post.images

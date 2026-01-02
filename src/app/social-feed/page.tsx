@@ -47,6 +47,7 @@ export default function SocialFeed() {
     fetchComments,
     createComment,
     replyToComment,
+    likeComment,
     loadMorePosts,
     hasMore,
   } = usePosts();
@@ -596,6 +597,11 @@ export default function SocialFeed() {
                     fetchComments={fetchComments}
                     createComment={createComment}
                     replyToComment={replyToComment}
+                    onLikeComment={async (commentId: string, isLiked: boolean) => {
+                      const action = isLiked ? "unlike" : "like";
+                      const result = await likeComment(commentId, action);
+                      return result;
+                    }}
                     // NEW: Pass follow props
                     isFollowing={isFollowing}
                     onFollowToggle={handleFollowToggle}

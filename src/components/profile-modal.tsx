@@ -24,7 +24,7 @@ interface ProfileModalProps {
 }
 
 export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
-  const { user } = useAuth();
+  const { user, refreshUserData } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [avatarUploadError, setAvatarUploadError] = useState<string | null>(null);
@@ -196,6 +196,9 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
           changedFields.avatar = confirmedAvatarUrl;
           setFormData((prev) => ({ ...prev, avatar: confirmedAvatarUrl }));
 
+          // Refresh user data immediately to show the new avatar
+          await refreshUserData();
+
           toast({
             title: "Avatar updated",
             description: "Your profile picture has been updated successfully.",
@@ -224,6 +227,9 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         });
       }
 
+      // Refresh user data to update the avatar in the UI
+      await refreshUserData();
+
       // Reset states and close modal
       setSelectedAvatarFile(null);
       setAvatarPreview(null);
@@ -239,7 +245,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [user, formData, selectedAvatarFile, uploadToCloudinary, updateAvatarInBackend, onClose]);
+  }, [user, formData, selectedAvatarFile, uploadToCloudinary, updateAvatarInBackend, onClose, refreshUserData]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>

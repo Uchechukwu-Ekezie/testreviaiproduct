@@ -82,6 +82,7 @@ interface AuthContextType {
   }) => Promise<boolean>;
   logout: () => void;
   refreshAccessToken: () => Promise<string | null>;
+  refreshUserData: () => Promise<void>;
 }
 
 // ✅ Create auth context with default values
@@ -93,6 +94,7 @@ const AuthContext = createContext<AuthContextType>({
   signup: async () => false,
   logout: () => {},
   refreshAccessToken: async () => null,
+  refreshUserData: async () => {},
 });
 
 // ✅ Auth provider props
@@ -521,6 +523,41 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return success;
   };
 
+  // 🔹 Refresh user data function
+  const refreshUserData = async (): Promise<void> => {
+    try {
+      const token = getAuthToken();
+      if (!token) {
+        console.log("No token available for refresh");
+        return;
+      }
+
+      setAuthToken(token);
+      const userData = await userAPI.getProfile();
+      
+      const userObj: User = {
+        id: userData.id,
+        username: userData.username || userData.email.split("@")[0],
+        email: userData.email,
+        first_name: userData.first_name || "",
+        last_name: userData.last_name || "",
+        type: userData.type || "user",
+        is_active: userData.is_active,
+        avatar: userData.avatar || "/placeholder.svg",
+        date_joined: userData.date_joined,
+        last_login: userData.last_login,
+        agent_request: userData.agent_request || undefined,
+      };
+
+      setUser(userObj);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("authUser", JSON.stringify(userObj));
+      }
+    } catch (error) {
+      console.error("Failed to refresh user data:", error);
+    }
+  };
+
   // 🔹 Logout function
   const logout = () => {
     if (typeof window !== "undefined") {
@@ -546,6 +583,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         signup,
         logout,
         refreshAccessToken: refreshAccessTokenFunc,
+        refreshUserData,
       }}
     >
       {children}

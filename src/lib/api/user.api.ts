@@ -97,13 +97,29 @@ export const userAPI = {
    */
   uploadAvatar: async (avatarUrl: string): Promise<string> => {
     return withErrorHandling(async () => {
-      const response = await api.patch<{ avatar_url: string }>(
-        "/auth/update-user-avatar/",
+      // Get the current user's ID from the auth token
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error("Authentication token is missing");
+      }
+      setAuthToken(token);
+
+      // Get current user profile to get the ID
+      const currentUser = await api.get<User>("/auth/me");
+      const userId = currentUser.data.id;
+
+      if (!userId) {
+        throw new Error("User ID not found");
+      }
+
+      // Use the correct endpoint with user ID
+      const response = await api.patch<User>(
+        `/auth/users/${userId}/`,
         {
-          avatar_url: avatarUrl,
+          avatar: avatarUrl,
         }
       );
-      return response.data.avatar_url;
+      return response.data.avatar || avatarUrl;
     });
   },
 

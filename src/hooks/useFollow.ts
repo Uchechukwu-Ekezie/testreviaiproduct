@@ -18,6 +18,17 @@ export const useFollow = () => {
       });
       return false;
     }
+
+    // Don't allow following yourself
+    if (userToFollow.id === currentUser.id) {
+      console.log('❌ Cannot follow yourself');
+      toast({
+        title: 'Cannot Follow Yourself',
+        description: 'You cannot follow your own account',
+        variant: 'destructive'
+      });
+      return false;
+    }
     
     console.log(`🔄 Attempting to follow user: ${userToFollow.username} (${userToFollow.id})`);
     
@@ -48,6 +59,18 @@ export const useFollow = () => {
           variant: 'default'
         });
         return true; // Consider this a success since we want to be in the following state
+      }
+
+      // Handle the case where user tries to follow themselves
+      if (error.response?.data?.detail?.includes('Cannot follow yourself') || 
+          error.response?.data?.detail?.includes('follow yourself')) {
+        console.log('❌ Cannot follow yourself');
+        toast({
+          title: 'Cannot Follow Yourself',
+          description: 'You cannot follow your own account',
+          variant: 'destructive'
+        });
+        return false;
       }
       
       // Try to refresh token if it's an auth error
@@ -201,12 +224,29 @@ export const useFollow = () => {
       return {};
     }
 
-    console.log(`🔄 Checking follow status for ${userIds.length} users:`, userIds);
+    // Filter out current user's ID - you can't follow yourself
+    const filteredUserIds = userIds.filter(id => id !== currentUser.id);
+    
+    if (filteredUserIds.length === 0) {
+      console.log('ℹ️  No users to check (all are current user)');
+      return {};
+    }
+
+    console.log(`🔄 Checking follow status for ${filteredUserIds.length} users (filtered from ${userIds.length}):`, filteredUserIds);
     
     try {
-      const response = await followAPI.checkFollowStatus(userIds);
+      const response = await followAPI.checkFollowStatus(filteredUserIds);
       console.log(`✅ Follow status check completed:`, response.follow_status);
-      return response.follow_status;
+      
+      // Add current user's own posts as false (can't follow yourself)
+      const result: Record<string, boolean> = { ...response.follow_status };
+      userIds.forEach(id => {
+        if (id === currentUser.id) {
+          result[id] = false; // Can't follow yourself
+        }
+      });
+      
+      return result;
     } catch (error: any) {
       console.error('❌ Failed to check follow status:', error);
       
@@ -216,13 +256,27 @@ export const useFollow = () => {
         await refreshAccessToken();
         // Retry the check
         try {
-          const retryResponse = await followAPI.checkFollowStatus(userIds);
-          return retryResponse.follow_status;
+          const retryResponse = await followAPI.checkFollowStatus(filteredUserIds);
+          const result: Record<string, boolean> = { ...retryResponse.follow_status };
+          userIds.forEach(id => {
+            if (id === currentUser.id) {
+              result[id] = false; // Can't follow yourself
+            }
+          });
+          return result;
         } catch (retryError) {
           console.error('❌ Failed to check follow status after token refresh:', retryError);
         }
       }
-      return {};
+      
+      // Return empty result with current user's own posts marked as false
+      const result: Record<string, boolean> = {};
+      userIds.forEach(id => {
+        if (id === currentUser.id) {
+          result[id] = false; // Can't follow yourself
+        }
+      });
+      return result;
     }
   }, [currentUser, refreshAccessToken]);
 
