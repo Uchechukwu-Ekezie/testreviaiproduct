@@ -635,9 +635,17 @@ export default function PropertyDetailClient({
               </div>
 
               {/* Price */}
-              <div className="text-3xl font-bold text-white">
+              <div className="text-3xl font-bold text-white mb-6">
                 {propertyDetailData.price}
               </div>
+
+              {/* Book Now Button */}
+              <button
+                onClick={() => router.push(`/booking/${propertyId}`)}
+                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
+              >
+                Book Now
+              </button>
             </div>
           </div>
 
