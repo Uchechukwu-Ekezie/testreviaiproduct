@@ -40,8 +40,28 @@ const apiFetch = async (
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.message || `HTTP error! status: ${response.status}`);
+    let errorData: any = {};
+    try {
+      errorData = await response.json();
+    } catch {
+      // If response is not JSON, create error object
+      errorData = {
+        message: `HTTP error! status: ${response.status}`,
+        status: response.status,
+        statusText: response.statusText,
+      };
+    }
+    
+    // Create an error object that matches the expected format
+    const error = new Error(errorData.message || errorData.detail || `HTTP error! status: ${response.status}`) as any;
+    error.response = {
+      status: response.status,
+      statusText: response.statusText,
+      data: errorData,
+    };
+    error.status = response.status;
+    error.statusText = response.statusText;
+    throw error;
   }
 
   return response.json();

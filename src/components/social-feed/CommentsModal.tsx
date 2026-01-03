@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Heart, MoreHorizontal, BadgeCheck } from "lucide-react";
 import type { Comment as CommentType } from "@/hooks/usePosts";
+import { followAPI } from "@/lib/api/follow.api";
 
 interface CommentsModalProps {
   isOpen: boolean;
@@ -51,6 +52,12 @@ export default function CommentsModal({
   const [expandedReplies, setExpandedReplies] = useState<Set<string>>(
     new Set()
   );
+  
+  // Cache for fetched author data
+  const [authorCache, setAuthorCache] = useState<Record<string, CommentType["author"]>>({});
+  
+  // State to store comments with fetched author data
+  const [commentsWithAuthors, setCommentsWithAuthors] = useState<CommentType[]>(comments);
 
   // Mobile input focus fix
   useEffect(() => {
@@ -160,6 +167,148 @@ export default function CommentsModal({
     }
   };
 
+  // Fetch author data by ID
+  const fetchAuthorData = useCallback(async (authorId: string): Promise<CommentType["author"] | null> => {
+    // Check cache first
+    if (authorCache[authorId]) {
+      return authorCache[authorId];
+    }
+
+    try {
+      const stats = await followAPI.getUserFollowStats(authorId);
+      const author: CommentType["author"] = {
+        id: stats.id,
+        username: stats.username || undefined,
+        email: stats.email || undefined,
+        first_name: stats.first_name || undefined,
+        last_name: stats.last_name || undefined,
+        avatar: stats.avatar || undefined,
+        type: undefined, // Type not available from follow stats
+      };
+      
+      // Cache the author data
+      setAuthorCache(prev => ({ ...prev, [authorId]: author }));
+      return author;
+    } catch (error) {
+      console.error(`Failed to fetch author data for ${authorId}:`, error);
+      return null;
+    }
+  }, [authorCache]);
+
+  // Fetch missing author data for comments
+  useEffect(() => {
+    const fetchMissingAuthors = async () => {
+      const authorIdsToFetch: string[] = [];
+      const currentCache = { ...authorCache };
+
+      // Collect all comments and replies that need author data
+      const collectComments = (commentList: CommentType[]) => {
+        commentList.forEach((comment) => {
+          // Check if author data is missing
+          const authorId = comment.author_id;
+          if (!authorId) return;
+          
+          const needsFetch = 
+            (!comment.author?.username && !comment.author?.avatar) &&
+            !currentCache[authorId];
+
+          if (needsFetch && !authorIdsToFetch.includes(authorId)) {
+            authorIdsToFetch.push(authorId);
+          }
+
+          // Process replies recursively
+          if (comment.replies && comment.replies.length > 0) {
+            collectComments(comment.replies);
+          }
+        });
+      };
+
+      collectComments(comments);
+
+      // Fetch author data for all missing authors
+      if (authorIdsToFetch.length > 0) {
+        const fetchPromises = authorIdsToFetch.map(async (authorId) => {
+          try {
+            const stats = await followAPI.getUserFollowStats(authorId);
+            const author: CommentType["author"] = {
+              id: stats.id,
+              username: stats.username || undefined,
+              email: stats.email || undefined,
+              first_name: stats.first_name || undefined,
+              last_name: stats.last_name || undefined,
+              avatar: stats.avatar || undefined,
+              type: undefined,
+            };
+            currentCache[authorId] = author;
+            return { authorId, author };
+          } catch (error) {
+            console.error(`Failed to fetch author data for ${authorId}:`, error);
+            return null;
+          }
+        });
+
+        const results = await Promise.all(fetchPromises);
+        
+        // Update cache with all fetched authors
+        const newCache = { ...currentCache };
+        results.forEach((result) => {
+          if (result) {
+            newCache[result.authorId] = result.author;
+          }
+        });
+        setAuthorCache(newCache);
+
+        // Update comments with fetched author data
+        const updateCommentAuthor = (comment: CommentType): CommentType => {
+          const updatedComment = { ...comment };
+          
+          if (comment.author_id && newCache[comment.author_id]) {
+            updatedComment.author = {
+              ...comment.author,
+              ...newCache[comment.author_id],
+            };
+          }
+
+          // Recursively update replies
+          if (comment.replies && comment.replies.length > 0) {
+            updatedComment.replies = comment.replies.map(updateCommentAuthor);
+          }
+
+          return updatedComment;
+        };
+
+        const updatedComments = comments.map(updateCommentAuthor);
+        setCommentsWithAuthors(updatedComments);
+      } else {
+        // No missing authors, just set comments as-is
+        setCommentsWithAuthors(comments);
+      }
+    };
+
+    if (comments.length > 0) {
+      fetchMissingAuthors();
+    } else {
+      setCommentsWithAuthors(comments);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comments]);
+
+  // Helper function to get author with fallback to fetching
+  const getAuthorWithFallback = useCallback(async (comment: CommentType): Promise<CommentType["author"] | null> => {
+    // If author already has username/avatar, return it
+    if (comment.author && (comment.author.username || comment.author.avatar)) {
+      return comment.author;
+    }
+
+    // If we have author_id but no author data, fetch it
+    if (comment.author_id && !comment.author?.username && !comment.author?.avatar) {
+      const fetchedAuthor = await fetchAuthorData(comment.author_id);
+      return fetchedAuthor || comment.author || null;
+    }
+
+    return comment.author || null;
+  }, [fetchAuthorData]);
+
   if (!isOpen) return null;
 
   const handleReplyToUser = (
@@ -204,7 +353,8 @@ export default function CommentsModal({
   };
 
   // Helper functions
-  const getAuthorDisplayName = (author: CommentType["author"]) => {
+  const getAuthorDisplayName = (author: CommentType["author"] | null) => {
+    if (!author) return "Unknown";
     const fullName = `${author.first_name ?? ""} ${
       author.last_name ?? ""
     }`.trim();
@@ -214,7 +364,8 @@ export default function CommentsModal({
     return "Unknown";
   };
 
-  const getAuthorHandle = (author: CommentType["author"]) => {
+  const getAuthorHandle = (author: CommentType["author"] | null) => {
+    if (!author) return null;
     if (author.username) return author.username;
     if (author.email) return author.email.split("@")[0];
     return null;
@@ -453,7 +604,7 @@ export default function CommentsModal({
               No comments yet.
             </div>
           ) : (
-            comments.map((comment) => renderCommentThread(comment))
+            commentsWithAuthors.map((comment) => renderCommentThread(comment))
           )}
         </div>
 

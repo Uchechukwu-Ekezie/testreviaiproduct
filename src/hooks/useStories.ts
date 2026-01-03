@@ -52,9 +52,10 @@ interface StoryError {
 }
 
 const API_BASE_URL = (() => {
-  const env = process.env.NEXT_PUBLIC_API_URL;
-  if (!env) return "http://localhost:8000";
-  return env.replace(/\/+$/g, "") + "/";
+  // Use the same base URL as the rest of the app
+  const env = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_API_URL;
+  if (!env) return "https://uat.backend.reviai.ai";
+  return env.replace(/\/+$/g, "");
 })();
 
 export function useStories() {
@@ -84,16 +85,56 @@ export function useStories() {
 
   // Transform posts to stories format
   const transformPostsToStories = (posts: Post[]): Story[] => {
+    console.log("[useStories] Transforming posts to stories:", posts);
     const storyMap = new Map<string, Story>();
 
     posts.forEach((post) => {
+      console.log("[useStories] Processing post:", {
+        id: post.id,
+        hasAuthor: !!post.author,
+        authorId: post.author?.id,
+        authorUsername: post.author?.username,
+        hasImages: !!post.images?.length,
+        hasMediaUrl: !!post.media_url,
+        images: post.images,
+        media_url: post.media_url,
+      });
+
+      // Handle posts that might have author_id, author_username, author_avatar instead of author object
+      let authorId: string | undefined;
+      let authorUsername: string | undefined;
+      let authorAvatar: string | undefined;
+      let authorFirstName: string | undefined;
+      let authorLastName: string | undefined;
+
+      if (post.author && post.author.id) {
+        // Post has author object
+        authorId = post.author.id;
+        authorUsername = post.author.username;
+        authorAvatar = post.author.avatar;
+        authorFirstName = post.author.first_name;
+        authorLastName = post.author.last_name;
+      } else if ((post as any).author_id) {
+        // Post has separate author fields
+        authorId = (post as any).author_id;
+        authorUsername = (post as any).author_username || (post as any).author_username;
+        authorAvatar = (post as any).author_avatar;
+        authorFirstName = (post as any).author_first_name;
+        authorLastName = (post as any).author_last_name;
+      }
+
       // Skip posts without valid author data
-      if (!post.author || !post.author.id) return;
+      if (!authorId) {
+        console.log("[useStories] Skipping post - no author ID:", post.id);
+        return;
+      }
       
-      const userId = post.author.id;
       const mediaUrl = post.images?.[0] || post.media_url || "";
       
-      if (!mediaUrl) return;
+      if (!mediaUrl) {
+        console.log("[useStories] Skipping post - no media URL:", post.id);
+        return;
+      }
 
       const storyItem: StoryItem = {
         id: post.id,
@@ -103,8 +144,8 @@ export function useStories() {
         is_viewed: post.is_viewed || false,
       };
 
-      if (storyMap.has(userId)) {
-        const existingStory = storyMap.get(userId)!;
+      if (storyMap.has(authorId)) {
+        const existingStory = storyMap.get(authorId)!;
         existingStory.stories.push(storyItem);
         existingStory.has_unviewed =
           existingStory.has_unviewed || !storyItem.is_viewed;
@@ -116,12 +157,12 @@ export function useStories() {
           existingStory.latest_story_time = post.created_at;
         }
       } else {
-        storyMap.set(userId, {
-          user_id: userId,
-          username: post.author.username,
-          avatar: post.author.avatar,
-          first_name: post.author.first_name,
-          last_name: post.author.last_name,
+        storyMap.set(authorId, {
+          user_id: authorId,
+          username: authorUsername || "Unknown",
+          avatar: authorAvatar || "",
+          first_name: authorFirstName,
+          last_name: authorLastName,
           stories: [storyItem],
           has_unviewed: !storyItem.is_viewed,
           latest_story_time: post.created_at,
@@ -130,11 +171,13 @@ export function useStories() {
     });
 
     // Sort stories by latest story time
-    return Array.from(storyMap.values()).sort(
+    const transformedStories = Array.from(storyMap.values()).sort(
       (a, b) =>
         new Date(b.latest_story_time).getTime() -
         new Date(a.latest_story_time).getTime()
     );
+    console.log("[useStories] Transformed stories:", transformedStories);
+    return transformedStories;
   };
 
   // Fetch all available stories (posts with is_story=true)
@@ -143,12 +186,18 @@ export function useStories() {
     setError(null);
 
     try {
-      const response = await axiosInstance.get<PostsResponse>(
-        "/posts/?is_story=true"
-      );
+      const url = "/posts/?is_story=true";
+      console.log("[useStories] Fetching stories from:", API_BASE_URL + url);
+      const response = await axiosInstance.get<PostsResponse>(url);
+      console.log("[useStories] API response:", {
+        count: response.data.count,
+        resultsCount: response.data.results?.length || 0,
+        results: response.data.results,
+      });
       const transformedStories = transformPostsToStories(
         response.data.results || []
       );
+      console.log("[useStories] Setting stories:", transformedStories);
       setStories(transformedStories);
       return transformedStories;
     } catch (err) {
