@@ -297,8 +297,12 @@ export function usePosts() {
   // Fetch posts with pagination and deduplication + caching
   const fetchPosts = useCallback(
     async (url: string = `${API_BASE_URL}posts/`, reset: boolean = false) => {
-      // Check if this is a pagination request (contains cursor)
-      const isPagination = url.includes('cursor=');
+      // Check if this is a pagination request (contains cursor, skip, limit, or page)
+      const isPagination = url.includes('cursor=') || 
+                          url.includes('skip=') || 
+                          url.includes('limit=') || 
+                          url.includes('page=') ||
+                          url.includes('next=');
       
       // Check cache first - if data is fresh (less than 5 min old), don't refetch
       // BUT always allow pagination requests through
@@ -319,7 +323,12 @@ export function usePosts() {
         return;
       }
 
-      console.log("[usePosts] Fetching posts from:", url, isPagination ? "(pagination)" : "(initial)");
+      console.log("[usePosts] Fetching posts from:", url, isPagination ? "(pagination)" : "(initial)", {
+        isPagination,
+        reset,
+        postsCount: posts.length,
+        timeSinceLastFetch: timeSinceLastFetch / 1000
+      });
       setIsLoadingPosts(true);
       setError(null);
 
@@ -327,7 +336,9 @@ export function usePosts() {
         const response = await axiosInstance.get<PostResponse>(url);
         console.log("[usePosts] Posts fetched successfully:", {
           count: response.data.results.length,
-          posts: response.data.results,
+          next: response.data.next,
+          hasMore: !!response.data.next,
+          isPagination
         });
 
         // Update last fetch time only for initial fetches, not pagination
@@ -381,6 +392,7 @@ export function usePosts() {
           
           return [...prev, ...newPosts];
         });
+        console.log("[usePosts] Setting nextPage to:", response.data.next, "Total posts now:", posts.length + transformedPosts.length);
         setNextPage(response.data.next);
       } catch (err) {
         const error = err as AxiosError<PostError>;
@@ -998,8 +1010,15 @@ export function usePosts() {
   // Load more posts
   const loadMorePosts = useCallback(async () => {
     if (nextPage && !isLoadingPosts) {
-      console.log("[usePosts] Loading more posts from:", nextPage);
-      await fetchPosts(nextPage, false);
+      // Convert relative URL to absolute if needed
+      let url = nextPage;
+      if (nextPage.startsWith('/')) {
+        url = `${API_BASE_URL}${nextPage.replace(/^\//, '')}`;
+      } else if (!nextPage.startsWith('http')) {
+        url = `${API_BASE_URL}${nextPage}`;
+      }
+      console.log("[usePosts] Loading more posts from:", url);
+      await fetchPosts(url, false);
     }
   }, [nextPage, isLoadingPosts, fetchPosts]);
 
