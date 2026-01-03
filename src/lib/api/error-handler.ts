@@ -21,26 +21,62 @@ export class ApiErrorHandler {
    * @returns Standardized ApiError object
    */
   static toApiError(error: unknown): ApiError {
-    const axiosError = error as ApiAxiosError;
-    const responseData = axiosError.response?.data;
+    // Handle different error types
+    if (error instanceof Error) {
+      // Check if it's an Axios error
+      const axiosError = error as ApiAxiosError;
+      const responseData = axiosError.response?.data;
 
-    // Handle detail field - prefer specific detail over entire data object
-    let detail: string | Record<string, unknown> | undefined;
-    if (responseData && typeof responseData === "object") {
-      const dataObj = responseData as unknown as Record<string, unknown>;
-      if (dataObj.detail !== undefined) {
-        detail = dataObj.detail as string | Record<string, unknown>;
-      } else {
-        detail = dataObj;
+      // Handle detail field - prefer specific detail over entire data object
+      let detail: string | Record<string, unknown> | undefined;
+      if (responseData && typeof responseData === "object") {
+        const dataObj = responseData as unknown as Record<string, unknown>;
+        if (dataObj.detail !== undefined) {
+          detail = dataObj.detail as string | Record<string, unknown>;
+        } else {
+          detail = dataObj;
+        }
       }
+
+      return {
+        status: axiosError.response?.status,
+        statusText: axiosError.response?.statusText,
+        message: axiosError.message || "An unexpected error occurred",
+        detail,
+        data: responseData,
+      };
     }
 
+    // Handle non-Error objects (e.g., plain objects, strings, etc.)
+    if (typeof error === "object" && error !== null) {
+      const errorObj = error as Record<string, unknown>;
+      return {
+        status: errorObj.status as number | undefined,
+        statusText: errorObj.statusText as string | undefined,
+        message: (errorObj.message as string) || "An unexpected error occurred",
+        detail: errorObj.detail as string | Record<string, unknown> | undefined,
+        data: errorObj.data as unknown,
+      };
+    }
+
+    // Handle string errors
+    if (typeof error === "string") {
+      return {
+        status: undefined,
+        statusText: undefined,
+        message: error,
+        detail: undefined,
+        data: undefined,
+      };
+    }
+
+    // Fallback for unknown error types
     return {
-      status: axiosError.response?.status,
-      statusText: axiosError.response?.statusText,
-      message: axiosError.message || "An unexpected error occurred",
-      detail,
-      data: responseData,
+      status: undefined,
+      statusText: undefined,
+      message: "An unexpected error occurred",
+      detail: String(error),
+      data: undefined,
     };
   }
 
@@ -55,12 +91,19 @@ export class ApiErrorHandler {
 
     // Log detailed error in development
     if (process.env.NODE_ENV === "development") {
-      console.error("API Error:", {
-        status: apiError.status,
-        statusText: apiError.statusText,
-        message: apiError.message,
-        detail: apiError.detail,
-      });
+      const errorInfo: Record<string, unknown> = {};
+      if (apiError.status !== undefined) errorInfo.status = apiError.status;
+      if (apiError.statusText) errorInfo.statusText = apiError.statusText;
+      if (apiError.message) errorInfo.message = apiError.message;
+      if (apiError.detail !== undefined) errorInfo.detail = apiError.detail;
+      if (apiError.data !== undefined) errorInfo.data = apiError.data;
+      
+      console.error("API Error:", errorInfo);
+      
+      // Also log the original error for debugging
+      if (error instanceof Error) {
+        console.error("Original error:", error);
+      }
     } else {
       // Log minimal info in production
       console.error("API Error:", apiError.status, apiError.message);

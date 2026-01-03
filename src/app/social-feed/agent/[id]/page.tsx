@@ -23,6 +23,7 @@ import { useProperties } from "@/contexts/properties-context";
 import { useAuth } from "@/contexts/auth-context";
 import { followAPI } from "@/lib/api/follow.api";
 import api from "@/lib/api/axios-config";
+import { toast } from "react-toastify";
 import { AgentReviewCard } from "@/components/agent-review-card";
 import { AgentReviewForm } from "@/components/agent-review-form";
 import { AgentReviewsEmptyState } from "@/components/agent-reviews-empty-state";
@@ -125,6 +126,29 @@ export default function AgentProfilePage({
     }
   }, [agentId, agentProperties]);
 
+  // Fetch follow stats when agentId is available
+  useEffect(() => {
+    if (!agentId || !currentUser) return;
+
+    const fetchFollowStats = async () => {
+      try {
+        const stats = await followAPI.getUserFollowStats(agentId);
+        setIsFollowing(stats.is_following);
+        setFollowersCount(stats.followers_count);
+      } catch (error) {
+        console.error("Failed to fetch follow stats:", error);
+        // Fallback to agent data if API fails
+        const foundAgent = agents.find((a) => a.id === agentId);
+        if (foundAgent) {
+          setIsFollowing(!!foundAgent.is_following);
+          setFollowersCount(foundAgent.followers_count || 0);
+        }
+      }
+    };
+
+    fetchFollowStats();
+  }, [agentId, currentUser, agents]);
+
   // Set agent data safely
   useEffect(() => {
     if (!agentId || agents.length === 0) return;
@@ -150,11 +174,13 @@ export default function AgentProfilePage({
       rating: foundAgent.rating || 4.8,
     });
 
-    setIsFollowing(!!foundAgent.is_following);
-    setFollowersCount(foundAgent.followers_count || 0);
+    // Only set follow status if not already set from API
+    if (followersCount === 0 && foundAgent.followers_count) {
+      setFollowersCount(foundAgent.followers_count);
+    }
     setReviewsCount(foundAgent.reviews_count || 0);
     setIsLoading(false);
-  }, [agentId, agents, agentSpecificProperties]);
+  }, [agentId, agents, agentSpecificProperties, followersCount]);
 
   // Fetch reviews
   const fetchReviews = async () => {
@@ -192,21 +218,46 @@ export default function AgentProfilePage({
 
   // Toggle follow
   const handleFollowToggle = async () => {
-    if (!currentUser || !agentId || isFollowLoading) return;
+    if (!currentUser) {
+      router.push("/signin");
+      return;
+    }
+
+    if (!agentId || isFollowLoading) return;
+
+    // Don't allow following yourself
+    if (agentId === currentUser.id) {
+      return;
+    }
 
     setIsFollowLoading(true);
     try {
       if (isFollowing) {
         await followAPI.unfollow(agentId);
         setIsFollowing(false);
-        setFollowersCount((c) => c - 1);
+        setFollowersCount((c) => Math.max(0, c - 1));
+        toast.success(`Unfollowed ${agent?.name || "agent"}`);
       } else {
         await followAPI.follow(agentId);
         setIsFollowing(true);
         setFollowersCount((c) => c + 1);
+        toast.success(`Following ${agent?.name || "agent"}`);
       }
-    } catch (error) {
+
+      // Refresh stats to get accurate counts
+      try {
+        const stats = await followAPI.getUserFollowStats(agentId);
+        setIsFollowing(stats.is_following);
+        setFollowersCount(stats.followers_count);
+      } catch (refreshError) {
+        console.error("Failed to refresh stats:", refreshError);
+        // Keep the optimistic update if refresh fails
+      }
+    } catch (error: any) {
       console.error("Follow failed:", error);
+      // Show error toast
+      const errorMessage = error?.response?.data?.detail || error?.message || "Failed to update follow status";
+      toast.error(errorMessage);
     } finally {
       setIsFollowLoading(false);
     }

@@ -54,6 +54,7 @@ interface PostResponse {
 export interface Comment {
   id: string;
   post: string;
+  author_id?: string; // Add author_id for cases where author data is missing
   author: {
     id: string;
     username?: string;
@@ -661,12 +662,14 @@ export function usePosts() {
           }
           
           // Otherwise, create author object from separate fields
+          // Preserve author_id for cases where we need to fetch author data later
           return {
             ...comment,
+            author_id: comment.author_id, // Preserve author_id
             author: {
               id: comment.author_id || '',
-              username: comment.author_username || '',
-              email: comment.author_username || '',
+              username: comment.author_username || undefined,
+              email: comment.author_username || undefined,
               avatar: comment.author_avatar || undefined,
               first_name: comment.author_first_name || undefined,
               last_name: comment.author_last_name || undefined,

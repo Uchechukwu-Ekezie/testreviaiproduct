@@ -635,7 +635,7 @@ export default function SocialFeed() {
     <>
       <div className="min-h-screen bg-gradient-to-b from-[#0a0a0a] via-[#141414] to-[#0a0a0a]">
         {/* Stories Bar */}
-        {/* <div className="mt-14 sm:mt-16">
+         <div className="mt-14 sm:mt-16">
           <StoriesBar
             stories={stories}
             currentUserId={user?.id}
@@ -681,7 +681,7 @@ export default function SocialFeed() {
             }}
             isLoading={isLoadingStories}
           />
-        </div> */}
+        </div> 
 
         <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-32 sm:pb-32 mt-20 sm:mt-22">
           {/* Inline Post Composer */}

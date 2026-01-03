@@ -218,7 +218,25 @@ export default function BookingPage({
         }
       } catch (paymentError: any) {
         console.error("Payment initialization error:", paymentError);
-        const errorMessage = paymentError?.message || paymentError?.detail || "Failed to initialize payment";
+        
+        // Extract error message from various possible formats
+        let errorMessage = "Failed to initialize payment. Please try again later.";
+        
+        if (paymentError?.detail) {
+          errorMessage = paymentError.detail;
+          // Check if it's a Paystack configuration error
+          if (errorMessage.includes("401 Unauthorized") || errorMessage.includes("Paystack")) {
+            errorMessage = "Payment service is temporarily unavailable. Please contact support or try again later.";
+          }
+        } else if (paymentError?.message) {
+          errorMessage = paymentError.message;
+        } else if (paymentError?.response?.data?.detail) {
+          errorMessage = paymentError.response.data.detail;
+          if (errorMessage.includes("401 Unauthorized") || errorMessage.includes("Paystack")) {
+            errorMessage = "Payment service is temporarily unavailable. Please contact support or try again later.";
+          }
+        }
+        
         toast.error(errorMessage);
         // Still redirect to bookings page so user can see their booking
         router.push(`/user-dashboard/bookings`);

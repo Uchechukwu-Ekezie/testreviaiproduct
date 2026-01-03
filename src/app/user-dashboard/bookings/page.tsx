@@ -372,7 +372,25 @@ export default function Bookings() {
       setBookings(bookingsWithProperties);
     } catch (error: any) {
       console.error("Error cancelling booking:", error);
-      toast.error(error.message || "Failed to cancel booking");
+      
+      // Extract error message from various possible formats
+      let errorMessage = "Failed to cancel booking. Please try again.";
+      
+      if (error?.detail) {
+        errorMessage = typeof error.detail === 'string' ? error.detail : "Failed to cancel booking";
+      } else if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.response?.data?.detail) {
+        errorMessage = typeof error.response.data.detail === 'string' 
+          ? error.response.data.detail 
+          : "Failed to cancel booking";
+      } else if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setProcessingBooking(null);
     }
@@ -391,7 +409,26 @@ export default function Bookings() {
       }
     } catch (error: any) {
       console.error("Error initializing payment:", error);
-      toast.error(error.message || "Failed to initialize payment");
+      
+      // Extract error message from various possible formats
+      let errorMessage = "Failed to initialize payment. Please try again later.";
+      
+      if (error?.detail) {
+        errorMessage = error.detail;
+        // Check if it's a Paystack configuration error
+        if (errorMessage.includes("401 Unauthorized") || errorMessage.includes("Paystack")) {
+          errorMessage = "Payment service is temporarily unavailable. Please contact support or try again later.";
+        }
+      } else if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+        if (errorMessage.includes("401 Unauthorized") || errorMessage.includes("Paystack")) {
+          errorMessage = "Payment service is temporarily unavailable. Please contact support or try again later.";
+        }
+      }
+      
+      toast.error(errorMessage);
       setProcessingBooking(null);
     }
   };

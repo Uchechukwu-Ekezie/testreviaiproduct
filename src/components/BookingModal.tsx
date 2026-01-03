@@ -90,6 +90,19 @@ export default function BookingModal({
           }
         } catch (paymentError: any) {
           console.error("Payment initialization error:", paymentError);
+          
+          // Extract error message
+          let errorMessage = "Payment initialization failed";
+          if (paymentError?.detail) {
+            errorMessage = paymentError.detail;
+            if (errorMessage.includes("401 Unauthorized") || errorMessage.includes("Paystack")) {
+              errorMessage = "Payment service is temporarily unavailable. Please contact support.";
+            }
+          } else if (paymentError?.message) {
+            errorMessage = paymentError.message;
+          }
+          
+          toast.error(errorMessage);
           // Still show success screen even if payment init fails
         }
       }
