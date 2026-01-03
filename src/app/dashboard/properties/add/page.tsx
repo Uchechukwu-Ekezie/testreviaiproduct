@@ -12,7 +12,7 @@ import {
   AlertCircle,
   MapPin,
 } from "lucide-react";
-import { useProperties } from "@/contexts/properties-context";
+import { useProperties, type Property } from "@/contexts/properties-context";
 import { useAuth } from "@/contexts/auth-context";
 import MapPicker from "@/components/agent/MapPicker";
 
@@ -410,33 +410,19 @@ const AddPropertyPage = () => {
       showToast("Creating property...", "success");
 
       // Prepare the payload according to API specification
-      const propertyPayload: Record<string, unknown> = {
+      // Use type assertion to satisfy TypeScript while maintaining runtime flexibility
+      const propertyPayload = {
         title: formData.title.trim(),
         address: formData.address.trim(),
-      };
+        property_type: formData.property_type as "apartment" | "house" | "condo" | "land",
+        status: formData.status as "for_rent" | "for_sale" | "just_listing",
+        visibility_status: formData.visibility_status as "visible" | "not_visible",
+        scrape_status: "pending" as const,
+      } as Omit<Property, "id" | "created_at" | "updated_at">;
 
       // Add required/optional fields only if they have values
       if (formData.description.trim()) propertyPayload.description = formData.description.trim();
       if (formData.price.trim()) propertyPayload.price = formData.price.trim();
-      if (formData.property_type) propertyPayload.property_type = formData.property_type as
-        | "apartment"
-        | "house"
-        | "land"
-        | "commercial"
-        | "warehouse"
-        | "office";
-      if (formData.status) propertyPayload.status = formData.status as 
-        | "just_listing"
-        | "for_sale"
-        | "for_rent"
-        | "sold"
-        | "rented"
-        | "off_market";
-      if (formData.visibility_status) propertyPayload.visibility_status = formData.visibility_status === "visible" 
-        ? "public" 
-        : formData.visibility_status === "not_visible" 
-        ? "private" 
-        : formData.visibility_status;
       if (formData.bedrooms.trim()) propertyPayload.bedrooms = formData.bedrooms.trim();
       if (formData.bathrooms.trim()) propertyPayload.bathrooms = formData.bathrooms.trim();
       if (formData.size.trim()) propertyPayload.size = formData.size.trim();
@@ -453,7 +439,7 @@ const AddPropertyPage = () => {
       // Add image_urls in the correct format
       if (uploadedImageUrls.length > 0) {
         propertyPayload.image_urls = uploadedImageUrls.map((img) => ({
-          image_url: img.url,
+          url: img.url,
           image_type: "other" as const,
           alt_text: img.alt_text || "",
           caption: img.caption || "",
@@ -462,7 +448,7 @@ const AddPropertyPage = () => {
         }));
       }
       
-      if (user?.id) propertyPayload.listed_by_id = user.id;
+      if (user?.id) (propertyPayload as any).listed_by = user.id;
       propertyPayload.is_added_by_agent = true;
       
       // Add amenities - required field, send empty object if no amenities selected
