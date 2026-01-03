@@ -18,62 +18,6 @@ import AuthGuard from "@/components/AuthGuard";
 import { propertiesAPI, bookingAPI } from "@/lib/api";
 import { toast } from "react-toastify";
 
-// Sample property data - replace w
-const propertyData = [
-  {
-    id: "0010fa44-a6eb-4b41-a472-e3087a013cfe",
-    title: "Luxury 2BR Apartment",
-    location: "Lekki Phase 1, Lagos",
-    coordinates: { lat: 6.4698, lng: 3.5852 },
-    rating: 4.5,
-    reviews: 24,
-    price: "₦100,250,000",
-    bedrooms: 2,
-    propertyType: "Apartment",
-    images: house,
-    badge: "Best Value",
-  },
-  {
-    id: "luxury-2br-apartment-1",
-    title: "Luxury 2BR Apartment",
-    location: "Lekki Phase 1, Lagos",
-    coordinates: { lat: 6.4698, lng: 3.5852 },
-    rating: 4.5,
-    reviews: 24,
-    price: "₦100,250,000",
-    bedrooms: 2,
-    propertyType: "Apartment",
-    images: house,
-    badge: "Best Value",
-  },
-  {
-    id: "luxury-3br-apartment-2",
-    title: "Luxury 3BR Apartment",
-    location: "Victoria Island, Lagos",
-    coordinates: { lat: 6.4281, lng: 3.4219 },
-    rating: 4.8,
-    reviews: 15,
-    price: "₦80,500,000",
-    bedrooms: 3,
-    propertyType: "Apartment",
-    images: house,
-    badge: "Best Value",
-  },
-  {
-    id: "luxury-3br-apartment-3",
-    title: "Luxury 3BR Apartment",
-    location: "Ikoyi, Lagos",
-    coordinates: { lat: 6.4541, lng: 3.4316 },
-    rating: 4.9,
-    reviews: 18,
-    price: "₦85,350,000",
-    bedrooms: 3,
-    propertyType: "Apartment",
-    images: house,
-    badge: "Best Value",
-  },
-];
-
 export default function BookingPage({
   params,
 }: {
@@ -87,9 +31,17 @@ export default function BookingPage({
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdBooking, setCreatedBooking] = useState<any>(null);
-  const [property, setProperty] = useState<(typeof propertyData)[0] | null>(
-    null
-  );
+  const [property, setProperty] = useState<{
+    id: string;
+    title: string;
+    location: string;
+    price: string;
+    rating: number;
+    reviews: number;
+    images: string | any;
+    bedrooms?: string;
+    propertyType?: string;
+  } | null>(null);
   const [bookingData, setBookingData] = useState({
     checkIn: "",
     checkOut: "",
@@ -105,8 +57,9 @@ export default function BookingPage({
     const fetchProperty = async () => {
       setIsLoading(true);
       try {
-        // First try to fetch from API
-        const apiProperty = await propertiesAPI.getById(propertyId) as any;
+        // Fetch property from API
+        const response = await propertiesAPI.getById(propertyId) as any;
+        const apiProperty = response?.data || response;
 
         if (apiProperty) {
           // Check if property is added by agent
@@ -115,19 +68,44 @@ export default function BookingPage({
             setIsLoading(false);
             return;
           }
-          // Type cast the API response to match our property type
-          setProperty(apiProperty as (typeof propertyData)[0]);
+
+          // Extract image URL from various possible formats
+          let imageUrl = house; // Default fallback
+          if (apiProperty.image_urls && Array.isArray(apiProperty.image_urls) && apiProperty.image_urls.length > 0) {
+            // Get primary image or first image
+            const primaryImage = apiProperty.image_urls.find((img: any) => img.is_primary) || apiProperty.image_urls[0];
+            imageUrl = primaryImage.url || primaryImage.image_url || house;
+          } else if (apiProperty.image_url) {
+            imageUrl = apiProperty.image_url;
+          } else if (apiProperty.images && Array.isArray(apiProperty.images) && apiProperty.images.length > 0) {
+            const primaryImage = apiProperty.images.find((img: any) => img.is_primary) || apiProperty.images[0];
+            imageUrl = primaryImage.image_url || primaryImage.url || house;
+          }
+
+          // Transform API property to UI format
+          const transformedProperty = {
+            id: apiProperty.id,
+            title: apiProperty.title || "Property",
+            location: apiProperty.address || apiProperty.city || "Location not specified",
+            price: apiProperty.price || "₦0",
+            rating: typeof apiProperty.rental_grade === "number" ? apiProperty.rental_grade : 4.0,
+            reviews: 0, // Can be updated if reviews are available
+            images: imageUrl,
+            bedrooms: apiProperty.bedrooms || "0",
+            propertyType: apiProperty.property_type || "apartment",
+          };
+
+          setProperty(transformedProperty);
           setIsLoading(false);
           return;
         }
-      } catch (error) {
-        // API fetch failed, fallback to sample data
+      } catch (error: any) {
+        console.error("Error fetching property:", error);
+        toast.error(error.message || "Failed to load property. Please try again.");
       }
 
-      // Fallback to sample data (only for testing, should not be used in production)
-      const foundProperty = propertyData.find((p) => p.id === propertyId);
-
-      setProperty(foundProperty || null);
+      // If we get here, property not found or not available for booking
+      setProperty(null);
       setIsLoading(false);
     };
 
@@ -200,7 +178,7 @@ export default function BookingPage({
 
     setIsSubmitting(true);
     try {
-      // Create booking
+      // Create booking using bookingAPI
       const bookingPayload = {
         property_id: property.id,
         guest_name: `${bookingData.firstName} ${bookingData.lastName}`,
@@ -212,33 +190,43 @@ export default function BookingPage({
         special_requests: bookingData.specialRequests || undefined,
       };
 
-      const booking = await bookingAPI.create(bookingPayload) as any;
+      const response = await bookingAPI.create(bookingPayload) as any;
+      
+      // Handle API response - could be wrapped in data property
+      const booking = response?.data || response;
       setCreatedBooking(booking);
+
+      if (!booking?.id) {
+        toast.error("Booking created but missing booking ID. Please contact support.");
+        router.push(`/user-dashboard/bookings`);
+        return;
+      }
 
       toast.success("Booking created successfully! Redirecting to payment...");
 
-      // Initialize payment
-      if (booking?.id) {
-        try {
-          const paymentResponse = await bookingAPI.initializePayment(booking.id) as any;
-          
-          if (paymentResponse?.authorization_url) {
-            // Redirect to Paystack payment page
-            window.location.href = paymentResponse.authorization_url;
-          } else {
-            toast.error("Failed to initialize payment. Please try again.");
-            router.push(`/user-dashboard/bookings`);
-          }
-        } catch (paymentError: any) {
-          console.error("Payment initialization error:", paymentError);
-          toast.error(paymentError.message || "Failed to initialize payment");
-          // Still redirect to bookings page so user can see their booking
+      // Initialize payment using bookingAPI
+      try {
+        const paymentResponse = await bookingAPI.initializePayment(booking.id) as any;
+        const paymentData = paymentResponse?.data || paymentResponse;
+        
+        if (paymentData?.authorization_url) {
+          // Redirect to Paystack payment page
+          window.location.href = paymentData.authorization_url;
+        } else {
+          toast.error("Failed to initialize payment. Please try again.");
           router.push(`/user-dashboard/bookings`);
         }
+      } catch (paymentError: any) {
+        console.error("Payment initialization error:", paymentError);
+        const errorMessage = paymentError?.message || paymentError?.detail || "Failed to initialize payment";
+        toast.error(errorMessage);
+        // Still redirect to bookings page so user can see their booking
+        router.push(`/user-dashboard/bookings`);
       }
     } catch (error: any) {
       console.error("Booking creation error:", error);
-      toast.error(error.message || "Failed to create booking. Please try again.");
+      const errorMessage = error?.message || error?.detail || error?.data?.message || "Failed to create booking. Please try again.";
+      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -276,10 +264,15 @@ export default function BookingPage({
           <div className="flex gap-6 p-6 bg-white/5 rounded-xl mb-8">
             <div className="relative w-32 h-32 rounded-lg overflow-hidden">
               <Image
-                src={property.images}
+                src={typeof property.images === 'string' ? property.images : property.images || house}
                 alt={property.title}
                 fill
                 className="object-cover"
+                unoptimized={typeof property.images === 'string' && property.images.startsWith('http')}
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.src = house.src;
+                }}
               />
             </div>
             <div className="flex-1">

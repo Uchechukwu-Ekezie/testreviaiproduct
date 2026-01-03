@@ -334,6 +334,10 @@ export const propertiesAPI = {
   search: async (searchParams: {
     query?: string;
     location?: string;
+    city?: string;
+    state?: string;
+    coordinates?: string;
+    radius?: number;
     priceMin?: number;
     priceMax?: number;
     bedrooms?: string;

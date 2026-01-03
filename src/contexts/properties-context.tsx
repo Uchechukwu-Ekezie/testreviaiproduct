@@ -188,6 +188,26 @@ export const PropertiesProvider: React.FC<PropertiesProviderProps> = ({
   const [fallbackSearchTerm, setFallbackSearchTerm] = useState("");
   const [lastSearchParams, setLastSearchParams] = useState<any>(null);
 
+  // Helper function to transform API property data to Property format
+  // API uses image_url, Property interface uses url
+  const transformApiPropertyToProperty = useCallback((apiProperty: any): Property => {
+    const transformed = { ...apiProperty };
+    
+    // Transform image_urls from API format (image_url) to Property format (url)
+    if (apiProperty.image_urls && Array.isArray(apiProperty.image_urls)) {
+      transformed.image_urls = apiProperty.image_urls.map((img: any) => ({
+        url: img.image_url || img.url || '',
+        image_type: img.image_type,
+        alt_text: img.alt_text,
+        caption: img.caption,
+        is_primary: img.is_primary ?? false,
+        display_order: img.display_order ?? 0,
+      }));
+    }
+    
+    return transformed as Property;
+  }, []);
+
   // Use useCallback to prevent infinite loops
   const fetchProperties = useCallback(
     async (page: number = 1, requestedPageSize: number = pageSize) => {
@@ -211,7 +231,9 @@ export const PropertiesProvider: React.FC<PropertiesProviderProps> = ({
           setHasNext(!!response.next);
           setHasPrevious(!!response.previous);
         } else if (response && Array.isArray(response)) {
-          setProperties(response);
+          // Transform API properties to Property format
+          const transformedProperties = response.map(transformApiPropertyToProperty);
+          setProperties(transformedProperties);
           setCurrentPage(1);
           setTotalCount(response.length);
           setTotalPages(1);
@@ -255,7 +277,9 @@ export const PropertiesProvider: React.FC<PropertiesProviderProps> = ({
 
         // Based on your API response structure, it looks like it has results array
         if (response && response.results && Array.isArray(response.results)) {
-          setProperties(response.results);
+          // Transform API properties to Property format
+          const transformedProperties = response.results.map(transformApiPropertyToProperty);
+          setProperties(transformedProperties);
 
           // Update pagination state
           setCurrentPage(1);
@@ -266,7 +290,9 @@ export const PropertiesProvider: React.FC<PropertiesProviderProps> = ({
           setHasNext(!!response.next);
           setHasPrevious(!!response.previous);
         } else if (response && Array.isArray(response)) {
-          setProperties(response);
+          // Transform API properties to Property format
+          const transformedProperties = response.map(transformApiPropertyToProperty);
+          setProperties(transformedProperties);
 
           // Update pagination state
           setCurrentPage(1);
@@ -363,12 +389,15 @@ export const PropertiesProvider: React.FC<PropertiesProviderProps> = ({
         console.log("🔄 Fetching property from API:", id);
         const response = (await propertiesAPI.getById(id)) as any;
 
-        // Cache the response for 5 minutes
-        if (response) {
-          propertiesCache.set(cacheKey, response, 300);
+        // Transform API property to Property format
+        const transformedProperty = response ? transformApiPropertyToProperty(response) : null;
+        
+        // Cache the transformed response for 5 minutes
+        if (transformedProperty) {
+          propertiesCache.set(cacheKey, transformedProperty, 300);
         }
 
-        return response || null;
+        return transformedProperty;
       } catch (error) {
         console.error("getPropertyById: Error occurred:", error);
         const errorMessage =
@@ -396,9 +425,11 @@ export const PropertiesProvider: React.FC<PropertiesProviderProps> = ({
         // Add optional fields
         if (propertyData.description) apiPayload.description = propertyData.description;
         if (propertyData.price) apiPayload.price = propertyData.price;
-        if (propertyData.coordinate) apiPayload.coordinate = typeof propertyData.coordinate === 'string' 
-          ? propertyData.coordinate 
-          : propertyData.coordinate ? `${propertyData.coordinate.lat},${propertyData.coordinate.lng}` : undefined;
+        if (propertyData.coordinate) {
+          apiPayload.coordinate = typeof propertyData.coordinate === 'string' 
+            ? propertyData.coordinate 
+            : undefined;
+        }
         if (propertyData.property_type) apiPayload.property_type = propertyData.property_type;
         if (propertyData.status) apiPayload.status = propertyData.status;
         if (propertyData.visibility_status) apiPayload.visibility_status = propertyData.visibility_status;
@@ -449,7 +480,7 @@ export const PropertiesProvider: React.FC<PropertiesProviderProps> = ({
               };
             } else {
               return {
-                image_url: img.url || img.image_url || '',
+                image_url: img.url || '',     
                 image_type: img.image_type || "other" as const,
                 alt_text: img.alt_text,
                 caption: img.caption,
@@ -460,7 +491,7 @@ export const PropertiesProvider: React.FC<PropertiesProviderProps> = ({
           });
         }
 
-        const response = await propertiesAPI.create(apiPayload);
+        const response = await propertiesAPI.create(apiPayload as any);
 
         if (response) {
           toast.success("Property created successfully!");
@@ -660,16 +691,18 @@ export const PropertiesProvider: React.FC<PropertiesProviderProps> = ({
                   pageSize: pageSize,
                 })) as any;
 
-                if (response && response.results && Array.isArray(response.results)) {
-                  allFetchedProperties.push(...response.results);
+                  if (response && response.results && Array.isArray(response.results)) {
+                    if (propPage === 1) {
+                      propTotalCount = response.count || 0;
+                      console.log(`Total properties available: ${propTotalCount}`);
+                    }
                   
-                  if (propPage === 1) {
-                    propTotalCount = response.count || 0;
-                    console.log(`Total properties available: ${propTotalCount}`);
-                  }
+                    // Transform API properties to Property format first
+                    const transformedResults = response.results.map(transformApiPropertyToProperty);
+                    allFetchedProperties.push(...transformedResults);
                   
-                  // Filter client-side for is_added_by_agent
-                  const agentProperties = response.results.filter((prop: any) => {
+                    // Filter client-side for is_added_by_agent
+                    const agentProperties = transformedResults.filter((prop: any) => {
                     // Check multiple possible formats and field names
                     const isAgent = prop.is_added_by_agent === true || 
                                    prop.is_added_by_agent === "true" ||
@@ -768,7 +801,9 @@ export const PropertiesProvider: React.FC<PropertiesProviderProps> = ({
               }
             }
             
-            setSearchResults(allProperties);
+            // Transform API properties to Property format
+            const transformedAllProperties = allProperties.map(transformApiPropertyToProperty);
+            setSearchResults(transformedAllProperties);
             setIsSearchMode(true);
             setSearchQuery(searchParams.query || searchParams.location || "Agent Properties");
             setCurrentPage(1);
@@ -782,7 +817,9 @@ export const PropertiesProvider: React.FC<PropertiesProviderProps> = ({
 
           // If backend supports the filter, use it
           if (backendSupportsFilter && testResponse) {
-            allResults.push(...testResponse.results);
+            // Transform API properties to Property format before adding to results
+            const transformedTestResults = testResponse.results.map(transformApiPropertyToProperty);
+            allResults.push(...transformedTestResults);
             totalCount = testResponse.count || 0;
             console.log(`Total agent properties: ${totalCount}`);
             currentPage = 2; // Start from page 2 since we already fetched page 1
@@ -822,7 +859,9 @@ export const PropertiesProvider: React.FC<PropertiesProviderProps> = ({
 
           if (backendSupportsFilter) {
             console.log(`Finished fetching agent properties. Total: ${allResults.length}`);
-            setSearchResults(allResults);
+            // Transform API properties to Property format
+            const transformedAllResults = allResults.map(transformApiPropertyToProperty);
+            setSearchResults(transformedAllResults);
             setIsSearchMode(true);
             setSearchQuery(searchParams.query || searchParams.location || "Agent Properties");
             setCurrentPage(1);
@@ -833,33 +872,35 @@ export const PropertiesProvider: React.FC<PropertiesProviderProps> = ({
           }
         } else {
           // Use server-side pagination - fetch only the requested page
-          const response = (await propertiesAPI.search(searchParams)) as any;
+        const response = (await propertiesAPI.search(searchParams)) as any;
 
-          if (response && response.results && Array.isArray(response.results)) {
-            setSearchResults(response.results);
-            setIsSearchMode(true);
-            setSearchQuery(searchParams.query || searchParams.location || "");
+        if (response && response.results && Array.isArray(response.results)) {
+          // Transform API properties to Property format
+          const transformedResults = response.results.map(transformApiPropertyToProperty);
+          setSearchResults(transformedResults);
+          setIsSearchMode(true);
+          setSearchQuery(searchParams.query || searchParams.location || "");
 
-            // Update pagination state for search results
-            setCurrentPage(searchParams.page || 1);
-            setTotalCount(response.count || response.results.length);
-            setTotalPages(
-              Math.ceil(
-                (response.count || response.results.length) /
-                  (searchParams.pageSize || searchPageSize)
-              )
-            );
-            setHasNext(!!response.next);
-            setHasPrevious(!!response.previous);
-          } else {
-            setSearchResults([]);
-            setIsSearchMode(true);
-            setSearchQuery(searchParams.query || "");
-            setCurrentPage(1);
-            setTotalCount(0);
-            setTotalPages(0);
-            setHasNext(false);
-            setHasPrevious(false);
+          // Update pagination state for search results
+          setCurrentPage(searchParams.page || 1);
+          setTotalCount(response.count || response.results.length);
+          setTotalPages(
+            Math.ceil(
+              (response.count || response.results.length) /
+                (searchParams.pageSize || searchPageSize)
+            )
+          );
+          setHasNext(!!response.next);
+          setHasPrevious(!!response.previous);
+        } else {
+          setSearchResults([]);
+          setIsSearchMode(true);
+          setSearchQuery(searchParams.query || "");
+          setCurrentPage(1);
+          setTotalCount(0);
+          setTotalPages(0);
+          setHasNext(false);
+          setHasPrevious(false);
           }
         }
       } catch (error) {

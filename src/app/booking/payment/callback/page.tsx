@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { bookingAPI } from "@/lib/api";
 import { toast } from "react-toastify";
 import { Check, X, Loader2 } from "lucide-react";
 
-export default function PaymentCallbackPage() {
+function PaymentCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
@@ -141,4 +141,23 @@ export default function PaymentCallbackPage() {
     </div>
   );
 }
+
+export default function PaymentCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-black flex items-center justify-center p-4">
+          <div className="bg-white/5 rounded-xl p-8 max-w-md w-full text-center border border-white/10">
+            <Loader2 className="w-16 h-16 text-[#FFD700] mx-auto mb-4 animate-spin" />
+            <h2 className="text-2xl font-bold text-white mb-2">Loading...</h2>
+            <p className="text-white/70">Preparing payment verification...</p>
+          </div>
+        </div>
+      }
+    >
+      <PaymentCallbackContent />
+    </Suspense>
+  );
+}
+
 
