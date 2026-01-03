@@ -26,6 +26,7 @@ type Property = {
   square_footage?: string;
   phone?: string;
   created_by?: string;
+  is_added_by_agent?: boolean;
   amenities?: {
     indoor?: string[];
     kitchen?: string[];
@@ -132,6 +133,7 @@ const transformProperty = (backendProperty: Property) => {
     size: backendProperty.size || backendProperty.square_footage || "",
     phone: backendProperty.phone || "",
     created_by: backendProperty.created_by || "",
+    is_added_by_agent: backendProperty.is_added_by_agent || false,
     amenities: Array.isArray(backendProperty.amenities)
       ? backendProperty.amenities
       : backendProperty.amenities &&
@@ -174,6 +176,7 @@ interface ComponentProperty {
   size: string;
   phone: string;
   created_by: string;
+  is_added_by_agent: boolean;
   amenities: string[];
   property_url: string;
   // Additional fields for review handling
@@ -250,6 +253,7 @@ export default function PropertyListing() {
     const environmentalScoreMin = searchParams.get('environmental_score_min');
     const amenitiesContains = searchParams.get('amenities_contains');
     const createdAfter = searchParams.get('created_at_after');
+    const isAddedByAgent = searchParams.get('is_added_by_agent');
 
     // Set search parameters based on URL values
     if (location) params.location = location;
@@ -262,6 +266,7 @@ export default function PropertyListing() {
     if (environmentalScoreMin) params.environmentalScoreMin = parseFloat(environmentalScoreMin);
     if (amenitiesContains) params.amenitiesContains = amenitiesContains;
     if (createdAfter) params.createdAfter = createdAfter;
+    if (isAddedByAgent === 'true') params.isAddedByAgent = true;
 
     return params;
   };
@@ -281,6 +286,9 @@ export default function PropertyListing() {
   // 1. URL Search Parameters (highest priority) - for direct links, bookmarks, sharing
   // 2. Filter-based Search (fallback) - for user interactions with filter components
   useEffect(() => {
+    // Prevent duplicate searches
+    if (loading) return;
+    
     if (hasURLSearchParams()) {
       // Priority 1: Use URL search parameters
       const urlSearchParams = getSearchParamsFromURL();
@@ -322,8 +330,18 @@ export default function PropertyListing() {
         filterSearchParams.propertyType = filters.propertyType;
       }
 
-      console.log("Filter-based search triggered:", filterSearchParams);
-      searchProperties(filterSearchParams);
+      if (filters.isAddedByAgent) {
+        filterSearchParams.isAddedByAgent = true;
+      }
+
+      // If only agent filter is selected, still trigger search
+      const hasOtherFilters = filters.location || filters.query || filters.priceRange || 
+                              (filters.bedrooms && filters.bedrooms !== "Any") || filters.propertyType;
+      
+      if (filters.isAddedByAgent || hasOtherFilters) {
+        console.log("Filter-based search triggered:", filterSearchParams);
+        searchProperties(filterSearchParams);
+      }
     } else {
       // Clear search when no parameters
       if (isSearchMode) {
@@ -395,12 +413,16 @@ export default function PropertyListing() {
 
   // Display properties (server-side search results or all properties)
   const filteredProperties = useMemo(() => {
-    // Server-side search handles all filtering now
-    // Just sort by proximity if coordinates are available and we're filtering
+    // Server-side search handles most filtering, but we apply client-side filters as fallback
     let result = properties;
 
+    // Client-side filter for is_added_by_agent (fallback if backend doesn't support it)
+    if (filters.isAddedByAgent) {
+      result = result.filter((property) => property.is_added_by_agent === true);
+    }
+
     if (isFiltered && filters.coordinates) {
-      result = [...properties].sort((a, b) => {
+      result = [...result].sort((a, b) => {
         const distanceA = calculateDistance(
           filters.coordinates!.lat,
           filters.coordinates!.lng,
@@ -556,6 +578,11 @@ export default function PropertyListing() {
                      {searchParams.get('amenities_contains')}
                    </div>
                  )}
+                 {searchParams.get('is_added_by_agent') === 'true' && (
+                   <div className="bg-[#FFD700]/20 px-3 py-1 rounded-full text-sm text-[#FFD700]">
+                     ✓ Agent Properties
+                   </div>
+                 )}
                  
                  {/* Fallback to filter-based display if no URL params */}
                  {!hasURLSearchParams() && (
@@ -584,6 +611,11 @@ export default function PropertyListing() {
                      {filters.query && (
                        <div className="bg-white/10 px-3 py-1 rounded-full text-sm text-white">
                          &quot;{filters.query}&quot;
+                       </div>
+                     )}
+                     {filters.isAddedByAgent && (
+                       <div className="bg-[#FFD700]/20 px-3 py-1 rounded-full text-sm text-[#FFD700]">
+                         ✓ Agent Properties
                        </div>
                      )}
                    </>
@@ -686,15 +718,22 @@ export default function PropertyListing() {
 
                     {/* Action Buttons */}
                     <div className="flex gap-2 pt-2">
-                      {/* <button
-                        onClick={(e) => handleBookingClick(e, property)}
-                        className="flex-2 bg-white w-[60%]  text-black font-semibold rounded-[15px] py-2 px-4 text-sm transition-all duration-300"
-                      >
-                        Book Now
-                      </button> */}
+                      {property.is_added_by_agent && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/booking/${property.id}`);
+                          }}
+                          className="flex-2 bg-white w-[60%] text-black font-semibold rounded-[15px] py-2 px-4 text-sm transition-all duration-300 hover:bg-white/90"
+                        >
+                          Book Now
+                        </button>
+                      )}
                       <button
                         onClick={(e) => handleViewClick(e, property.id)}
-                        className="flex-1 rounded-[15px]  text-white border border-white/20  py-2 px-4 text-sm transition-colors flex items-center justify-center gap-2"
+                        className={`rounded-[15px] text-white border border-white/20 py-2 px-4 text-sm transition-colors flex items-center justify-center gap-2 ${
+                          property.is_added_by_agent ? "flex-1" : "flex-1"
+                        }`}
                       >
                         <Eye className="w-4 h-4" />
                         View

@@ -9,6 +9,7 @@ interface SearchFilters {
   bedrooms: string;
   propertyType: string;
   query: string;
+  isAddedByAgent?: boolean;
 }
 
 interface SearchContextType {
@@ -25,6 +26,7 @@ const defaultFilters: SearchFilters = {
   bedrooms: "Any",
   propertyType: "",
   query: "",
+  isAddedByAgent: false,
 };
 
 const SearchContext = createContext<SearchContextType | undefined>(undefined);
@@ -44,6 +46,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     const value = filters[key as keyof SearchFilters];
     if (key === "bedrooms") return value !== "Any";
     if (key === "coordinates") return value !== null;
+    if (key === "isAddedByAgent") return value === true;
     return value !== "" && value !== defaultFilters[key as keyof SearchFilters];
   });
 

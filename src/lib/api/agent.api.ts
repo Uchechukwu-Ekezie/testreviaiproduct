@@ -265,19 +265,81 @@ export const agentAPI = {
   createProperty: async (
     propertyData: Record<string, unknown>
   ): Promise<Property> => {
-    const agentPropertyData = {
-      ...propertyData,
+    // Transform property data to match API specification
+    const apiPayload: Record<string, unknown> = {
+      title: propertyData.title as string,
+      address: propertyData.address as string,
       is_added_by_agent: true,
     };
 
+    // Add optional fields only if they have values
+    if (propertyData.description) apiPayload.description = propertyData.description;
+    if (propertyData.price) apiPayload.price = propertyData.price;
+    if (propertyData.coordinate) apiPayload.coordinate = propertyData.coordinate;
+    if (propertyData.property_type) apiPayload.property_type = propertyData.property_type;
+    if (propertyData.status) apiPayload.status = propertyData.status;
+    if (propertyData.visibility_status) apiPayload.visibility_status = propertyData.visibility_status;
+    if (propertyData.bedrooms) apiPayload.bedrooms = propertyData.bedrooms;
+    if (propertyData.bathrooms) apiPayload.bathrooms = propertyData.bathrooms;
+    if (propertyData.size) apiPayload.size = propertyData.size;
+    if (propertyData.year_built) apiPayload.year_built = propertyData.year_built;
+    if (propertyData.lot_size) apiPayload.lot_size = propertyData.lot_size;
+    if (propertyData.square_footage) apiPayload.square_footage = propertyData.square_footage;
+    if (propertyData.state) apiPayload.state = propertyData.state;
+    if (propertyData.city) apiPayload.city = propertyData.city;
+    if (propertyData.zip_code) apiPayload.zip_code = propertyData.zip_code;
+    if (propertyData.property_url) apiPayload.property_url = propertyData.property_url;
+    if (propertyData.phone) apiPayload.phone = propertyData.phone;
+    if (propertyData.rental_grade) apiPayload.rental_grade = propertyData.rental_grade;
+    
+    // Transform listed_by to listed_by_id
+    if (propertyData.listed_by) {
+      apiPayload.listed_by_id = propertyData.listed_by;
+    } else if (propertyData.listed_by_id) {
+      apiPayload.listed_by_id = propertyData.listed_by_id;
+    }
+    
+    // Add amenities - required field, always include it
+    apiPayload.amenities = (propertyData.amenities as any) || {
+      indoor: [],
+      kitchen: [],
+      bathroom: [],
+      utility: [],
+      outdoor: [],
+      security: [],
+    };
+    
+    // Transform image_urls to match API format
+    if (propertyData.image_urls && Array.isArray(propertyData.image_urls)) {
+      apiPayload.image_urls = propertyData.image_urls.map((img: any, index: number) => {
+        if (typeof img === 'string') {
+          return {
+            image_url: img,
+            image_type: "other" as const,
+            is_primary: index === 0,
+            display_order: index,
+          };
+        } else {
+          return {
+            image_url: img.url || img.image_url || '',
+            image_type: img.image_type || "other" as const,
+            alt_text: img.alt_text || '',
+            caption: img.caption || '',
+            is_primary: img.is_primary ?? (index === 0),
+            display_order: img.display_order ?? index,
+          };
+        }
+      });
+    }
+
     console.log(
       "agentAPI.createProperty: Creating property with agent flag:",
-      agentPropertyData
+      apiPayload
     );
 
-    return apiFetch("property/", {
+    return apiFetch("/property/", {
       method: "POST",
-      body: JSON.stringify(agentPropertyData),
+      body: JSON.stringify(apiPayload),
     });
   },
 

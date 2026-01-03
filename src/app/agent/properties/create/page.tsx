@@ -97,7 +97,7 @@ export default function CreatePropertyPage() {
           : null,
         year_built: formData.year_built ? parseInt(formData.year_built) : null,
         created_by: user?.id,
-        listed_by: user?.id,
+        listed_by_id: user?.id,
         visibility_status: "visible",
         // is_added_by_agent will be automatically set to true by the API
       };

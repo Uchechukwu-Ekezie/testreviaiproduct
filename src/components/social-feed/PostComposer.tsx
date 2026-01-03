@@ -346,7 +346,7 @@ export default function PostComposer({
   return (
     <div className="border border-gray-800/50 rounded-xl sm:rounded-2xl p-3 sm:p-4 mb-4 sm:mb-6 relative overflow-visible bg-transparent backdrop-blur-sm shadow-lg">
       {/* Avatar and Textarea Row */}
-      <div className="flex gap-2 sm:gap-3 items-center relative py-2">
+      <div className="flex gap-2 sm:gap-3 items-center relative ">
         {/* Avatar */}
         <div className="flex-shrink-0 pt-1">
           {userAvatar ? (
@@ -565,13 +565,13 @@ export default function PostComposer({
               <Video className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
             </button>
 
-            <button
+            {/* <button
               className="p-1.5 sm:p-2 hover:bg-blue-500/10 rounded-full transition-colors disabled:opacity-40"
               disabled={isProcessing}
               title="Add emoji"
             >
               <Smile className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
-            </button>
+            </button> */}
 
             <button
               onClick={captureLocation}

@@ -7,14 +7,14 @@ import Image from "next/image";
 import PriceRangeInput from "./PriceRangeInput";
 import SpecificPropertySearch from "./SpecificPropertySearch";
 import round from "../../public/Image/Vector.svg";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSearch } from "@/contexts/search-context";
 import { useProperties } from "@/contexts/properties-context";
 
 export default function HeroSection() {
   const router = useRouter();
-  const { setFilters } = useSearch();
+  const { setFilters, filters } = useSearch();
   const { searchProperties } = useProperties();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -27,7 +27,13 @@ export default function HeroSection() {
   const [selectedBedrooms, setSelectedBedrooms] = useState("Any");
   const [selectedPropertyType, setSelectedPropertyType] =
     useState("e.g Apartment");
+  const [isAddedByAgent, setIsAddedByAgent] = useState(filters.isAddedByAgent || false);
   const [showSpecificSearch, setShowSpecificSearch] = useState(false);
+  
+  // Sync checkbox with filters context
+  useEffect(() => {
+    setIsAddedByAgent(filters.isAddedByAgent || false);
+  }, [filters.isAddedByAgent]);
   const [specificSearchQuery, setSpecificSearchQuery] = useState("");
   const [selectedProperty, setSelectedProperty] = useState<{
     address: string;
@@ -48,6 +54,7 @@ export default function HeroSection() {
         ? ""
         : selectedPropertyType,
       query: searchQuery,
+      isAddedByAgent: isAddedByAgent,
     };
 
     // Search clicked
@@ -271,6 +278,76 @@ export default function HeroSection() {
                         </option>
                       </select>
                     </div>
+                  </div>
+
+                  {/* Added by Agent Filter */}
+                  <div className="mt-4 flex items-center justify-center">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isAddedByAgent}
+                        onChange={async (e) => {
+                          const newValue = e.target.checked;
+                          setIsAddedByAgent(newValue);
+                          // Trigger search immediately when checkbox is toggled
+                          const searchData = {
+                            location: selectedLocation,
+                            coordinates: locationCoordinates,
+                            priceRange: selectedPriceRange,
+                            bedrooms: selectedBedrooms,
+                            propertyType: selectedPropertyType.startsWith("e.g")
+                              ? ""
+                              : selectedPropertyType,
+                            query: searchQuery,
+                            isAddedByAgent: newValue,
+                          };
+                          setFilters(searchData);
+                          
+                          // If on properties page, trigger search immediately
+                          if (window.location.pathname === "/properties") {
+                            const searchParams: any = {
+                              pageSize: 20,
+                              page: 1,
+                            };
+                            
+                            if (searchData.location) searchParams.location = searchData.location;
+                            if (searchData.query) searchParams.query = searchData.query;
+                            if (searchData.priceRange) {
+                              const priceMatch = searchData.priceRange.match(/(\d+)/);
+                              if (priceMatch) {
+                                const price = parseInt(priceMatch[1]);
+                                searchParams.priceMin = price;
+                              }
+                            }
+                            if (searchData.bedrooms && searchData.bedrooms !== "Any") {
+                              searchParams.bedrooms = searchData.bedrooms;
+                            }
+                            if (searchData.propertyType) {
+                              searchParams.propertyType = searchData.propertyType;
+                            }
+                            if (newValue) {
+                              searchParams.isAddedByAgent = true;
+                            }
+                            
+                            await searchProperties(searchParams);
+                            
+                            setTimeout(() => {
+                              const propertiesSection = document.getElementById("properties");
+                              if (propertiesSection) {
+                                propertiesSection.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "start",
+                                });
+                              }
+                            }, 100);
+                          }
+                        }}
+                        className="w-4 h-4 rounded border-white/20 bg-transparent text-[#FFD700] focus:ring-2 focus:ring-[#FFD700]/50 focus:ring-offset-0"
+                      />
+                      <span className="text-sm text-white/80">
+                        Show only properties added by agents
+                      </span>
+                    </label>
                   </div>
 
                   {/* Search Button */}

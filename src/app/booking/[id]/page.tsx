@@ -15,7 +15,8 @@ import {
 import Image from "next/image";
 import house from "../../../../public/Image/house.jpeg";
 import AuthGuard from "@/components/AuthGuard";
-import { propertiesAPI } from "@/lib/api";
+import { propertiesAPI, bookingAPI } from "@/lib/api";
+import { toast } from "react-toastify";
 
 // Sample property data - replace w
 const propertyData = [
@@ -84,6 +85,8 @@ export default function BookingPage({
 
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createdBooking, setCreatedBooking] = useState<any>(null);
   const [property, setProperty] = useState<(typeof propertyData)[0] | null>(
     null
   );
@@ -103,9 +106,15 @@ export default function BookingPage({
       setIsLoading(true);
       try {
         // First try to fetch from API
-        const apiProperty = await propertiesAPI.getById(propertyId);
+        const apiProperty = await propertiesAPI.getById(propertyId) as any;
 
         if (apiProperty) {
+          // Check if property is added by agent
+          if (!apiProperty.is_added_by_agent) {
+            setProperty(null);
+            setIsLoading(false);
+            return;
+          }
           // Type cast the API response to match our property type
           setProperty(apiProperty as (typeof propertyData)[0]);
           setIsLoading(false);
@@ -115,7 +124,7 @@ export default function BookingPage({
         // API fetch failed, fallback to sample data
       }
 
-      // Fallback to sample data
+      // Fallback to sample data (only for testing, should not be used in production)
       const foundProperty = propertyData.find((p) => p.id === propertyId);
 
       setProperty(foundProperty || null);
@@ -140,9 +149,9 @@ export default function BookingPage({
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-white text-center">
-          <h2 className="text-2xl font-bold mb-2">Property Not Found</h2>
+          <h2 className="text-2xl font-bold mb-2">Property Not Available for Booking</h2>
           <p className="text-white/70 mb-4">
-            The property you&apos;re looking for doesn&apos;t exist.
+            This property is not available for booking. Only properties added by agents can be booked.
           </p>
           <button
             onClick={() => router.push("/properties")}
@@ -170,10 +179,69 @@ export default function BookingPage({
     if (step > 1) setStep(step - 1);
   };
 
-  const handleSubmit = () => {
-    // Here you would typically send the booking data to your API
-    alert("Booking request submitted successfully!");
-    router.push("/properties");
+  const handleSubmit = async () => {
+    // Validate required fields
+    if (!bookingData.checkIn || !bookingData.checkOut) {
+      toast.error("Please select check-in and check-out dates");
+      return;
+    }
+    if (!bookingData.firstName || !bookingData.lastName) {
+      toast.error("Please enter your full name");
+      return;
+    }
+    if (!bookingData.email || !bookingData.phone) {
+      toast.error("Please enter your email and phone number");
+      return;
+    }
+    if (!property?.id) {
+      toast.error("Property information is missing");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // Create booking
+      const bookingPayload = {
+        property_id: property.id,
+        guest_name: `${bookingData.firstName} ${bookingData.lastName}`,
+        guest_email: bookingData.email,
+        guest_phone: bookingData.phone,
+        check_in_date: bookingData.checkIn,
+        check_out_date: bookingData.checkOut,
+        number_of_guests: bookingData.guests,
+        special_requests: bookingData.specialRequests || undefined,
+      };
+
+      const booking = await bookingAPI.create(bookingPayload) as any;
+      setCreatedBooking(booking);
+
+      toast.success("Booking created successfully! Redirecting to payment...");
+
+      // Initialize payment
+      if (booking?.id) {
+        try {
+          const paymentResponse = await bookingAPI.initializePayment(booking.id) as any;
+          
+          if (paymentResponse?.authorization_url) {
+            // Redirect to Paystack payment page
+            window.location.href = paymentResponse.authorization_url;
+          } else {
+            toast.error("Failed to initialize payment. Please try again.");
+            router.push(`/user-dashboard/bookings`);
+          }
+        } catch (paymentError: any) {
+          console.error("Payment initialization error:", paymentError);
+          toast.error(paymentError.message || "Failed to initialize payment");
+          // Still redirect to bookings page so user can see their booking
+          router.push(`/user-dashboard/bookings`);
+        }
+      }
+    } catch (error: any) {
+      console.error("Booking creation error:", error);
+      toast.error(error.message || "Failed to create booking. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const renderStars = (rating: number) => {
@@ -494,9 +562,16 @@ export default function BookingPage({
             </button>
             <button
               onClick={step === 3 ? handleSubmit : handleNext}
-              className="px-8 py-4 bg-[#FFD700] text-black font-semibold rounded-lg hover:bg-[#FFA500] transition-colors text-lg"
+              disabled={isSubmitting}
+              className="px-8 py-4 bg-[#FFD700] text-black font-semibold rounded-lg hover:bg-[#FFA500] transition-colors text-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {step === 3 ? "Confirm Booking" : "Next"}
+              {isSubmitting ? (
+                "Processing..."
+              ) : step === 3 ? (
+                "Confirm Booking"
+              ) : (
+                "Next"
+              )}
             </button>
           </div>
         </div>

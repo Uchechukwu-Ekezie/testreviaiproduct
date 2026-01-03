@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { apiFetch } from "@/lib/api";
+import { bookingAPI } from "@/lib/api";
 import { useAuth } from "@/contexts/auth-context";
+import { toast } from "react-toastify";
 
 // Interfaces for type safety
 interface Booking {
@@ -55,6 +56,7 @@ export default function Bookings() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("recent");
   const [filterType, setFilterType] = useState("all");
+  const [processingBooking, setProcessingBooking] = useState<string | null>(null);
 
   // Fetch bookings data
   useEffect(() => {
@@ -68,11 +70,14 @@ export default function Bookings() {
         setLoading(true);
         setError(null);
 
-        // Try to fetch bookings from API
-        const response = await apiFetch("bookings/mine/");
-        const bookingsData = response || [];
+        // Fetch bookings from API
+        const response = await bookingAPI.getMine({
+          page: 1,
+          page_size: 100,
+        }) as any;
         
-        // Fetched bookings
+        // Handle paginated response or array response
+        const bookingsData = response?.bookings || response || [];
         setBookings(bookingsData);
 
       } catch (err: any) {
@@ -214,6 +219,54 @@ export default function Bookings() {
       return "bg-yellow-500/20 text-yellow-400";
     }
     return "bg-gray-500/20 text-gray-400";
+  };
+
+  const handleCancelBooking = async (bookingId: string) => {
+    if (!confirm("Are you sure you want to cancel this booking?")) {
+      return;
+    }
+
+    setProcessingBooking(bookingId);
+    try {
+      await bookingAPI.cancel(bookingId);
+      toast.success("Booking cancelled successfully");
+      // Refresh bookings list
+      const response = await bookingAPI.getMine({
+        page: 1,
+        page_size: 100,
+      }) as any;
+      const bookingsData = response?.bookings || response || [];
+      setBookings(bookingsData);
+    } catch (error: any) {
+      console.error("Error cancelling booking:", error);
+      toast.error(error.message || "Failed to cancel booking");
+    } finally {
+      setProcessingBooking(null);
+    }
+  };
+
+  const handlePayBooking = async (bookingId: string) => {
+    setProcessingBooking(bookingId);
+    try {
+      const paymentResponse = await bookingAPI.initializePayment(bookingId) as any;
+      
+      if (paymentResponse?.authorization_url) {
+        // Redirect to Paystack payment page
+        window.location.href = paymentResponse.authorization_url;
+      } else {
+        toast.error("Failed to initialize payment");
+      }
+    } catch (error: any) {
+      console.error("Error initializing payment:", error);
+      toast.error(error.message || "Failed to initialize payment");
+      setProcessingBooking(null);
+    }
+  };
+
+  const handleViewDetails = (bookingId: string) => {
+    // Navigate to booking details page or show modal
+    // For now, just show a toast
+    toast.info("Booking details feature coming soon");
   };
 
   if (!isAuthenticated) {
@@ -455,14 +508,30 @@ export default function Bookings() {
                       )}
                     </div>
 
-                    <div className="px-4 py-3 flex items-start w-full gap-2 mt-3 md:ml-[-20px]">
-                      <button className="px-3 bg-[#373737] py-1 text-sm text-gray-400 hover:text-white rounded-[15px]">
-                        Reschedule
-                      </button>
-                      <button className="px-3 bg-[#373737] py-1 text-sm text-red-400 hover:text-red-300 rounded-[15px]">
-                        Cancel
-                      </button>
-                      <button className="px-3 bg-[#373737] py-1 text-sm text-blue-400 hover:text-blue-300 ml-auto rounded-[15px]">
+                    <div className="px-4 py-3 flex items-start w-full gap-2 mt-3 md:ml-[-20px] flex-wrap">
+                      {booking.status?.toLowerCase() === "pending" && (
+                        <button
+                          onClick={() => handlePayBooking(booking.id)}
+                          disabled={processingBooking === booking.id}
+                          className="px-3 bg-[#373737] py-1 text-sm text-green-400 hover:text-green-300 rounded-[15px] disabled:opacity-50"
+                        >
+                          {processingBooking === booking.id ? "Processing..." : "Pay Now"}
+                        </button>
+                      )}
+                      {booking.status?.toLowerCase() !== "cancelled" && 
+                       booking.status?.toLowerCase() !== "completed" && (
+                        <button
+                          onClick={() => handleCancelBooking(booking.id)}
+                          disabled={processingBooking === booking.id}
+                          className="px-3 bg-[#373737] py-1 text-sm text-red-400 hover:text-red-300 rounded-[15px] disabled:opacity-50"
+                        >
+                          {processingBooking === booking.id ? "Processing..." : "Cancel"}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleViewDetails(booking.id)}
+                        className="px-3 bg-[#373737] py-1 text-sm text-blue-400 hover:text-blue-300 ml-auto rounded-[15px]"
+                      >
                         View Details
                       </button>
                     </div>

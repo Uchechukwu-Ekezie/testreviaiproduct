@@ -226,6 +226,7 @@ interface PropertyDetailData {
   status: string;
   property_type: string;
   year_built: number | null;
+  is_added_by_agent?: boolean;
   reviews: {
     id: number | string;
     name: string;
@@ -277,6 +278,7 @@ const transformApiDataToUI = (property: Property) => ({
   property_url: property.property_url || "",
   status: property.status || "available",
   property_type: property.property_type || "apartment",
+  is_added_by_agent: property.is_added_by_agent || false,
   year_built:
     property.year_built === undefined || property.year_built === null
       ? null
@@ -639,13 +641,15 @@ export default function PropertyDetailClient({
                 {propertyDetailData.price}
               </div>
 
-              {/* Book Now Button */}
-              <button
-                onClick={() => router.push(`/booking/${propertyId}`)}
-                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
-              >
-                Book Now
-              </button>
+              {/* Book Now Button - Only show for agent-added properties */}
+              {propertyDetailData.is_added_by_agent && (
+                <button
+                  onClick={() => router.push(`/booking/${propertyId}`)}
+                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
+                >
+                  Book Now
+                </button>
+              )}
             </div>
           </div>
 

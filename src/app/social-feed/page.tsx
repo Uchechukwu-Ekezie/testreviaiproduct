@@ -248,6 +248,68 @@ export default function SocialFeed() {
     }
   }, [selectedFilter, fetchAgents]);
 
+  // Auto-load all posts when page loads (similar to media view page)
+  const isLoadingAllPosts = useRef(false);
+  const hasStartedAutoLoad = useRef(false);
+  const previousPostsLength = useRef(0);
+  
+  useEffect(() => {
+    const loadAllPosts = async () => {
+      // Only load if we have posts, there are more to load, and we're not already loading
+      if (posts.length > 0 && hasMore && !isLoadingPosts && !isLoadingAllPosts.current && !hasStartedAutoLoad.current) {
+        hasStartedAutoLoad.current = true;
+        isLoadingAllPosts.current = true;
+        previousPostsLength.current = posts.length;
+        console.log(`[SocialFeed] Auto-loading all posts. Current: ${posts.length}, hasMore: ${hasMore}`);
+        
+        let attempts = 0;
+        const maxAttempts = 50; // Safety limit to prevent infinite loops
+        let lastPostsCount = posts.length;
+        let noChangeCount = 0; // Track consecutive loads with no new posts
+        
+        while (hasMore && !isLoadingPosts && attempts < maxAttempts) {
+          console.log(`[SocialFeed] Loading more posts - attempt ${attempts + 1}, current count: ${posts.length}`);
+          await loadMorePosts();
+          attempts++;
+          
+          // Wait for state to update (posts array and hasMore)
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Check if we got new posts
+          if (posts.length === lastPostsCount) {
+            noChangeCount++;
+            // If we've had 2 consecutive loads with no new posts, stop
+            if (noChangeCount >= 2) {
+              console.log(`[SocialFeed] No new posts loaded after ${noChangeCount} attempts, stopping`);
+              break;
+            }
+          } else {
+            noChangeCount = 0; // Reset counter if we got new posts
+            lastPostsCount = posts.length;
+          }
+        }
+        
+        if (attempts > 0) {
+          console.log(`[SocialFeed] Finished auto-loading posts. Total: ${posts.length}, attempts: ${attempts}`);
+        }
+        
+        isLoadingAllPosts.current = false;
+      }
+    };
+
+    // Start loading all posts after initial posts are loaded and page is mounted
+    // Only start once when we first get posts
+    if (posts.length > 0 && hasMore && !isLoadingPosts && isMounted && !hasStartedAutoLoad.current && previousPostsLength.current === 0) {
+      previousPostsLength.current = posts.length;
+      // Small delay to ensure initial render is complete
+      const timeoutId = setTimeout(() => {
+        loadAllPosts();
+      }, 1000);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [posts.length, hasMore, isLoadingPosts, loadMorePosts, isMounted]);
+
   useEffect(() => {
     if (selectedFilter === "agents" && agents.length > 0) {
       agents.forEach((a) => a.id && fetchPropertiesByUserId(a.id));
@@ -356,67 +418,143 @@ export default function SocialFeed() {
   // Improved infinite scroll with Intersection Observer + mobile fallback
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
   const isLoadingMoreRef = useRef(false);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const scrollHandlerRef = useRef<(() => void) | null>(null);
+  const containerRef = useRef<HTMLElement | Window | null>(null);
 
   useEffect(() => {
-    const currentTrigger = loadMoreTriggerRef.current;
+    if (!isMounted) return;
 
-    if (!currentTrigger) return;
+    // Small delay to ensure DOM is ready
+    const timeoutId = setTimeout(() => {
+      const currentTrigger = loadMoreTriggerRef.current;
 
-    // Check if mobile device
-    const checkIsMobile = () => window.innerWidth < 768;
-    let isMobileDevice = checkIsMobile();
+      if (!currentTrigger) {
+        console.log("[SocialFeed] Trigger element not found");
+        return;
+      }
 
-    // Intersection Observer with adaptive rootMargin
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (entry.isIntersecting && hasMore && !isLoadingPosts && !isLoadingMoreRef.current) {
-          console.log(
-            "[SocialFeed] Intersection Observer triggered - Loading more posts"
-          );
+      // Cleanup previous observers/listeners
+      if (observerRef.current && currentTrigger) {
+        observerRef.current.unobserve(currentTrigger);
+      }
+      if (scrollHandlerRef.current && containerRef.current) {
+        containerRef.current.removeEventListener("scroll", scrollHandlerRef.current);
+      }
+
+      // Find the scrolling container (main element in SocialFeedClientWrapper)
+      const findScrollingContainer = (): HTMLElement | null => {
+        let element: HTMLElement | null = currentTrigger;
+        while (element && element !== document.body) {
+          const style = window.getComputedStyle(element);
+          if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+            console.log("[SocialFeed] Found scrolling container:", element);
+            return element;
+          }
+          element = element.parentElement;
+        }
+        console.log("[SocialFeed] No scrolling container found, using viewport");
+        return null;
+      };
+
+      const scrollingContainer = findScrollingContainer();
+
+      // Intersection Observer - use scrolling container as root if found
+      const observer = new IntersectionObserver(
+        (entries) => {
+          const entry = entries[0];
+          console.log("[SocialFeed] Intersection Observer entry:", {
+            isIntersecting: entry.isIntersecting,
+            hasMore,
+            isLoadingPosts,
+            isLoadingMore: isLoadingMoreRef.current,
+            intersectionRatio: entry.intersectionRatio
+          });
+          
+          if (entry.isIntersecting && hasMore && !isLoadingPosts && !isLoadingMoreRef.current) {
+            console.log("[SocialFeed] Intersection Observer triggered - Loading more posts");
+            isLoadingMoreRef.current = true;
+            loadMorePosts().finally(() => {
+              isLoadingMoreRef.current = false;
+            });
+          }
+        },
+        {
+          root: scrollingContainer, // Use scrolling container as root
+          rootMargin: "400px", // Start loading 400px before the trigger
+          threshold: 0.1,
+        }
+      );
+
+      observer.observe(currentTrigger);
+      observerRef.current = observer;
+      console.log("[SocialFeed] Intersection Observer set up", {
+        hasMore,
+        triggerElement: currentTrigger,
+        scrollingContainer: scrollingContainer
+      });
+
+      // Fallback scroll listener on the actual scrolling container
+      const handleScroll = () => {
+        if (isLoadingMoreRef.current || !hasMore || isLoadingPosts) {
+          return;
+        }
+
+        const container = scrollingContainer || document.documentElement;
+        
+        const scrollTop = scrollingContainer 
+          ? scrollingContainer.scrollTop 
+          : window.scrollY;
+        
+        const scrollHeight = scrollingContainer
+          ? scrollingContainer.scrollHeight
+          : document.documentElement.scrollHeight;
+        
+        const clientHeight = scrollingContainer
+          ? scrollingContainer.clientHeight
+          : window.innerHeight;
+
+        const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
+
+        // Trigger load when within 500px of bottom
+        if (distanceFromBottom < 500) {
+          console.log("[SocialFeed] Scroll listener triggered - Loading more posts", {
+            distanceFromBottom,
+            scrollTop,
+            scrollHeight,
+            clientHeight,
+            hasMore,
+            isLoadingPosts
+          });
           isLoadingMoreRef.current = true;
           loadMorePosts().finally(() => {
             isLoadingMoreRef.current = false;
           });
         }
-      },
-      {
-        root: null,
-        rootMargin: "200px", // Smaller margin for better mobile support
-        threshold: 0.1,
-      }
-    );
+      };
 
-    observer.observe(currentTrigger);
-
-    // Fallback scroll listener for mobile (more reliable on mobile browsers)
-    const handleScroll = () => {
-      if (isLoadingMoreRef.current || !hasMore || isLoadingPosts) return;
-
-      const scrollPosition = window.scrollY + window.innerHeight;
-      const documentHeight = document.documentElement.scrollHeight;
-      const distanceFromBottom = documentHeight - scrollPosition;
-
-      // Trigger load when within 500px of bottom
-      if (distanceFromBottom < 500) {
-        console.log("[SocialFeed] Scroll listener triggered - Loading more posts");
-        isLoadingMoreRef.current = true;
-        loadMorePosts().finally(() => {
-          isLoadingMoreRef.current = false;
-        });
-      }
-    };
-
-    // Always add scroll listener as fallback (works better on mobile)
-    window.addEventListener("scroll", handleScroll, { passive: true });
+      // Add scroll listener to the actual scrolling container
+      const containerToListen = scrollingContainer || window;
+      containerToListen.addEventListener("scroll", handleScroll, { passive: true });
+      scrollHandlerRef.current = handleScroll;
+      containerRef.current = containerToListen;
+      console.log("[SocialFeed] Scroll listener attached to:", containerToListen);
+    }, 100);
 
     return () => {
-      if (currentTrigger) {
-        observer.unobserve(currentTrigger);
+      clearTimeout(timeoutId);
+      const currentTrigger = loadMoreTriggerRef.current;
+      if (observerRef.current && currentTrigger) {
+        observerRef.current.unobserve(currentTrigger);
+        observerRef.current = null;
       }
-      window.removeEventListener("scroll", handleScroll);
+      if (scrollHandlerRef.current && containerRef.current) {
+        containerRef.current.removeEventListener("scroll", scrollHandlerRef.current);
+        scrollHandlerRef.current = null;
+        containerRef.current = null;
+      }
     };
-  }, [hasMore, isLoadingPosts, loadMorePosts]);
+  }, [hasMore, isLoadingPosts, loadMorePosts, isMounted]);
 
   const handleCreatePost = useCallback(
     async (
@@ -643,10 +781,11 @@ export default function SocialFeed() {
               })}
 
               {/* Intersection Observer trigger for infinite scroll - only show after mount */}
-              {isMounted && hasMore && posts.length > 0 && (
+              {isMounted && hasMore && combinedPosts.length > 0 && (
                 <div
                   ref={loadMoreTriggerRef}
-                  className="h-20 flex items-center justify-center"
+                  className="h-20 flex items-center justify-center min-h-[80px]"
+                  style={{ minHeight: '80px' }}
                 >
                   {isLoadingPosts && (
                     <p className="text-center text-gray-400 py-8 text-sm">
