@@ -156,6 +156,9 @@ export { settingsAPI } from "./settings.api";
 // Posts API - Posts and comments management
 export { postAPI } from "./post.api";
 
+// Booking API - Booking management and payment processing
+export { bookingAPI } from "./booking.api";
+
 // ===========================
 // Backward Compatibility Aliases
 // ===========================

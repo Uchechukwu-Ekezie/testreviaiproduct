@@ -12,7 +12,7 @@ import {
   AlertCircle,
   MapPin,
 } from "lucide-react";
-import { useProperties } from "@/contexts/properties-context";
+import { useProperties, type Property } from "@/contexts/properties-context";
 import { useAuth } from "@/contexts/auth-context";
 import MapPicker from "@/components/agent/MapPicker";
 
@@ -410,50 +410,56 @@ const AddPropertyPage = () => {
       showToast("Creating property...", "success");
 
       // Prepare the payload according to API specification
+      // Use type assertion to satisfy TypeScript while maintaining runtime flexibility
       const propertyPayload = {
         title: formData.title.trim(),
-        description: formData.description.trim(),
-        price: formData.price.trim(),
         address: formData.address.trim(),
-        property_type: formData.property_type as
-          | "apartment"
-          | "house"
-          | "condo"
-          | "land",
+        property_type: formData.property_type as "apartment" | "house" | "condo" | "land",
         status: formData.status as "for_rent" | "for_sale" | "just_listing",
-        visibility_status: formData.visibility_status as
-          | "visible"
-          | "not_visible",
-        bedrooms: formData.bedrooms.trim() || undefined,
-        bathrooms: formData.bathrooms.trim() || undefined,
-        size: formData.size.trim() || undefined,
-        square_footage: formData.square_footage.trim() || undefined,
-        year_built: formData.year_built.trim() || undefined,
-        lot_size: formData.lot_size.trim() || undefined,
-        state: formData.state.trim() || undefined,
-        city: formData.city.trim() || undefined,
-        zip_code: formData.zip_code.trim() || undefined,
-        phone: formData.phone.trim() || undefined,
-        coordinate: formData.coordinate.trim() || undefined,
-        property_url: formData.property_url.trim() || undefined,
-        amenities: formData.amenities,
-        image_urls: uploadedImageUrls,
-        listed_by: user?.id || undefined,
-        is_added_by_agent: true as const, // Automatically set to true when agents create properties
-        scrape_status: "pending" as
-          | "error"
-          | "pending"
-          | "completed"
-          | "no_contact",
-      };
+        visibility_status: formData.visibility_status as "visible" | "not_visible",
+        scrape_status: "pending" as const,
+      } as Omit<Property, "id" | "created_at" | "updated_at">;
 
-      // Filter out empty string values and convert to null
-      Object.keys(propertyPayload).forEach((key) => {
-        const typedKey = key as keyof typeof propertyPayload;
-        if (propertyPayload[typedKey] === "") {
-          (propertyPayload as Record<string, unknown>)[key] = null;
-        }
-      });
+      // Add required/optional fields only if they have values
+      if (formData.description.trim()) propertyPayload.description = formData.description.trim();
+      if (formData.price.trim()) propertyPayload.price = formData.price.trim();
+      if (formData.bedrooms.trim()) propertyPayload.bedrooms = formData.bedrooms.trim();
+      if (formData.bathrooms.trim()) propertyPayload.bathrooms = formData.bathrooms.trim();
+      if (formData.size.trim()) propertyPayload.size = formData.size.trim();
+      if (formData.square_footage.trim()) propertyPayload.square_footage = formData.square_footage.trim();
+      if (formData.year_built.trim()) propertyPayload.year_built = formData.year_built.trim();
+      if (formData.lot_size.trim()) propertyPayload.lot_size = formData.lot_size.trim();
+      if (formData.state.trim()) propertyPayload.state = formData.state.trim();
+      if (formData.city.trim()) propertyPayload.city = formData.city.trim();
+      if (formData.zip_code.trim()) propertyPayload.zip_code = formData.zip_code.trim();
+      if (formData.phone.trim()) propertyPayload.phone = formData.phone.trim();
+      if (formData.coordinate.trim()) propertyPayload.coordinate = formData.coordinate.trim();
+      if (formData.property_url.trim()) propertyPayload.property_url = formData.property_url.trim();
+      
+      // Add image_urls in the correct format
+      if (uploadedImageUrls.length > 0) {
+        propertyPayload.image_urls = uploadedImageUrls.map((img) => ({
+          url: img.url,
+          image_type: "other" as const,
+          alt_text: img.alt_text || "",
+          caption: img.caption || "",
+          is_primary: img.is_primary || false,
+          display_order: img.display_order || 0,
+        }));
+      }
+      
+      if (user?.id) (propertyPayload as any).listed_by = user.id;
+      propertyPayload.is_added_by_agent = true;
+      
+      // Add amenities - required field, send empty object if no amenities selected
+      propertyPayload.amenities = formData.amenities || {
+        indoor: [],
+        kitchen: [],
+        bathroom: [],
+        utility: [],
+        outdoor: [],
+        security: [],
+      };
 
       console.log("Property payload:", propertyPayload);
 

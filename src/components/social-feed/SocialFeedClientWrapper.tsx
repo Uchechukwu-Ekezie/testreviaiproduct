@@ -121,6 +121,10 @@ export default function SocialFeedClientWrapper({
   // Media queries
   const isMobile = useMediaQuery("(max-width: 768px)");
 
+  // Scroll state for header background
+  const [isScrolled, setIsScrolled] = useState(false);
+  const mainContentRef = useRef<HTMLElement>(null);
+
   // Hydration-safe initialization
   useEffect(() => {
     setIsHydrated(true);
@@ -128,6 +132,20 @@ export default function SocialFeedClientWrapper({
     if (stored) {
       setSidebarOpen(stored === "true");
     }
+  }, []);
+
+  // Detect scroll on main content area
+  useEffect(() => {
+    const mainElement = mainContentRef.current;
+    if (!mainElement) return;
+
+    const handleScroll = () => {
+      const scrollTop = mainElement.scrollTop;
+      setIsScrolled(scrollTop > 10);
+    };
+
+    mainElement.addEventListener("scroll", handleScroll, { passive: true });
+    return () => mainElement.removeEventListener("scroll", handleScroll);
   }, []);
 
   useEffect(() => {
@@ -292,10 +310,11 @@ export default function SocialFeedClientWrapper({
           startNewChat={() => router.push("/")}
           isMediumScreen={useMediaQuery("(min-width: 768px)")}
           isClient={true}
+          isScrolled={isScrolled}
         />
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <main ref={mainContentRef} className="flex-1 overflow-y-auto">{children}</main>
 
         {/* Floating Chat Input - Hidden on post detail pages */}
         {!isPostDetailPage && (

@@ -346,7 +346,7 @@ export default function PostComposer({
   return (
     <div className="border border-gray-800/50 rounded-xl sm:rounded-2xl p-3 sm:p-4 mb-4 sm:mb-6 relative overflow-visible bg-transparent backdrop-blur-sm shadow-lg">
       {/* Avatar and Textarea Row */}
-      <div className="flex gap-2 sm:gap-3 items-center relative">
+      <div className="flex gap-2 sm:gap-3 items-center relative ">
         {/* Avatar */}
         <div className="flex-shrink-0 pt-1">
           {userAvatar ? (
@@ -389,7 +389,7 @@ export default function PostComposer({
           />
 
           {/* Dropdown toggle button - only shows for special placeholders */}
-          {shouldShowDropdownOptions() && caption.trim().length === 0 && (
+          {/* {shouldShowDropdownOptions() && caption.trim().length === 0 && (
             <button
               data-dropdown-button
               onClick={handleToggleDropdown}
@@ -402,10 +402,10 @@ export default function PostComposer({
                 }`}
               />
             </button>
-          )}
+          )} */}
 
           {/* Dropdown for special placeholders */}
-          {showDropdown &&
+          {/* {showDropdown &&
             shouldShowDropdownOptions() &&
             caption.trim().length === 0 && (
               <div
@@ -438,7 +438,7 @@ export default function PostComposer({
                   <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5 rotate-[-90deg] group-hover:translate-x-1 transition-transform text-gray-400" />
                 </button>
               </div>
-            )}
+            )} */}
         </div>
       </div>
 
@@ -510,7 +510,7 @@ export default function PostComposer({
       )}
 
       {/* Location display */}
-      {location && (
+      {/* {location && (
         <div className="mt-2 sm:mt-3 flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-400">
           <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500" />
           <span className="truncate flex-1">
@@ -525,7 +525,7 @@ export default function PostComposer({
             Remove
           </button>
         </div>
-      )}
+      )} */}
 
       {/* X.com style bottom bar */}
       {(isExpanded || hasContent) && (
@@ -565,13 +565,13 @@ export default function PostComposer({
               <Video className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
             </button>
 
-            <button
+            {/* <button
               className="p-1.5 sm:p-2 hover:bg-blue-500/10 rounded-full transition-colors disabled:opacity-40"
               disabled={isProcessing}
               title="Add emoji"
             >
               <Smile className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
-            </button>
+            </button> */}
 
             <button
               onClick={captureLocation}

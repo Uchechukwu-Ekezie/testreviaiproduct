@@ -4,6 +4,7 @@ import { useState } from "react";
 import { X, Check, Phone, Mail, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
+import { bookingAPI } from "@/lib/api";
 
 interface Property {
   id: string;
@@ -41,19 +42,62 @@ export default function BookingModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!property?.id) {
+      toast.error("Property information is missing");
+      return;
+    }
+
+    // Validate required fields
+    if (!formData.checkIn || !formData.checkOut) {
+      toast.error("Please select check-in and check-out dates");
+      return;
+    }
+    if (!formData.name || !formData.email || !formData.phone) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Create booking
+      const bookingPayload = {
+        property_id: property.id,
+        guest_name: formData.name,
+        guest_email: formData.email,
+        guest_phone: formData.phone,
+        check_in_date: formData.checkIn,
+        check_out_date: formData.checkOut,
+        number_of_guests: parseInt(formData.guests),
+        special_requests: formData.message || undefined,
+      };
+
+      const booking = await bookingAPI.create(bookingPayload) as any;
 
       // Show success toast
       toast.success("Booking request submitted successfully!");
 
+      // Initialize payment
+      if (booking?.id) {
+        try {
+          const paymentResponse = await bookingAPI.initializePayment(booking.id) as any;
+          
+          if (paymentResponse?.authorization_url) {
+            // Redirect to Paystack payment page
+            window.location.href = paymentResponse.authorization_url;
+            return; // Don't show success screen if redirecting
+          }
+        } catch (paymentError: any) {
+          console.error("Payment initialization error:", paymentError);
+          // Still show success screen even if payment init fails
+        }
+      }
+
       setStep("success");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Booking error:", error);
-      toast.error("Failed to submit booking. Please try again.");
+      toast.error(error.message || "Failed to submit booking. Please try again.");
     } finally {
       setIsSubmitting(false);
     }

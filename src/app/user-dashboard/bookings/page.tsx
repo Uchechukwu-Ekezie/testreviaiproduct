@@ -3,25 +3,39 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { apiFetch } from "@/lib/api";
+import { bookingAPI, propertiesAPI } from "@/lib/api";
 import { useAuth } from "@/contexts/auth-context";
+import { toast } from "react-toastify";
 
 // Interfaces for type safety
 interface Booking {
   id: string;
-  property: string | {
+  property_booked_id?: string;
+  property?: string | {
     id: string;
     title: string;
     address: string;
     image_url?: string;
+    image_urls?: Array<{
+      url?: string;
+      image_url?: string;
+      is_primary?: boolean;
+    }>;
+    images?: Array<{
+      url?: string;
+      image_url?: string;
+      is_primary?: boolean;
+    }>;
   };
-  type: string;
+  type?: string;
   status: string;
-  date: string;
+  date?: string;
   created_at: string;
   updated_at: string;
   location?: string;
-  price: number;
+  price?: number | string;
+  total_amount?: string;
+  currency?: string;
   landlord?: string;
   image?: string;
   category?: string;
@@ -30,6 +44,12 @@ interface Booking {
     name: string;
     email: string;
   };
+  guest_name?: string;
+  guest_email?: string;
+  guest_phone?: string;
+  check_in_date?: string;
+  check_out_date?: string;
+  number_of_guests?: number;
 }
 
 const sortOptions = [
@@ -55,6 +75,8 @@ export default function Bookings() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("recent");
   const [filterType, setFilterType] = useState("all");
+  const [processingBooking, setProcessingBooking] = useState<string | null>(null);
+  const [propertyCache, setPropertyCache] = useState<Record<string, any>>({});
 
   // Fetch bookings data
   useEffect(() => {
@@ -68,12 +90,57 @@ export default function Bookings() {
         setLoading(true);
         setError(null);
 
-        // Try to fetch bookings from API
-        const response = await apiFetch("bookings/mine/");
-        const bookingsData = response || [];
+        // Fetch bookings from API
+        const response = await bookingAPI.getMine({
+          page: 1,
+          page_size: 100,
+        }) as any;
         
-        // Fetched bookings
-        setBookings(bookingsData);
+        // Handle paginated response or array response
+        const bookingsData = response?.bookings || response?.data?.bookings || response || [];
+        
+        // Fetch property data for each booking
+        const bookingsWithProperties = await Promise.all(
+          bookingsData.map(async (booking: Booking) => {
+            if (!booking.property_booked_id) {
+              return booking;
+            }
+
+            // Check cache first
+            if (propertyCache[booking.property_booked_id]) {
+              return {
+                ...booking,
+                property: propertyCache[booking.property_booked_id],
+              };
+            }
+
+            try {
+              // Fetch property data
+              const propertyResponse = await propertiesAPI.getById(booking.property_booked_id) as any;
+              const property = propertyResponse?.data || propertyResponse;
+              
+              if (property) {
+                // Cache the property
+                setPropertyCache(prev => ({
+                  ...prev,
+                  [booking.property_booked_id!]: property,
+                }));
+                
+                return {
+                  ...booking,
+                  property: property,
+                };
+              }
+            } catch (propError) {
+              console.error(`Error fetching property ${booking.property_booked_id}:`, propError);
+              // Continue with booking even if property fetch fails
+            }
+
+            return booking;
+          })
+        );
+
+        setBookings(bookingsWithProperties);
 
       } catch (err: any) {
         console.error("Error fetching bookings:", err);
@@ -90,23 +157,49 @@ export default function Bookings() {
     };
 
     fetchBookings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user]);
 
   // Transform booking data to ensure consistency
-  const transformedBookings = bookings.map(booking => ({
-    ...booking,
-    property: typeof booking.property === 'string' 
-      ? booking.property 
-      : booking.property?.title || 'Unknown Property',
-    location: booking.location || 
-              (typeof booking.property === 'object' ? booking.property.address : '') || 
-              'Location not specified',
-    image: booking.image || 
-           (typeof booking.property === 'object' ? booking.property.image_url : '') || 
-           null,
-    category: getCategoryFromStatus(booking.status),
-    date: formatDate(booking.date || booking.created_at),
-  }));
+  const transformedBookings = bookings.map(booking => {
+    // Extract property information
+    let propertyTitle = 'Unknown Property';
+    let propertyAddress = 'Location not specified';
+    let propertyImage: string | null = null;
+
+    if (typeof booking.property === 'object' && booking.property) {
+      propertyTitle = booking.property.title || 'Unknown Property';
+      propertyAddress = booking.property.address || 'Location not specified';
+      
+      // Get image from various possible formats
+      // Priority: image_urls array > images array > image_url string
+      if (booking.property.image_urls && Array.isArray(booking.property.image_urls) && booking.property.image_urls.length > 0) {
+        // Find primary image or use first image
+        const primaryImage = booking.property.image_urls.find((img: any) => img.is_primary) || booking.property.image_urls[0];
+        propertyImage = primaryImage.url || primaryImage.image_url || null;
+      } else if (booking.property.images && Array.isArray(booking.property.images) && booking.property.images.length > 0) {
+        // Handle images array format
+        const primaryImage = booking.property.images.find((img: any) => img.is_primary) || booking.property.images[0];
+        propertyImage = primaryImage.image_url || primaryImage.url || null;
+      } else if (booking.property.image_url) {
+        propertyImage = booking.property.image_url;
+      }
+    } else if (typeof booking.property === 'string') {
+      propertyTitle = booking.property;
+    }
+
+    return {
+      ...booking,
+      property: propertyTitle,
+      location: booking.location || propertyAddress,
+      image: booking.image || propertyImage,
+      category: getCategoryFromStatus(booking.status),
+      date: formatDate(booking.date || booking.created_at),
+      // Derive type from property or default to 'booking'
+      type: booking.type || 'booking',
+      price: booking.total_amount || booking.price || 0,
+    };
+  });
 
   // Helper function to categorize bookings based on status
   function getCategoryFromStatus(status: string): string {
@@ -170,7 +263,7 @@ export default function Bookings() {
       return false;
 
     // Filter by type
-    if (filterType !== "all" && booking.type.toLowerCase() !== filterType)
+    if (filterType !== "all" && booking.type && booking.type.toLowerCase() !== filterType)
       return false;
 
     return true;
@@ -182,15 +275,18 @@ export default function Bookings() {
       case "upcoming":
         return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
       case "price-high":
-        return b.price - a.price;
+        return (typeof b.price === 'string' ? parseFloat(b.price) : b.price || 0) - 
+               (typeof a.price === 'string' ? parseFloat(a.price) : a.price || 0);
       case "price-low":
-        return a.price - b.price;
+        return (typeof a.price === 'string' ? parseFloat(a.price) : a.price || 0) - 
+               (typeof b.price === 'string' ? parseFloat(b.price) : b.price || 0);
       default:
         return 0;
     }
   });
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string | undefined) => {
+    if (!status) return "bg-gray-500/20 text-gray-400";
     const lowerStatus = status.toLowerCase();
     if (lowerStatus.includes('confirmed')) {
       return "bg-green-500/20 text-green-400";
@@ -204,7 +300,8 @@ export default function Bookings() {
     return "bg-gray-500/20 text-gray-400";
   };
 
-  const getTypeColor = (type: string) => {
+  const getTypeColor = (type: string | undefined) => {
+    if (!type) return "bg-gray-500/20 text-gray-400";
     const lowerType = type.toLowerCase();
     if (lowerType.includes('consultation')) {
       return "bg-blue-500/20 text-blue-400";
@@ -214,6 +311,95 @@ export default function Bookings() {
       return "bg-yellow-500/20 text-yellow-400";
     }
     return "bg-gray-500/20 text-gray-400";
+  };
+
+  const handleCancelBooking = async (bookingId: string) => {
+    if (!confirm("Are you sure you want to cancel this booking?")) {
+      return;
+    }
+
+    setProcessingBooking(bookingId);
+    try {
+      await bookingAPI.cancel(bookingId);
+      toast.success("Booking cancelled successfully");
+      // Refresh bookings list
+      const response = await bookingAPI.getMine({
+        page: 1,
+        page_size: 100,
+      }) as any;
+      const bookingsData = response?.bookings || response?.data?.bookings || response || [];
+      
+      // Fetch property data for each booking
+      const newPropertyCache: Record<string, any> = { ...propertyCache };
+      const bookingsWithProperties = await Promise.all(
+        bookingsData.map(async (booking: Booking) => {
+          if (!booking.property_booked_id) {
+            return booking;
+          }
+
+          // Check cache first
+          if (newPropertyCache[booking.property_booked_id]) {
+            return {
+              ...booking,
+              property: newPropertyCache[booking.property_booked_id],
+            };
+          }
+
+          try {
+            // Fetch property data
+            const propertyResponse = await propertiesAPI.getById(booking.property_booked_id) as any;
+            const property = propertyResponse?.data || propertyResponse;
+            
+            if (property) {
+              // Cache the property
+              newPropertyCache[booking.property_booked_id] = property;
+              
+              return {
+                ...booking,
+                property: property,
+              };
+            }
+          } catch (propError) {
+            console.error(`Error fetching property ${booking.property_booked_id}:`, propError);
+          }
+
+          return booking;
+        })
+      );
+
+      // Update cache with all fetched properties
+      setPropertyCache(newPropertyCache);
+      setBookings(bookingsWithProperties);
+    } catch (error: any) {
+      console.error("Error cancelling booking:", error);
+      toast.error(error.message || "Failed to cancel booking");
+    } finally {
+      setProcessingBooking(null);
+    }
+  };
+
+  const handlePayBooking = async (bookingId: string) => {
+    setProcessingBooking(bookingId);
+    try {
+      const paymentResponse = await bookingAPI.initializePayment(bookingId) as any;
+      
+      if (paymentResponse?.authorization_url) {
+        // Redirect to Paystack payment page
+        window.location.href = paymentResponse.authorization_url;
+      } else {
+        toast.error("Failed to initialize payment");
+      }
+    } catch (error: any) {
+      console.error("Error initializing payment:", error);
+      toast.error(error.message || "Failed to initialize payment");
+      setProcessingBooking(null);
+    }
+  };
+
+  const handleViewDetails = (bookingId: string) => {
+    // Navigate to booking details page or show modal
+    // For now, just show a toast
+    toast.info("Booking details feature coming soon");
   };
 
   if (!isAuthenticated) {
@@ -365,20 +551,35 @@ export default function Bookings() {
               >
                 <div className="flex h-[220px]">
                   {/* Property Image */}
-                  <div className="w-[160px] h-full bg-gradient-to-br from-blue-400 to-blue-600 flex-shrink-0">
+                  <div className="w-[160px] h-full bg-gradient-to-br from-blue-400 to-blue-600 flex-shrink-0 relative overflow-hidden">
                     {booking.image ? (
                       <Image
                         src={booking.image}
-                        alt={booking.property}
-                        width={160}
-                        height={220}
-                        className="w-full h-full object-cover"
+                        alt={booking.property || 'Property image'}
+                        fill
+                        className="object-cover"
+                        unoptimized={booking.image.startsWith('http')}
                         onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
                         }}
                       />
                     ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-blue-400 to-blue-600"></div>
+                      <div className="w-full h-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
+                        <svg
+                          className="w-12 h-12 text-white/50"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                          />
+                        </svg>
+                      </div>
                     )}
                   </div>
 
@@ -391,20 +592,24 @@ export default function Bookings() {
                     </div>
 
                     <div className="flex gap-2 mb-3">
-                      <span
-                        className={`text-xs px-2 py-1 rounded-full font-medium ${getTypeColor(
-                          booking.type
-                        )}`}
-                      >
-                        {booking.type}
-                      </span>
-                      <span
-                        className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(
-                          booking.status
-                        )}`}
-                      >
-                        {booking.status}
-                      </span>
+                      {booking.type && (
+                        <span
+                          className={`text-xs px-2 py-1 rounded-full font-medium ${getTypeColor(
+                            booking.type
+                          )}`}
+                        >
+                          {booking.type}
+                        </span>
+                      )}
+                      {booking.status && (
+                        <span
+                          className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(
+                            booking.status
+                          )}`}
+                        >
+                          {booking.status}
+                        </span>
+                      )}
                     </div>
 
                     <div className="space-y-2 text-sm text-gray-400">
@@ -455,14 +660,30 @@ export default function Bookings() {
                       )}
                     </div>
 
-                    <div className="px-4 py-3 flex items-start w-full gap-2 mt-3 md:ml-[-20px]">
-                      <button className="px-3 bg-[#373737] py-1 text-sm text-gray-400 hover:text-white rounded-[15px]">
-                        Reschedule
-                      </button>
-                      <button className="px-3 bg-[#373737] py-1 text-sm text-red-400 hover:text-red-300 rounded-[15px]">
-                        Cancel
-                      </button>
-                      <button className="px-3 bg-[#373737] py-1 text-sm text-blue-400 hover:text-blue-300 ml-auto rounded-[15px]">
+                    <div className="px-4 py-3 flex items-start w-full gap-2 mt-3 md:ml-[-20px] flex-wrap">
+                      {booking.status?.toLowerCase() === "pending" && (
+                        <button
+                          onClick={() => handlePayBooking(booking.id)}
+                          disabled={processingBooking === booking.id}
+                          className="px-3 bg-[#373737] py-1 text-sm text-green-400 hover:text-green-300 rounded-[15px] disabled:opacity-50"
+                        >
+                          {processingBooking === booking.id ? "Processing..." : "Pay Now"}
+                        </button>
+                      )}
+                      {booking.status?.toLowerCase() !== "cancelled" && 
+                       booking.status?.toLowerCase() !== "completed" && (
+                        <button
+                          onClick={() => handleCancelBooking(booking.id)}
+                          disabled={processingBooking === booking.id}
+                          className="px-3 bg-[#373737] py-1 text-sm text-red-400 hover:text-red-300 rounded-[15px] disabled:opacity-50"
+                        >
+                          {processingBooking === booking.id ? "Processing..." : "Cancel"}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleViewDetails(booking.id)}
+                        className="px-3 bg-[#373737] py-1 text-sm text-blue-400 hover:text-blue-300 ml-auto rounded-[15px]"
+                      >
                         View Details
                       </button>
                     </div>

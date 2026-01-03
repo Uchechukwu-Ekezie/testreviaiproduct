@@ -817,32 +817,61 @@ export function usePosts() {
 
       setError(null);
       try {
+        // Include parent_id in request body as required by API
         const response = await axiosInstance.post<Comment>(
           `comments/${commentId}/reply/`,
-          { content }
+          { 
+            content,
+            parent_id: commentId
+          }
         );
         console.log("[usePosts] Reply created:", response.data);
         
-        // Transform reply to include author object
+        // Transform reply to include author object and ensure replies is an array
+        // Handle potential backend validation errors where replies might not be properly formatted
         const reply: any = response.data;
+        
+        // If the response has a nested structure due to backend error, extract the actual reply
+        let actualReply = reply;
+        if (reply && typeof reply === 'object' && !reply.id && !reply.content) {
+          // Backend might have returned an error structure, try to extract the reply
+          console.warn("[usePosts] Unexpected reply structure, attempting to normalize:", reply);
+        }
+        
         const transformedReply = {
-          ...reply,
-          author: reply.author || {
-            id: reply.author_id || '',
-            username: reply.author_username || '',
-            email: reply.author_username || '',
-            avatar: reply.author_avatar || undefined,
-            first_name: reply.author_first_name || undefined,
-            last_name: reply.author_last_name || undefined,
-            type: reply.author_user_type || undefined,
+          ...actualReply,
+          replies: Array.isArray(actualReply.replies) ? actualReply.replies : [],
+          reply_count: actualReply.reply_count || 0,
+          author: actualReply.author || {
+            id: actualReply.author_id || '',
+            username: actualReply.author_username || '',
+            email: actualReply.author_username || '',
+            avatar: actualReply.author_avatar || undefined,
+            first_name: actualReply.author_first_name || undefined,
+            last_name: actualReply.author_last_name || undefined,
+            type: actualReply.author_user_type || undefined,
           }
         };
         
         return transformedReply;
       } catch (err) {
         const error = err as AxiosError<PostError>;
+        
+        // Check if this is the specific backend validation error
+        const errorDetail = error.response?.data?.detail || '';
+        if (errorDetail.includes('replies') && errorDetail.includes('list_type')) {
+          console.error(
+            "[usePosts] Backend validation error - replies field issue:",
+            errorDetail
+          );
+          // This is a backend bug, but we can try to inform the user
+          const errorMsg = "The server encountered an error processing your reply. Please try again.";
+          setError(errorMsg);
+          throw new Error(errorMsg);
+        }
+        
         const errorMsg =
-          error.response?.data?.detail ||
+          errorDetail ||
           error.response?.data?.error ||
           error.response?.data?.non_field_errors?.[0] ||
           error.message ||
