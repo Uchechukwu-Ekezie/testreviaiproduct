@@ -1,6 +1,7 @@
 "use client";
 
 import type React from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { PanelLeftOpen, Plus, User, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,7 @@ interface ChatHeaderProps {
   startNewChat?: () => void;
   isMediumScreen: boolean; // Add this prop
   isClient?: boolean; // Add this prop for hydration safety
+  isScrolled?: boolean; // Add this prop for scroll state
 }
 
 const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -27,8 +29,27 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   startNewChat,
   isMediumScreen,
   isClient = true, // Default to true for backward compatibility
+  isScrolled: isScrolledProp, // Get scroll state from parent
 }) => {
   const router = useRouter();
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  // Use prop if provided, otherwise detect window scroll (for other pages)
+  useEffect(() => {
+    if (isScrolledProp !== undefined) {
+      setIsScrolled(isScrolledProp);
+      return;
+    }
+
+    // Fallback: detect window scroll for pages that don't pass the prop
+    const handleScroll = () => {
+      const scrollY = window.scrollY;
+      setIsScrolled(scrollY > 10);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [isScrolledProp]);
 
   // Debug logging removed to prevent console spam on every re-render
 
@@ -80,7 +101,8 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
       {/* Main Header */}
       <header
         className={cn(
-          "fixed top-0 z-40 h-14  bg-transparent",
+          "fixed top-0 z-40 h-16 transition-all duration-300 ease-in-out",
+          isScrolled ? "bg-gradient-to-b from-[#0a0a0a] via-[#141414] to-[#0a0a0a]" : "bg-transparent",
           "w-full",
           sidebarCollapsed && !isLgScreen ? "md:pl-16" : "md:pl-64",
           isLgScreen && !sidebarOpen ? "lg:pl-4" : "lg:pl-64"

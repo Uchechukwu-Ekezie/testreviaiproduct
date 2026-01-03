@@ -280,24 +280,21 @@ export default function NeighborhoodHighlights() {
   };
 
   return (
-    <div className="min-h-screen bg-[#141414] text-white pb-20">
+    <div className="min-h-screen bg-gradient-to-b from-[#0a0a0a] via-[#141414] to-[#0a0a0a] text-white pb-20">
       {/* Instagram Stories Bar - Top Agents */}
-      <div className="bg-black/30 backdrop-blur border-b border-white/10 sticky top-0 z-50">
+      {/* <div className="bg-black/30 backdrop-blur border-b border-white/10 sticky top-0 z-50">
         <div className="flex gap-4 px-4 py-4 overflow-x-auto scrollbar-hide">
-          {/* Agent Stories */}
           {agents.slice(0, 20).map((agent) => {
             const listings = agentProperties.filter(
               (p) => p.created_by === agent.id
             ).length;
             const agentRating = getAgentRating(agent.id);
             
-            // Get display name with proper fallback
             const displayName = agent.name || 
               `${agent.first_name || ""} ${agent.last_name || ""}`.trim() || 
               agent.username || 
               "Agent";
             
-            // Get initials for avatar fallback
             const initials = displayName
               .split(" ")
               .map((n) => n[0])
@@ -337,7 +334,6 @@ export default function NeighborhoodHighlights() {
                   {displayName}
                 </p>
 
-                {/* Agent Rating */}
                 <div className="flex items-center justify-center gap-0.5 mt-1">
                   <Star className="w-3 h-3 text-yellow-400 fill-current" />
                   <span className="text-xs text-yellow-400 font-medium">
@@ -348,10 +344,10 @@ export default function NeighborhoodHighlights() {
             );
           })}
         </div>
-      </div>
+      </div> */}
 
       {/* Location Status Header */}
-      <div className="px-4 py-4 border-b border-white/10 bg-black/30 backdrop-blur sticky top-[88px] z-40">
+      {/* <div className="px-4 py-4 border-b border-white/10 bg-black/30 backdrop-blur sticky top-[88px] z-40">
         <div className="flex items-center gap-2 text-sm">
           <MapPin className="w-4 h-4 text-white/70" />
           {locationStatus === "loading" && (
@@ -376,7 +372,7 @@ export default function NeighborhoodHighlights() {
             <span className="text-red-400">Location unavailable</span>
           )}
         </div>
-      </div>
+      </div> */}
 
       {/* Feed */}
       <div className="max-w-lg mx-auto pt-6">

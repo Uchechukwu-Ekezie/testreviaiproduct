@@ -353,37 +353,68 @@ export default function SocialFeed() {
     []
   );
 
-  // Improved infinite scroll with Intersection Observer
+  // Improved infinite scroll with Intersection Observer + mobile fallback
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
+  const isLoadingMoreRef = useRef(false);
 
   useEffect(() => {
     const currentTrigger = loadMoreTriggerRef.current;
 
     if (!currentTrigger) return;
 
+    // Check if mobile device
+    const checkIsMobile = () => window.innerWidth < 768;
+    let isMobileDevice = checkIsMobile();
+
+    // Intersection Observer with adaptive rootMargin
     const observer = new IntersectionObserver(
       (entries) => {
         const entry = entries[0];
-        if (entry.isIntersecting && hasMore && !isLoadingPosts) {
+        if (entry.isIntersecting && hasMore && !isLoadingPosts && !isLoadingMoreRef.current) {
           console.log(
             "[SocialFeed] Intersection Observer triggered - Loading more posts"
           );
-          loadMorePosts();
+          isLoadingMoreRef.current = true;
+          loadMorePosts().finally(() => {
+            isLoadingMoreRef.current = false;
+          });
         }
       },
       {
         root: null,
-        rootMargin: "800px", // Start loading 800px before the trigger element (about 1-2 posts ahead)
+        rootMargin: "200px", // Smaller margin for better mobile support
         threshold: 0.1,
       }
     );
 
     observer.observe(currentTrigger);
 
+    // Fallback scroll listener for mobile (more reliable on mobile browsers)
+    const handleScroll = () => {
+      if (isLoadingMoreRef.current || !hasMore || isLoadingPosts) return;
+
+      const scrollPosition = window.scrollY + window.innerHeight;
+      const documentHeight = document.documentElement.scrollHeight;
+      const distanceFromBottom = documentHeight - scrollPosition;
+
+      // Trigger load when within 500px of bottom
+      if (distanceFromBottom < 500) {
+        console.log("[SocialFeed] Scroll listener triggered - Loading more posts");
+        isLoadingMoreRef.current = true;
+        loadMorePosts().finally(() => {
+          isLoadingMoreRef.current = false;
+        });
+      }
+    };
+
+    // Always add scroll listener as fallback (works better on mobile)
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
     return () => {
       if (currentTrigger) {
         observer.unobserve(currentTrigger);
       }
+      window.removeEventListener("scroll", handleScroll);
     };
   }, [hasMore, isLoadingPosts, loadMorePosts]);
 
@@ -466,7 +497,7 @@ export default function SocialFeed() {
     <>
       <div className="min-h-screen bg-gradient-to-b from-[#0a0a0a] via-[#141414] to-[#0a0a0a]">
         {/* Stories Bar */}
-        <div className="mt-14 sm:mt-16">
+        {/* <div className="mt-14 sm:mt-16">
           <StoriesBar
             stories={stories}
             currentUserId={user?.id}
@@ -512,9 +543,9 @@ export default function SocialFeed() {
             }}
             isLoading={isLoadingStories}
           />
-        </div>
+        </div> */}
 
-        <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-32 sm:pb-32">
+        <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-32 sm:pb-32 mt-20 sm:mt-22">
           {/* Inline Post Composer */}
           <PostComposer
             onCreatePost={handleCreatePost}
