@@ -10,6 +10,7 @@ import {
   Settings,
   LogOut,
   X,
+  CalendarCheck,
 } from "lucide-react";
 
 const navigationItems = [
@@ -22,6 +23,11 @@ const navigationItems = [
     name: "My Properties",
     href: "/dashboard/properties",
     icon: Building2,
+  },
+  {
+    name: "Bookings",
+    href: "/dashboard/bookings",
+    icon: CalendarCheck,
   },
   {
     name: "Reviews",

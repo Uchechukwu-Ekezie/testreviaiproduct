@@ -46,6 +46,7 @@ export default function DashboardLayout({
 
     if (!isLoading && user) {
       const isAgent =
+        user?.type === "agent" ||
         user?.agent_request?.status === "approved" ||
         user?.agent_info?.status === "approved";
       const isAdmin = user?.type === "admin";
@@ -57,10 +58,11 @@ export default function DashboardLayout({
         isAdmin,
         isLandlord,
         isRegularUser,
+        user_type: user?.type,
         agent_request_status: user?.agent_request?.status,
         agent_info_status: user?.agent_info?.status,
-        user_type: user?.type,
         raw_user_type: JSON.stringify(user?.type),
+        full_user: user,
       });
 
       // Allow access if user is agent (approved), admin, landlord, or regular user
@@ -107,6 +109,7 @@ export default function DashboardLayout({
   }
 
   const isAgent =
+    user?.type === "agent" ||
     user?.agent_request?.status === "approved" ||
     user?.agent_info?.status === "approved";
   const isAdmin = user?.type === "admin";
@@ -119,6 +122,7 @@ export default function DashboardLayout({
     isLandlord,
     isRegularUser,
     userType: user?.type,
+    agent_request_status: user?.agent_request?.status,
     agent_info_status: user?.agent_info?.status,
     fullUser: user,
   });

@@ -68,7 +68,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   return (
     <>
       {/* Fixed Right Actions */}
-      <div className="fixed z-50 right-10 top-3">
+      <div className="fixed z-10 right-10 top-3">
         <div className="flex items-center gap-2">
           {/* Social Feed Button - Only show when authenticated */}
           {isAuthenticated && (

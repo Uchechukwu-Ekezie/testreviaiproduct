@@ -298,7 +298,7 @@ export default function PropertyDetailClient({
   propertyId,
 }: PropertyDetailClientProps) {
   const router = useRouter();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { getPropertyById } = useProperties();
   const [isFavorite, setIsFavorite] = useState(false);
   const [propertyDetailData, setPropertyDetailData] =
@@ -457,12 +457,14 @@ export default function PropertyDetailClient({
           : 5;
 
       const reviewData = {
-        rating: numericRating,
+        rating: numericRating.toString(), // API expects string
         address: propertyDetailData?.location || "",
         review_text: reviewForm.reviewText,
-        property: propertyId,
-        status: "pending" as const,
-        evidence: "",
+        property_id: propertyId, // API expects property_id, not property
+        user_id: user?.id || "", // API expects user_id
+        evidence: [], // API expects array, not empty string
+        title: reviewForm.userName || "", // Optional: use userName as title
+        content: reviewForm.reviewText, // Optional: same as review_text
       };
 
       console.log("Submitting review:", reviewData);
@@ -571,7 +573,7 @@ export default function PropertyDetailClient({
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      <div className="container mx-auto px-4 py-6 pt-40">
+      <div className="container mx-auto px-4 sm:px-6 py-6 pt-20 sm:pt-32 lg:pt-40">
         <button
           onClick={handleBack}
           className="flex items-center gap-2 text-white/70 hover:text-white transition-colors mb-6"
@@ -580,11 +582,11 @@ export default function PropertyDetailClient({
           Back
         </button>
 
-        <div className="space-y-8">
+        <div className="space-y-6 sm:space-y-8">
           {/* First Section - Image and Title Side by Side */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-28 max-w-[955px]">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-28 max-w-[955px]">
             {/* Left Column - First Property Image */}
-            <div className="relative h-80 lg:h-96 rounded-2xl overflow-hidden w-[500px]">
+            <div className="relative h-64 sm:h-80 lg:h-96 rounded-2xl overflow-hidden w-full max-w-[500px] lg:w-[500px]">
               <Image
                 src={propertyDetailData.images[0]}
                 alt={propertyDetailData.title}
@@ -609,35 +611,35 @@ export default function PropertyDetailClient({
             </div>
 
             {/* Right Column - Property Title and Details */}
-            <div className="space-y-6 mt-16 lg:mt-20">
+            <div className="space-y-4 sm:space-y-6 mt-4 sm:mt-8 lg:mt-20">
               <div>
-                <h1 className="text-[28px] font-medium mb-2">
+                <h1 className="text-xl sm:text-2xl lg:text-[28px] font-medium mb-2">
                   {propertyDetailData.title}
                 </h1>
                 <div className="flex items-center gap-2 text-white/70 mb-4">
-                  <MapPin className="w-4 h-4" />
-                  <span className="font-normal text-[18px]">
+                  <MapPin className="w-4 h-4 flex-shrink-0" />
+                  <span className="font-normal text-sm sm:text-base lg:text-[18px] break-words">
                     {propertyDetailData.location}
                   </span>
                 </div>
               </div>
 
               {/* Rating */}
-              <div className="flex p-2 items-center  max-w-[300px] gap-4 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl ">
+              <div className="flex flex-col sm:flex-row p-2 sm:p-3 items-start sm:items-center max-w-full sm:max-w-[300px] gap-2 sm:gap-4 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl">
                 <div className="flex items-center gap-2">
                   {renderStars(averageRating || 0)}
-                  <span className="text-white font-semibold px-3">
+                  <span className="text-white font-semibold px-2 sm:px-3 text-sm sm:text-base">
                     {averageRating ? averageRating.toFixed(1) : "No rating"}
                   </span>
                 </div>
-                <span className="text-white/70">
+                <span className="text-white/70 text-sm sm:text-base">
                   {backendReviews.length} Review
                   {backendReviews.length !== 1 ? "s" : ""}
                 </span>
               </div>
 
               {/* Price */}
-              <div className="text-3xl font-bold text-white mb-6">
+              <div className="text-2xl sm:text-3xl font-bold text-white mb-4 sm:mb-6">
                 {propertyDetailData.price}
               </div>
 
@@ -645,7 +647,7 @@ export default function PropertyDetailClient({
               {propertyDetailData.is_added_by_agent && (
                 <button
                   onClick={() => router.push(`/booking/${propertyId}`)}
-                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
+                  className="w-full sm:w-auto min-w-[200px] bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold py-3 sm:py-4 px-4 sm:px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 text-sm sm:text-base"
                 >
                   Book Now
                 </button>
@@ -655,7 +657,7 @@ export default function PropertyDetailClient({
 
           {/* Second Section - Second Image Below */}
           {propertyDetailData.images.length > 1 && (
-            <div className="relative h-80 lg:h-96 rounded-2xl overflow-hidden">
+            <div className="relative h-64 sm:h-80 lg:h-96 rounded-2xl overflow-hidden">
               <Image
                 src={propertyDetailData.images[1]}
                 alt={`${propertyDetailData.title} - Image 2`}
@@ -666,9 +668,9 @@ export default function PropertyDetailClient({
           )}
 
           {/* About This Property */}
-          <div className="mt-12 space-y-8 max-w-[1157px]">
+          <div className="mt-8 sm:mt-12 space-y-6 sm:space-y-8 max-w-[1157px]">
             <div>
-              <h2 className="text-2xl font-bold mb-4">About This Property</h2>
+              <h2 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4">About This Property</h2>
               <div className="text-white/80 leading-relaxed">
                 <MarkdownRenderer content={propertyDetailData.description} />
               </div>
@@ -676,15 +678,15 @@ export default function PropertyDetailClient({
 
             {/* Amenities */}
             <div>
-              <h3 className="text-xl font-semibold mb-4">Amenities</h3>
-              <div className="flex flex-wrap gap-4">
+              <h3 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Amenities</h3>
+              <div className="flex flex-wrap gap-3 sm:gap-4">
                 {propertyDetailData.amenities.map(
                   (amenity: string, index: number) => (
                     <div
                       key={index}
-                      className="flex items-center gap-2 text-white/80"
+                      className="flex items-center gap-2 text-white/80 text-sm sm:text-base"
                     >
-                      <Shield className="w-4 h-4 text-green-500" />
+                      <Shield className="w-4 h-4 text-green-500 flex-shrink-0" />
                       <span>{amenity}</span>
                     </div>
                   )
@@ -694,8 +696,8 @@ export default function PropertyDetailClient({
 
             {/* Specifications */}
             <div>
-              <h3 className="text-xl font-semibold mb-4">Specifications</h3>
-              <div className="flex flex-wrap gap-6 text-white/80">
+              <h3 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Specifications</h3>
+              <div className="flex flex-wrap gap-4 sm:gap-6 text-white/80">
                 <div className="flex items-center gap-3">
                   <Bed className="w-6 h-6 text-[#FFD700]" />
                   <div className="flex items-center gap-2">
@@ -729,10 +731,10 @@ export default function PropertyDetailClient({
             {/* Contact Information */}
             {(propertyDetailData.phone || propertyDetailData.created_by) && (
               <div>
-                <h3 className="text-xl font-semibold mb-4">
+                <h3 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">
                   Contact Information
                 </h3>
-                <div className="bg-black/40 backdrop-blur-sm border border-white/10 rounded-2xl p-6 space-y-4">
+                <div className="bg-black/40 backdrop-blur-sm border border-white/10 rounded-2xl p-4 sm:p-6 space-y-4">
                   {propertyDetailData.created_by && (
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-[#FFD700] rounded-full flex items-center justify-center">
@@ -791,20 +793,20 @@ export default function PropertyDetailClient({
             )}
 
             {/* Reviews & Ratings */}
-            <div className="mt-12 border-t border-white/10 pt-8">
-              <h3 className="text-xl font-semibold">Reviews & Ratings</h3>
+            <div className="mt-8 sm:mt-12 border-t border-white/10 pt-6 sm:pt-8">
+              <h3 className="text-lg sm:text-xl font-semibold">Reviews & Ratings</h3>
 
               {/* Overall Rating */}
-              <div className="bg-black/40 backdrop-blur-sm pt-6 mb-6">
-                <div className="flex items-center justify-between">
+              <div className="bg-black/40 backdrop-blur-sm pt-4 sm:pt-6 mb-4 sm:mb-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div>
-                    <div className="text-4xl font-bold">
+                    <div className="text-3xl sm:text-4xl font-bold">
                       {averageRating ? averageRating.toFixed(1) : "No rating"}
                     </div>
                     <div className="flex items-center gap-2 mt-2">
                       {renderStars(averageRating || 0)}
                     </div>
-                    <div className="text-white/70 mt-1">
+                    <div className="text-white/70 mt-1 text-sm sm:text-base">
                       {backendReviews.length > 0
                         ? `Based on ${backendReviews.length} review${
                             backendReviews.length !== 1 ? "s" : ""
@@ -1006,20 +1008,20 @@ export default function PropertyDetailClient({
             </div>
 
             {/* Share Your Experience */}
-            <div className="bg-[#0D0D0D] rounded-2xl p-10 text-center max-w-[1083px] mx-auto">
-              <h3 className="text-xl font-semibold mb-2 text-white">
+            <div className="bg-[#0D0D0D] rounded-2xl p-4 sm:p-6 lg:p-10 text-center max-w-[1083px] mx-auto">
+              <h3 className="text-lg sm:text-xl font-semibold mb-2 text-white">
                 Share Your Experience
               </h3>
-              <p className="text-white/60 text-sm mb-6">Rate this property</p>
+              <p className="text-white/60 text-sm mb-4 sm:mb-6">Rate this property</p>
 
               {!isAuthenticated ? (
-                <div className="text-center py-8">
-                  <p className="text-white/70 mb-4">
+                <div className="text-center py-6 sm:py-8">
+                  <p className="text-white/70 mb-4 text-sm sm:text-base">
                     Please log in to share your review
                   </p>
                   <button
                     onClick={() => router.push("/login")}
-                    className="bg-gradient-to-r from-[#FFD700] to-[#780991] hover:opacity-90 text-white px-6 py-3 rounded-lg font-semibold transition-opacity"
+                    className="bg-gradient-to-r from-[#FFD700] to-[#780991] hover:opacity-90 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold transition-opacity text-sm sm:text-base"
                   >
                     Log In to Review
                   </button>
@@ -1027,11 +1029,11 @@ export default function PropertyDetailClient({
               ) : (
                 <form onSubmit={handleSubmitReview}>
                   {/* Categorical Rating */}
-                  <div className="flex justify-center gap-4 mb-6">
+                  <div className="flex flex-wrap justify-center gap-3 sm:gap-4 mb-4 sm:mb-6">
                     <button
                       type="button"
                       onClick={() => handleStarClick("bad")}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                      className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${
                         reviewForm.rating === "bad"
                           ? "bg-red-600 text-white"
                           : "bg-gray-700 text-gray-300 hover:bg-red-500 hover:text-white"
@@ -1043,7 +1045,7 @@ export default function PropertyDetailClient({
                     <button
                       type="button"
                       onClick={() => handleStarClick("average")}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                      className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${
                         reviewForm.rating === "average"
                           ? "bg-yellow-600 text-white"
                           : "bg-gray-700 text-gray-300 hover:bg-yellow-500 hover:text-white"
@@ -1055,7 +1057,7 @@ export default function PropertyDetailClient({
                     <button
                       type="button"
                       onClick={() => handleStarClick("good")}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                      className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${
                         reviewForm.rating === "good"
                           ? "bg-green-600 text-white"
                           : "bg-gray-700 text-gray-300 hover:bg-green-500 hover:text-white"
@@ -1066,7 +1068,7 @@ export default function PropertyDetailClient({
                     </button>
                   </div>
 
-                  <p className="text-white/60 text-sm mb-6 text-center">
+                  <p className="text-white/60 text-sm mb-4 sm:mb-6 text-center">
                     {reviewForm.rating
                       ? `You rated: ${
                           reviewForm.rating.charAt(0).toUpperCase() +
@@ -1076,8 +1078,8 @@ export default function PropertyDetailClient({
                   </p>
 
                   {/* Name Input */}
-                  <div className="flex flex-col items-center mb-4 w-[458px] mx-auto">
-                    <div className="mb-4 text-left">
+                  <div className="flex flex-col items-center mb-4 w-full max-w-[458px] mx-auto">
+                    <div className="mb-4 text-left w-full">
                       <label className="block text-white/70 text-sm mb-2">
                         Your Name
                       </label>
@@ -1091,13 +1093,13 @@ export default function PropertyDetailClient({
                             userName: e.target.value,
                           }))
                         }
-                        className="w-[458px] bg-black/40 border border-white/20 rounded-lg px-4 py-3 text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-[#FFD700]/50 focus:border-transparent"
+                        className="w-full bg-black/40 border border-white/20 rounded-lg px-4 py-3 text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-[#FFD700]/50 focus:border-transparent"
                         required
                       />
                     </div>
 
                     {/* Review Textarea */}
-                    <div className="mb-6 text-left">
+                    <div className="mb-6 text-left w-full">
                       <label className="block text-white/70 text-sm mb-2">
                         Your Review
                       </label>
@@ -1111,7 +1113,7 @@ export default function PropertyDetailClient({
                             reviewText: e.target.value,
                           }))
                         }
-                        className="w-[458px] bg-black/40 border border-white/20 rounded-lg px-4 py-3 text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-[#FFD700]/50 focus:border-transparent resize-none"
+                        className="w-full bg-black/40 border border-white/20 rounded-lg px-4 py-3 text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-[#FFD700]/50 focus:border-transparent resize-none"
                         required
                       ></textarea>
                     </div>
@@ -1120,7 +1122,7 @@ export default function PropertyDetailClient({
                     <button
                       type="submit"
                       disabled={isSubmittingReview}
-                      className="w-full bg-white hover:bg-gray-100 text-black font-semibold py-3 rounded-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="w-full bg-white hover:bg-gray-100 text-black font-semibold py-3 rounded-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
                     >
                       {isSubmittingReview ? (
                         <>

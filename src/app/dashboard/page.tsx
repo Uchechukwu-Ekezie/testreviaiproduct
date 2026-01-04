@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
 import { useProperties } from "@/contexts/properties-context";
 import { Header } from "@/components/dashboard/header";
@@ -217,7 +218,10 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="p-6 border rounded-[15px] shadow-inner bg-[#212121] shadow-white/5 border-[#2a2a2a]">
+          <Link
+            href="/dashboard/bookings"
+            className="p-6 border rounded-[15px] shadow-inner bg-[#212121] shadow-white/5 border-[#2a2a2a] hover:border-blue-500/50 transition-colors cursor-pointer block"
+          >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-medium text-gray-400">
                 Total Bookings
@@ -229,10 +233,12 @@ export default function Dashboard() {
                 <p className="text-2xl font-bold">
                   {dashboardStats.totalBookings}
                 </p>
-                <p className="text-sm text-white">Coming soon</p>
+                <p className="text-sm text-white hover:text-blue-400 transition-colors">
+                  View all bookings →
+                </p>
               </div>
             </div>
-          </div>
+          </Link>
 
           <div className="p-6 border rounded-[15px] shadow-inner bg-[#212121] shadow-white/5 border-[#2a2a2a]">
             <div className="flex items-center justify-between mb-4">

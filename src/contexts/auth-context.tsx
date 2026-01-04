@@ -404,6 +404,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           date_joined: response.user.date_joined,
           last_login: response.user.last_login,
           agent_request: response.user.agent_request || undefined,
+          agent_info: response.user.agent_info || undefined,
         };
       } else {
         const userData = await userAPI.getProfile();
@@ -419,6 +420,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           date_joined: userData.date_joined,
           last_login: userData.last_login,
           agent_request: userData.agent_request || undefined,
+          agent_info: userData.agent_info || undefined,
         };
       }
 
@@ -476,18 +478,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const response = (await authAPI.signup(signupData)) as any;
 
-      const userObj: User = {
-        id: response.id || "temp-id",
-        username: response.username || userData.email.split("@")[0],
-        email: response.email || userData.email,
-        first_name: response.first_name || userData.first_name,
-        last_name: response.last_name || userData.last_name,
-        type: response.type || "user",
-        is_active: response.is_active !== undefined ? response.is_active : true,
-        avatar: response.avatar || "/placeholder.svg",
-        date_joined: response.date_joined || new Date().toISOString(),
-        agent_request: response.agent_request || undefined,
-      };
+        const userObj: User = {
+          id: response.id || "temp-id",
+          username: response.username || userData.email.split("@")[0],
+          email: response.email || userData.email,
+          first_name: response.first_name || userData.first_name,
+          last_name: response.last_name || userData.last_name,
+          type: response.type || "user",
+          is_active: response.is_active !== undefined ? response.is_active : true,
+          avatar: response.avatar || "/placeholder.svg",
+          date_joined: response.date_joined || new Date().toISOString(),
+          agent_request: response.agent_request || undefined,
+          agent_info: response.agent_info || undefined,
+        };
 
       setUser(userObj);
       if (typeof window !== "undefined") {
@@ -547,6 +550,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         date_joined: userData.date_joined,
         last_login: userData.last_login,
         agent_request: userData.agent_request || undefined,
+        agent_info: userData.agent_info || undefined,
       };
 
       setUser(userObj);
