@@ -50,6 +50,9 @@ interface Booking {
   check_in_date?: string;
   check_out_date?: string;
   number_of_guests?: number;
+  payment_authorization_url?: string | null;
+  payment_reference?: string;
+  paystack_reference?: string | null;
 }
 
 const sortOptions = [
@@ -399,11 +402,23 @@ export default function Bookings() {
   const handlePayBooking = async (bookingId: string) => {
     setProcessingBooking(bookingId);
     try {
+      // Check if booking already has a payment authorization URL
+      const booking = bookings.find(b => b.id === bookingId);
+      if (booking?.payment_authorization_url && booking.payment_authorization_url !== null) {
+        // Use existing payment URL
+        console.log("[Bookings] Using existing payment URL from booking");
+        window.location.href = booking.payment_authorization_url;
+        return;
+      }
+
+      // No existing URL, initialize payment
+      console.log("[Bookings] Initializing payment for booking:", bookingId);
       const paymentResponse = await bookingAPI.initializePayment(bookingId) as any;
+      const paymentData = paymentResponse?.data || paymentResponse;
       
-      if (paymentResponse?.authorization_url) {
+      if (paymentData?.authorization_url) {
         // Redirect to Paystack payment page
-        window.location.href = paymentResponse.authorization_url;
+        window.location.href = paymentData.authorization_url;
       } else {
         toast.error("Failed to initialize payment");
       }
@@ -584,9 +599,9 @@ export default function Bookings() {
             {filteredBookings.map((booking) => (
               <div
                 key={booking.id}
-                className="bg-[#212121] rounded-[15px] shadow-inner shadow-white/5 border border-gray-700 overflow-hidden"
+                className="bg-[#212121] rounded-[15px] shadow-inner shadow-white/5 border border-gray-700 overflow-hidden flex flex-col"
               >
-                <div className="flex h-[220px]">
+                <div className="flex min-h-[220px] flex-shrink-0">
                   {/* Property Image */}
                   <div className="w-[160px] h-full bg-gradient-to-br from-blue-400 to-blue-600 flex-shrink-0 relative overflow-hidden">
                     {booking.image ? (
@@ -621,23 +636,14 @@ export default function Bookings() {
                   </div>
 
                   {/* Content */}
-                  <div className="flex-1 p-4">
+                  <div className="flex-1 p-4 flex flex-col min-w-0 relative">
                     <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-semibold text-white text-sm">
+                      <h3 className="font-semibold text-white text-sm line-clamp-2">
                         {booking.property}
                       </h3>
                     </div>
 
-                    <div className="flex gap-2 mb-3">
-                      {booking.type && (
-                        <span
-                          className={`text-xs px-2 py-1 rounded-full font-medium ${getTypeColor(
-                            booking.type
-                          )}`}
-                        >
-                          {booking.type}
-                        </span>
-                      )}
+                    <div className="flex gap-2 mb-3 flex-wrap">
                       {booking.status && (
                         <span
                           className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(
@@ -647,79 +653,181 @@ export default function Bookings() {
                           {booking.status}
                         </span>
                       )}
+                      {booking.type && (
+                        <span
+                          className={`text-xs px-2 py-1 rounded-full font-medium ${getTypeColor(
+                            booking.type
+                          )}`}
+                        >
+                          {booking.type}
+                        </span>
+                      )}
                     </div>
 
-                    <div className="space-y-2 text-sm text-gray-400">
-                      <div className="flex items-center">
-                        <svg
-                          className="w-4 h-4 mr-2"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                          />
-                        </svg>
-                        {booking.date}
-                      </div>
+                    <div className="space-y-2 text-xs text-gray-400 flex-1">
+                      {/* Check-in Date */}
+                      {booking.check_in_date && (
+                        <div className="flex items-center">
+                          <svg
+                            className="w-4 h-4 mr-2 flex-shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                            />
+                          </svg>
+                          <span className="font-medium text-gray-300">Check-in:</span>
+                          <span className="ml-1">{new Date(booking.check_in_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                        </div>
+                      )}
 
-                      <div className="flex items-center">
-                        <svg
-                          className="w-4 h-4 mr-2"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                          />
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                          />
-                        </svg>
-                        {booking.location}
-                      </div>
+                      {/* Check-out Date */}
+                      {booking.check_out_date && (
+                        <div className="flex items-center">
+                          <svg
+                            className="w-4 h-4 mr-2 flex-shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                            />
+                          </svg>
+                          <span className="font-medium text-gray-300">Check-out:</span>
+                          <span className="ml-1">{new Date(booking.check_out_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                        </div>
+                      )}
 
-                      {booking.landlord && (
-                        <div className="text-xs text-gray-500">
-                          Landlord/Agent: {booking.landlord}
+                      {/* Number of Guests */}
+                      {booking.number_of_guests && (
+                        <div className="flex items-center">
+                          <svg
+                            className="w-4 h-4 mr-2 flex-shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                            />
+                          </svg>
+                          <span>{booking.number_of_guests} {booking.number_of_guests === 1 ? 'Guest' : 'Guests'}</span>
+                        </div>
+                      )}
+
+                      {/* Location */}
+                      {booking.location && (
+                        <div className="flex items-center">
+                          <svg
+                            className="w-4 h-4 mr-2 flex-shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                            />
+                          </svg>
+                          <span className="line-clamp-1">{booking.location}</span>
+                        </div>
+                      )}
+
+                      {/* Total Amount */}
+                      {booking.total_amount && (
+                        <div className="flex items-center pt-1 border-t border-gray-700">
+                          <svg
+                            className="w-4 h-4 mr-2 flex-shrink-0 text-green-400"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                          <span className="font-semibold text-white text-sm">
+                            {booking.currency || 'NGN'} {parseFloat(booking.total_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
                         </div>
                       )}
                     </div>
 
-                    <div className="px-4 py-3 flex items-start w-full gap-2 mt-3 md:ml-[-20px] flex-wrap">
-                      {booking.status?.toLowerCase() === "pending" && (
+                    <div className="px-4 py-3 flex items-center w-full gap-2 border-t border-gray-700 pt-3 flex-wrap relative z-10 bg-[#212121]">
+                      {/* Show Pay Now button for pending bookings, or cancelled bookings with payment URL (for testing) */}
+                      {(booking.status?.toLowerCase() === "pending" || 
+                        (booking.status?.toLowerCase() === "cancelled" && booking.payment_authorization_url)) && (
                         <button
-                          onClick={() => handlePayBooking(booking.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            handlePayBooking(booking.id);
+                          }}
                           disabled={processingBooking === booking.id}
-                          className="px-3 bg-[#373737] py-1 text-sm text-green-400 hover:text-green-300 rounded-[15px] disabled:opacity-50"
+                          className="px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 hover:text-green-300 text-sm font-medium rounded-[10px] disabled:opacity-50 transition-colors flex items-center gap-2 cursor-pointer relative z-20"
                         >
-                          {processingBooking === booking.id ? "Processing..." : "Pay Now"}
+                          {processingBooking === booking.id ? (
+                            <>
+                              <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Processing...
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              Pay Now
+                            </>
+                          )}
                         </button>
                       )}
                       {booking.status?.toLowerCase() !== "cancelled" && 
                        booking.status?.toLowerCase() !== "completed" && (
                         <button
-                          onClick={() => handleCancelBooking(booking.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            handleCancelBooking(booking.id);
+                          }}
                           disabled={processingBooking === booking.id}
-                          className="px-3 bg-[#373737] py-1 text-sm text-red-400 hover:text-red-300 rounded-[15px] disabled:opacity-50"
+                          className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 text-sm font-medium rounded-[10px] disabled:opacity-50 transition-colors cursor-pointer relative z-20"
                         >
                           {processingBooking === booking.id ? "Processing..." : "Cancel"}
                         </button>
                       )}
                       <button
-                        onClick={() => handleViewDetails(booking.id)}
-                        className="px-3 bg-[#373737] py-1 text-sm text-blue-400 hover:text-blue-300 ml-auto rounded-[15px]"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          handleViewDetails(booking.id);
+                        }}
+                        className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 hover:text-blue-300 text-sm font-medium rounded-[10px] transition-colors ml-auto cursor-pointer relative z-20"
                       >
                         View Details
                       </button>

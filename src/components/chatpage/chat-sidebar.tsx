@@ -407,7 +407,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = React.memo(
     return (
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-[280px] bg-[#171717] border-gray-800 flex flex-col h-full overflow-x-hidden",
+          "fixed inset-y-0 left-0 z-[60] w-[280px] bg-[#171717] border-gray-800 flex flex-col h-full overflow-x-hidden",
           // Only apply responsive classes on client-side to prevent hydration mismatch
           isClient && isMobile && !sidebarOpen && "hidden",
           isClient && isLgScreen && !sidebarOpen && "hidden",

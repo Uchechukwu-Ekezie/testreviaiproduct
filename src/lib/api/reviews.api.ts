@@ -31,6 +31,11 @@ const apiFetch = async (
   const token =
     typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
 
+  // Normalize BASE_URL and URL to prevent double slashes
+  const baseUrl = BASE_URL?.endsWith('/') ? BASE_URL.slice(0, -1) : BASE_URL;
+  const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+  const fullUrl = `${baseUrl}${cleanUrl}`;
+
   const defaultOptions: RequestInit = {
     headers: {
       "Content-Type": "application/json",
@@ -38,7 +43,7 @@ const apiFetch = async (
     },
   };
 
-  const response = await fetch(`${BASE_URL}${url}`, {
+  const response = await fetch(fullUrl, {
     ...defaultOptions,
     ...options,
     headers: {
@@ -130,7 +135,7 @@ export const reviewsAPI = {
         queryParams.append("page_size", filters.page_size.toString());
 
       const queryString = queryParams.toString();
-      const url = `property/reviews-by-user/${userId}/${
+      const url = `/property/reviews-by-user/${userId}${
         queryString ? `?${queryString}` : ""
       }`;
 
@@ -234,10 +239,32 @@ export const reviewsAPI = {
    */
   create: async (reviewData: ReviewCreate): Promise<Review> => {
     return withErrorHandling(async () => {
-      console.log("reviewsAPI.create: Starting request with data:", reviewData);
+      // Transform data to match API requirements
+      const transformedData: any = {
+        ...reviewData,
+        // Ensure rating is a string
+        rating: typeof reviewData.rating === 'number' 
+          ? reviewData.rating.toString() 
+          : reviewData.rating,
+        // Ensure evidence is an array
+        evidence: Array.isArray(reviewData.evidence)
+          ? reviewData.evidence
+          : typeof reviewData.evidence === 'string' && reviewData.evidence.trim()
+          ? [reviewData.evidence]
+          : [],
+        // Use property_id if property is provided
+        property_id: reviewData.property_id || reviewData.property,
+      };
+      
+      // Remove property if property_id is set
+      if (transformedData.property_id && transformedData.property) {
+        delete transformedData.property;
+      }
+
+      console.log("reviewsAPI.create: Starting request with data:", transformedData);
       const response = await apiFetch("/reviews/", {
         method: "POST",
-        body: JSON.stringify(reviewData),
+        body: JSON.stringify(transformedData),
       });
       console.log("reviewsAPI.create: Success response:", response);
       return response as Review;

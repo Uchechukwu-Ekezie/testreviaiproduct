@@ -75,6 +75,9 @@ export function PropertyReviewForm({
         review_text: comment.trim(),
         property_id: propertyId,
         user_id: user.id,
+        evidence: [], // API expects array, not empty string
+        title: "", // Optional: can be added if form has title field
+        content: comment.trim(), // Optional: same as review_text
       };
 
       await reviewsAPI.create(reviewData);

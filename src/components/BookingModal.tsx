@@ -78,14 +78,28 @@ export default function BookingModal({
       // Show success toast
       toast.success("Booking request submitted successfully!");
 
-      // Initialize payment
-      if (booking?.id) {
+      // Check if payment authorization URL is already in the booking response
+      const bookingData = booking?.data || booking;
+      // Only use it if it's a valid non-null URL
+      if (bookingData?.payment_authorization_url && bookingData.payment_authorization_url !== null) {
+        // Backend already initialized payment, redirect directly
+        console.log("[BookingModal] Using payment URL from booking response");
+        window.location.href = bookingData.payment_authorization_url;
+        return; // Don't show success screen if redirecting
+      }
+
+      // Payment URL not provided, need to initialize payment
+      console.log("[BookingModal] Payment URL not in response, initializing payment...");
+
+      // If no authorization URL in response, initialize payment (fallback)
+      if (bookingData?.id) {
         try {
-          const paymentResponse = await bookingAPI.initializePayment(booking.id) as any;
+          const paymentResponse = await bookingAPI.initializePayment(bookingData.id) as any;
+          const paymentData = paymentResponse?.data || paymentResponse;
           
-          if (paymentResponse?.authorization_url) {
+          if (paymentData?.authorization_url) {
             // Redirect to Paystack payment page
-            window.location.href = paymentResponse.authorization_url;
+            window.location.href = paymentData.authorization_url;
             return; // Don't show success screen if redirecting
           }
         } catch (paymentError: any) {

@@ -204,7 +204,19 @@ export default function BookingPage({
 
       toast.success("Booking created successfully! Redirecting to payment...");
 
-      // Initialize payment using bookingAPI
+      // Check if payment authorization URL is already in the booking response
+      // Only use it if it's a valid non-null URL
+      if (booking?.payment_authorization_url && booking.payment_authorization_url !== null) {
+        // Backend already initialized payment, redirect directly
+        console.log("[Booking] Using payment URL from booking response");
+        window.location.href = booking.payment_authorization_url;
+        return;
+      }
+
+      // Payment URL not provided, need to initialize payment
+      console.log("[Booking] Payment URL not in response, initializing payment...");
+
+      // If no authorization URL in response, initialize payment (fallback)
       try {
         const paymentResponse = await bookingAPI.initializePayment(booking.id) as any;
         const paymentData = paymentResponse?.data || paymentResponse;
