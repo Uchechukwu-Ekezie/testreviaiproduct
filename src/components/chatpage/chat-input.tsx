@@ -18,6 +18,14 @@ import {
 } from "@/utils/geolocation";
 import type { ChatSubmitOptions, ChatSubmitLocation } from "@/types/chat";
 
+// Constants for better maintainability
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024; // 25MB
+const MAX_TEXTAREA_HEIGHT = 180; // pixels
+const MAX_TEXTAREA_HEIGHT_MOBILE = 96; // pixels (24 * 4)
+const MAX_TEXTAREA_HEIGHT_DESKTOP = 128; // pixels (32 * 4)
+const KEYBOARD_SCROLL_DELAY = 300; // milliseconds
+
 interface ChatInputProps {
   input: string;
   setInput: React.Dispatch<React.SetStateAction<string>>;
@@ -354,7 +362,7 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(
           textareaRef.current.style.height = "auto";
           textareaRef.current.style.height = `${Math.min(
             textareaRef.current.scrollHeight,
-            180
+            MAX_TEXTAREA_HEIGHT
           )}px`;
         }
       },
@@ -519,7 +527,7 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(
         textareaRef.current.style.height = "auto";
         textareaRef.current.style.height = `${Math.min(
           textareaRef.current.scrollHeight,
-          180
+          MAX_TEXTAREA_HEIGHT
         )}px`;
       }
     }, []);
@@ -551,10 +559,10 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(
             return false;
           }
 
-          if (file.size > 10 * 1024 * 1024) {
+          if (file.size > MAX_IMAGE_SIZE) {
             toast({
               title: "File too large",
-              description: `${file.name} exceeds the 10MB limit.`,
+              description: `${file.name} exceeds the ${MAX_IMAGE_SIZE / (1024 * 1024)}MB limit.`,
               variant: "destructive",
             });
             return false;
@@ -646,8 +654,6 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         ]);
 
-        const maxSize = 25 * 1024 * 1024; // 25MB limit
-
         // Optimized validation with early returns
         const validFiles = selectedFiles.filter((file) => {
           if (!allowedTypes.has(file.type)) {
@@ -659,10 +665,10 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(
             return false;
           }
 
-          if (file.size > maxSize) {
+          if (file.size > MAX_ATTACHMENT_SIZE) {
             toast({
               title: "File too large",
-              description: `${file.name} exceeds the 25MB limit.`,
+              description: `${file.name} exceeds the ${MAX_ATTACHMENT_SIZE / (1024 * 1024)}MB limit.`,
               variant: "destructive",
             });
             return false;
@@ -718,13 +724,13 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(
     // If collapsed, show floating button
     if (isCollapsed && setIsCollapsed) {
       return (
-        <motion.div
-          className="fixed bottom-6 left-6 z-30 pointer-events-auto"
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0, opacity: 0 }}
-          transition={{ type: "spring", stiffness: 260, damping: 20 }}
-        >
+      <motion.div
+        className="fixed bottom-6 left-6 z-40 pointer-events-auto"
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 260, damping: 20 }}
+      >
           <motion.button
             onClick={() => setIsCollapsed(false)}
             className={cn(
@@ -807,7 +813,7 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(
 
     return (
       <div
-        className="w-full fixed bottom-0 left-0 right-0 z-30 border-border pointer-events-none bg-transparent"
+        className="w-full fixed bottom-0 left-0 right-0 z-40 border-border pointer-events-none bg-transparent"
         style={{
           paddingLeft: isMobile ? 0 : sidebarCollapsed ? "4rem" : "16rem",
           paddingRight: isMobile ? 0 : "14px",
@@ -989,19 +995,21 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(
             <input
               type="file"
               multiple
-              hidden
               ref={imageInputRef}
               onChange={handleImageUpload}
               accept="image/*"
+              className="hidden"
+              style={{ display: 'none' }}
             />
 
             <input
               type="file"
               multiple
-              hidden
               ref={attachmentInputRef}
               onChange={handleAttachmentUpload}
               accept=".pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="hidden"
+              style={{ display: 'none' }}
             />
 
             {/* Layout - Mobile has + button inside, Desktop has + button outside */}
@@ -1040,7 +1048,6 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    console.log("Add button clicked, opening modal");
                     setIsModalOpen(true);
                   }}
                   className={cn(
@@ -1123,7 +1130,6 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        console.log("Add button clicked, opening modal");
                         setIsModalOpen(true);
                       }}
                       className={cn(
@@ -1165,7 +1171,7 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(
                               behavior: "smooth",
                               block: "center",
                             });
-                          }, 300);
+                          }, KEYBOARD_SCROLL_DELAY);
                         }
                       }}
                       disabled={isLoading}
@@ -1173,11 +1179,16 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(
                       inputMode="text"
                       autoComplete="off"
                       autoCapitalize="sentences"
+                      aria-label="Chat input"
+                      aria-describedby="chat-input-description"
                       className={cn(
                         "w-full overflow-y-auto bg-transparent resize-none text-foreground placeholder:text-muted-foreground focus:outline-none touch-manipulation",
                         isMobile ? "p-1 text-base max-h-24" : "p-2 max-h-32"
                       )}
                     />
+                    <span id="chat-input-description" className="sr-only">
+                      Type your message and press Enter to send, or Shift+Enter for a new line
+                    </span>
                   </div>
 
                   {/* Send Button - Inside the border */}
@@ -1190,6 +1201,13 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(
                         images.length === 0 &&
                         attachments.length === 0) ||
                       uploadingImages.some((uploading) => uploading)
+                    }
+                    aria-label={
+                      isLoading && !isStopping
+                        ? "Stop generating response"
+                        : uploadingImages.some((uploading) => uploading)
+                        ? "Uploading images, please wait"
+                        : "Send message"
                     }
                     className={cn(
                       "flex items-center justify-center flex-shrink-0 rounded-full transition-colors touch-manipulation",
@@ -1306,15 +1324,16 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(
             <>
               {/* Backdrop - Mobile only */}
               <motion.div
-                className="fixed inset-0 z-[100] bg-black/50 md:hidden"
+                className="fixed inset-0 z-[100] bg-black/50 md:hidden pointer-events-auto"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setIsModalOpen(false)}
+                onTouchStart={(e) => e.stopPropagation()}
               />
               {/* Modal Content - Slides up from bottom - Mobile only */}
               <motion.div
-                className="fixed bottom-0 left-0 right-0 z-[101] w-full bg-card rounded-t-3xl border-t-[2px] border-border shadow-2xl md:hidden"
+                className="fixed bottom-0 left-0 right-0 z-[101] w-full bg-card rounded-t-3xl border-t-[2px] border-border shadow-2xl md:hidden pointer-events-auto"
                 style={{
                   paddingLeft: "1.5rem",
                   paddingRight: "1.5rem",
@@ -1329,18 +1348,31 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(
                   damping: 30,
                   stiffness: 300,
                 }}
+                onClick={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                onTouchMove={(e) => e.stopPropagation()}
+                onTouchEnd={(e) => e.stopPropagation()}
               >
                 {/* Handle bar */}
                 <div className="flex justify-center mb-4">
                   <div className="w-10 h-1 bg-muted-foreground/30 rounded-full" />
                 </div>
 
-                <div className="flex items-center justify-between mb-6">
+                <div 
+                  className="flex items-center justify-between mb-6"
+                  onClick={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                >
                   <h3 className="text-lg font-medium">Add to your message</h3>
                   <motion.button
                     type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="p-2 border-2 rounded-full hover:bg-muted border-border touch-manipulation"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      setIsModalOpen(false);
+                    }}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    className="p-2 border-2 rounded-full hover:bg-muted border-border touch-manipulation active:bg-muted"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.9 }}
                   >
@@ -1348,42 +1380,54 @@ const ChatInput: React.FC<ChatInputProps> = React.memo(
                   </motion.button>
                 </div>
 
-                <div className="grid gap-2">
-                  <motion.button
-                    type="button"
-                    disabled={isLoading}
-                    onClick={() => {
-                      imageInputRef.current?.click();
-                      setIsModalOpen(false);
-                    }}
-                    className="flex items-center w-full gap-4 p-4 transition-colors rounded-xl hover:bg-muted disabled:opacity-50 touch-manipulation min-h-[56px]"
-                    whileHover={{
-                      backgroundColor: "rgba(255,255,255,0.1)",
-                    }}
-                    whileTap={{ scale: 0.98 }}
+                <div 
+                  className="grid gap-2"
+                  onClick={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                >
+                  <label
+                    htmlFor="mobile-image-input"
+                    className="flex items-center w-full gap-4 p-4 transition-colors rounded-xl hover:bg-muted disabled:opacity-50 touch-manipulation min-h-[56px] active:bg-muted cursor-pointer"
                   >
                     <ImageIcon className="w-6 h-6 text-muted-foreground" />
                     <span className="text-base text-foreground">
                       Upload Image
                     </span>
-                  </motion.button>
+                    <input
+                      id="mobile-image-input"
+                      type="file"
+                      multiple
+                      ref={imageInputRef}
+                      onChange={(e) => {
+                        handleImageUpload(e);
+                        setIsModalOpen(false);
+                      }}
+                      accept="image/*"
+                      className="hidden"
+                      style={{ display: 'none' }}
+                    />
+                  </label>
                   <div className="w-full border-b border-border opacity-50"></div>
-                  <motion.button
-                    type="button"
-                    disabled={isLoading}
-                    onClick={() => {
-                      attachmentInputRef.current?.click();
-                      setIsModalOpen(false);
-                    }}
-                    className="flex items-center w-full gap-4 p-4 transition-colors rounded-xl hover:bg-muted disabled:opacity-50 touch-manipulation min-h-[56px]"
-                    whileHover={{
-                      backgroundColor: "rgba(255,255,255,0.1)",
-                    }}
-                    whileTap={{ scale: 0.98 }}
+                  <label
+                    htmlFor="mobile-attachment-input"
+                    className="flex items-center w-full gap-4 p-4 transition-colors rounded-xl hover:bg-muted disabled:opacity-50 touch-manipulation min-h-[56px] active:bg-muted cursor-pointer"
                   >
                     <PaperclipIcon className="w-5 h-5 text-muted-foreground" />
                     <span className="text-foreground">Attach Document</span>
-                  </motion.button>
+                    <input
+                      id="mobile-attachment-input"
+                      type="file"
+                      multiple
+                      ref={attachmentInputRef}
+                      onChange={(e) => {
+                        handleAttachmentUpload(e);
+                        setIsModalOpen(false);
+                      }}
+                      accept=".pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                      className="hidden"
+                      style={{ display: 'none' }}
+                    />
+                  </label>
                 </div>
               </motion.div>
             </>
