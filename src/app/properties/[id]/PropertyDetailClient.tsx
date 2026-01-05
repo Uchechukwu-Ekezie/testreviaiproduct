@@ -22,7 +22,7 @@ import { useRouter } from "next/navigation";
 import { useProperties } from "@/contexts/properties-context";
 import { useAuth } from "@/contexts/auth-context";
 import type { Property } from "@/contexts/properties-context";
-import { reviewsAPI } from "@/lib/api";
+import { reviewsAPI, followAPI } from "@/lib/api";
 import BookingModal from "@/components/BookingModal";
 import imgg from "../../../../public/Image/house.jpeg";
 
@@ -354,33 +354,80 @@ export default function PropertyDetailClient({
   const fetchReviews = async (property: any) => {
     try {
       setReviewsLoading(true);
-      console.log("Processing property reviews:", property?.reviews);
+      console.log("Fetching reviews for property:", propertyId);
 
-      // Use reviews from the property data directly
-      if (property && Array.isArray(property.reviews)) {
-        const processedReviews = property.reviews.map((review: any) => ({
+      // Fetch reviews from the API endpoint
+      const reviews = await reviewsAPI.getByProperty(propertyId, 0, 100, 'approved');
+      console.log("Fetched reviews from API:", reviews);
+
+      // Extract unique user IDs from reviews
+      const userIds = new Set<string>();
+      reviews.forEach((review: any) => {
+        if (review.user_id) userIds.add(review.user_id);
+        if (review.user && typeof review.user === 'string') userIds.add(review.user);
+        if (review.user && typeof review.user === 'object' && review.user.id) userIds.add(review.user.id);
+      });
+
+      // Fetch user data for all reviewers
+      const userDataMap = new Map<string, any>();
+      await Promise.all(
+        Array.from(userIds).map(async (userId: string) => {
+          try {
+            const userStats = await followAPI.getUserFollowStats(userId);
+            userDataMap.set(userId, {
+              id: userStats.id,
+              name: `${userStats.first_name || ""} ${userStats.last_name || ""}`.trim() || userStats.username || "Anonymous",
+              email: userStats.email,
+              avatar: userStats.avatar,
+            });
+          } catch (error) {
+            console.error(`Failed to fetch user data for ${userId}:`, error);
+            userDataMap.set(userId, {
+              id: userId,
+              name: "Anonymous",
+              email: null,
+              avatar: undefined,
+            });
+          }
+        })
+      );
+
+      // Process and transform reviews
+      const processedReviews = reviews.map((review: any) => {
+        // Get user ID from various possible fields
+        const userId = review.user_id || (typeof review.user === 'string' ? review.user : review.user?.id);
+        
+        // Get user data from map or use existing user object
+        const userData = userId && userDataMap.has(userId)
+          ? userDataMap.get(userId)
+          : (review.user && typeof review.user === 'object' ? review.user : {
+              id: userId || null,
+              name: "Anonymous",
+              email: null,
+              avatar: undefined,
+            });
+
+        return {
           id: review.id,
-          user: review.user,
-          username: review.user?.name || review.username || "Anonymous",
-          rating: review.rating,
-          date: review.date,
+          user: userData,
+          username: userData.name || "Anonymous",
+          rating: typeof review.rating === 'number' ? review.rating : parseInt(review.rating) || 0,
+          date: review.date || review.created_at,
           created_at: review.created_at,
-          comment: review.comment || review.review_text,
-          review_text: review.review_text,
-          status: review.status,
-          property: review.property,
-          address: review.address,
-          evidence: review.evidence,
-        }));
+          comment: review.comment || review.review_text || review.content || "",
+          review_text: review.review_text || review.content || "",
+          status: review.status || "pending",
+          property: review.property || review.property_id || propertyId,
+          address: review.address || "",
+          evidence: review.evidence || null,
+          avatar: userData.avatar,
+        };
+      });
 
-        console.log("Processed reviews:", processedReviews);
-        setBackendReviews(processedReviews);
-      } else {
-        console.log("No reviews found in property data");
-        setBackendReviews([]);
-      }
+      console.log("Processed reviews:", processedReviews);
+      setBackendReviews(processedReviews);
     } catch (err) {
-      console.error("Error processing reviews:", err);
+      console.error("Error fetching reviews:", err);
       setBackendReviews([]);
     } finally {
       setReviewsLoading(false);
@@ -842,13 +889,21 @@ export default function PropertyDetailClient({
                       className="bg-black/40 backdrop-blur-sm border border-white/10 rounded-2xl p-4"
                     >
                       <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
-                          <span className="text-white font-semibold text-sm">
-                            {(review.user?.name || review.username || "U")
-                              .charAt(0)
-                              .toUpperCase()}
-                          </span>
-                        </div>
+                        {review.avatar ? (
+                          <img
+                            src={review.avatar}
+                            alt={review.user?.name || review.username || "User"}
+                            className="w-10 h-10 rounded-full object-cover border-2 border-white/20"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
+                            <span className="text-white font-semibold text-sm">
+                              {(review.user?.name || review.username || "U")
+                                .charAt(0)
+                                .toUpperCase()}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex-1">
                           <h4 className="text-white font-medium text-sm mb-1">
                             {review.user?.name ||
@@ -860,7 +915,11 @@ export default function PropertyDetailClient({
                               (review.created_at
                                 ? new Date(
                                     review.created_at
-                                  ).toLocaleDateString()
+                                  ).toLocaleDateString("en-GB", {
+                                    day: "2-digit",
+                                    month: "short",
+                                    year: "numeric",
+                                  })
                                 : "Recently")}
                           </span>
                           {review.address && (

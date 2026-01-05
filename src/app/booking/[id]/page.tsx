@@ -163,6 +163,25 @@ export default function BookingPage({
       toast.error("Please select check-in and check-out dates");
       return;
     }
+    
+    // Validate dates are not in the past
+    if (!isValidDate(bookingData.checkIn, today)) {
+      toast.error("Check-in date cannot be in the past");
+      return;
+    }
+    
+    const minCheckout = getMinCheckoutDate();
+    if (!isValidDate(bookingData.checkOut, minCheckout)) {
+      toast.error("Check-out date must be after check-in date");
+      return;
+    }
+    
+    // Validate check-out is after check-in
+    if (bookingData.checkOut <= bookingData.checkIn) {
+      toast.error("Check-out date must be after check-in date");
+      return;
+    }
+    
     if (!bookingData.firstName || !bookingData.lastName) {
       toast.error("Please enter your full name");
       return;
@@ -204,6 +223,11 @@ export default function BookingPage({
 
       toast.success("Booking created successfully! Redirecting to payment...");
 
+      // Store booking ID in sessionStorage for payment callback
+      if (booking?.id) {
+        sessionStorage.setItem('pending_booking_id', booking.id);
+      }
+
       // Check if payment authorization URL is already in the booking response
       // Only use it if it's a valid non-null URL
       if (booking?.payment_authorization_url && booking.payment_authorization_url !== null) {
@@ -222,6 +246,10 @@ export default function BookingPage({
         const paymentData = paymentResponse?.data || paymentResponse;
         
         if (paymentData?.authorization_url) {
+          // Store booking ID in sessionStorage for payment callback
+          if (booking?.id) {
+            sessionStorage.setItem('pending_booking_id', booking.id);
+          }
           // Redirect to Paystack payment page
           window.location.href = paymentData.authorization_url;
         } else {
@@ -276,14 +304,31 @@ export default function BookingPage({
   };
 
   // Get today's date in YYYY-MM-DD format
-  const today = new Date().toISOString().split('T')[0];
+  const getToday = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  
+  const today = getToday();
+  
+  // Validate date is not in the past
+  const isValidDate = (dateString: string, minDate: string = today) => {
+    if (!dateString) return false;
+    return dateString >= minDate;
+  };
   
   // Calculate minimum check-out date (day after check-in or today)
   const getMinCheckoutDate = () => {
     if (bookingData.checkIn) {
       const checkInDate = new Date(bookingData.checkIn);
       checkInDate.setDate(checkInDate.getDate() + 1);
-      return checkInDate.toISOString().split('T')[0];
+      const year = checkInDate.getFullYear();
+      const month = String(checkInDate.getMonth() + 1).padStart(2, '0');
+      const day = String(checkInDate.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
     }
     return today;
   };
@@ -414,13 +459,22 @@ export default function BookingPage({
                         type="date"
                         value={bookingData.checkIn}
                         onChange={(e) => {
-                          handleInputChange("checkIn", e.target.value);
-                          // Reset check-out if it's before the new check-in
-                          if (bookingData.checkOut && e.target.value && bookingData.checkOut <= e.target.value) {
-                            handleInputChange("checkOut", "");
+                          const selectedDate = e.target.value;
+                          // Validate that the selected date is not in the past
+                          if (selectedDate && isValidDate(selectedDate, today)) {
+                            handleInputChange("checkIn", selectedDate);
+                            // Reset check-out if it's before the new check-in
+                            if (bookingData.checkOut && selectedDate && bookingData.checkOut <= selectedDate) {
+                              handleInputChange("checkOut", "");
+                            }
+                          } else if (selectedDate) {
+                            // If invalid date selected, show error and don't update
+                            toast.error("Please select a date from today onwards");
+                            e.target.value = bookingData.checkIn; // Reset to previous value
                           }
                         }}
                         min={today}
+                        max="2099-12-31"
                         required
                         className="w-full p-2.5 sm:p-3 bg-white/10 border border-white/20 rounded-lg text-white text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-[#FFD700]/50 focus:border-[#FFD700] transition-all hover:border-white/30"
                       />
@@ -444,10 +498,20 @@ export default function BookingPage({
                       <input
                         type="date"
                         value={bookingData.checkOut}
-                        onChange={(e) =>
-                          handleInputChange("checkOut", e.target.value)
-                        }
+                        onChange={(e) => {
+                          const selectedDate = e.target.value;
+                          const minCheckout = getMinCheckoutDate();
+                          // Validate that the selected date is after check-in
+                          if (selectedDate && isValidDate(selectedDate, minCheckout)) {
+                            handleInputChange("checkOut", selectedDate);
+                          } else if (selectedDate) {
+                            // If invalid date selected, show error and don't update
+                            toast.error("Check-out date must be after check-in date");
+                            e.target.value = bookingData.checkOut; // Reset to previous value
+                          }
+                        }}
                         min={getMinCheckoutDate()}
+                        max="2099-12-31"
                         disabled={!bookingData.checkIn}
                         required
                         className="w-full p-2.5 sm:p-3 bg-white/10 border border-white/20 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#FFD700]/50 focus:border-[#FFD700] transition-all hover:border-white/30 disabled:opacity-50 disabled:cursor-not-allowed"

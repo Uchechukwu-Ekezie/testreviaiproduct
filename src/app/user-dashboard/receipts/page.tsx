@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { apiFetch } from "@/lib/api";
+import { bookingAPI, followAPI } from "@/lib/api";
 import { useAuth } from "@/contexts/auth-context";
+import { toast } from "react-toastify";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 
 // Interfaces for type safety
 interface Receipt {
@@ -63,6 +66,30 @@ export default function Receipts() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("recent");
   const [selectedReceipts, setSelectedReceipts] = useState<string[]>([]);
+  const userCacheRef = useRef<Map<string, string>>(new Map()); // Cache user_id -> user_name
+
+  // Fetch user name by user_id
+  const fetchUserName = async (userId: string | null | undefined): Promise<string> => {
+    if (!userId) return 'Unknown';
+    
+    // Check cache first
+    if (userCacheRef.current.has(userId)) {
+      return userCacheRef.current.get(userId) || 'Unknown';
+    }
+
+    try {
+      const userStats = await followAPI.getUserFollowStats(userId);
+      const fullName = `${userStats.first_name || ""} ${userStats.last_name || ""}`.trim();
+      const userName = fullName || userStats.username?.split("@")[0] || userStats.email?.split("@")[0] || 'Unknown';
+      
+      // Cache the result
+      userCacheRef.current.set(userId, userName);
+      return userName;
+    } catch (error) {
+      console.error(`Failed to fetch user name for ${userId}:`, error);
+      return 'Unknown';
+    }
+  };
 
   // Fetch receipts data
   useEffect(() => {
@@ -76,12 +103,117 @@ export default function Receipts() {
         setLoading(true);
         setError(null);
 
-        // Try to fetch receipts from API
-        const response = await apiFetch("receipts/mine/");
-        const receiptsData = response || [];
+        if (!user?.id) {
+          setError("User ID not found");
+          setLoading(false);
+          return;
+        }
+
+        // Fetch user transactions from the new endpoint
+        const response = await bookingAPI.getUserTransactions(user.id, {
+          page: 1,
+          page_size: 100,
+        }) as any;
         
-        // Fetched receipts
-        setReceipts(receiptsData);
+        // Handle different response formats
+        let transactionsData: any[] = [];
+        if (Array.isArray(response)) {
+          transactionsData = response;
+        } else if (response && typeof response === 'object') {
+          // Check if response has a transactions property
+          if (Array.isArray(response.transactions)) {
+            transactionsData = response.transactions;
+          } else if (Array.isArray(response.data)) {
+            transactionsData = response.data;
+          } else if (Array.isArray(response.results)) {
+            transactionsData = response.results;
+          }
+        }
+        
+        // Extract unique user IDs from transactions
+        const userIds = new Set<string>();
+        transactionsData.forEach((transaction: any) => {
+          // Extract from transaction_metadata if available
+          if (transaction.transaction_metadata?.agent?.id) {
+            userIds.add(transaction.transaction_metadata.agent.id);
+          }
+          if (transaction.transaction_metadata?.guest?.id) {
+            userIds.add(transaction.transaction_metadata.guest.id);
+          }
+          // Also check top-level fields
+          if (transaction.user_id) userIds.add(transaction.user_id);
+          if (transaction.user) {
+            const userId = typeof transaction.user === 'string' ? transaction.user : transaction.user.id;
+            if (userId) userIds.add(userId);
+          }
+          if (transaction.agent_id) userIds.add(transaction.agent_id);
+          if (transaction.agent?.id) userIds.add(transaction.agent.id);
+        });
+
+        // Fetch user names for all unique user IDs
+        const userNamesMap = new Map<string, string>();
+        await Promise.all(
+          Array.from(userIds).map(async (userId) => {
+            const userName = await fetchUserName(userId);
+            userNamesMap.set(userId, userName);
+          })
+        );
+        
+        // Transform transactions to receipts format
+        const transformedReceipts = transactionsData.map((transaction: any) => {
+          // Extract from transaction_metadata first, then fallback to top-level
+          const metadata = transaction.transaction_metadata || {};
+          const agentId = metadata.agent?.id || transaction.agent_id || transaction.agent?.id;
+          const userId = metadata.guest?.id || transaction.user_id || (typeof transaction.user === 'string' ? transaction.user : transaction.user?.id);
+          
+          // Get user names from the map we already fetched, or use metadata
+          const agentName = metadata.agent?.name || 
+            (agentId ? (userNamesMap.get(agentId) || 'Unknown') : 'Unknown') ||
+            transaction.agent_name || 
+            transaction.agent?.name || 
+            'Unknown';
+          
+          const userName = metadata.guest?.name || 
+            (userId ? (userNamesMap.get(userId) || 'Unknown') : 'Unknown');
+
+          // Extract property info from metadata
+          const propertyTitle = metadata.property_title || 
+            transaction.property_title ||
+            transaction.property_id || 
+            transaction.property || 
+            transaction.booking?.property_id || 
+            transaction.booking?.property ||
+            'Unknown Property';
+
+          // Parse amount (can be string or number)
+          const amount = typeof transaction.amount === 'string' 
+            ? parseFloat(transaction.amount) || 0
+            : transaction.amount || 0;
+
+          return {
+            id: transaction.id || transaction.transaction_id || `TXN-${Date.now()}`,
+            bookingId: metadata.booking_id || transaction.booking_id || transaction.booking?.id,
+            booking: transaction.booking,
+            property: propertyTitle,
+            type: transaction.type || transaction.transaction_type || 'payment',
+            amount: amount,
+            date: transaction.created_at || transaction.date,
+            created_at: transaction.created_at || new Date().toISOString(),
+            updated_at: transaction.updated_at || transaction.created_at || new Date().toISOString(),
+            time: transaction.created_at,
+            status: transaction.status || 'completed',
+            paymentMethod: transaction.payment_method || 'paystack',
+            payment_method: transaction.payment_method || 'paystack',
+            landlord: agentName,
+            location: metadata.property_title || transaction.location || transaction.property_address || '',
+            transactionId: transaction.id || transaction.transaction_id,
+            transaction_id: transaction.id || transaction.transaction_id,
+            user: transaction.user || transaction.user_id,
+          };
+        });
+        
+        // Ensure receiptsData is always an array
+        setReceipts(transformedReceipts);
 
       } catch (err: any) {
         console.error("Error fetching receipts:", err);
@@ -101,7 +233,8 @@ export default function Receipts() {
   }, [isAuthenticated, user]);
 
   // Transform receipt data to ensure consistency
-  const transformedReceipts = receipts.map(receipt => ({
+  // Ensure receipts is always an array before mapping
+  const transformedReceipts = (Array.isArray(receipts) ? receipts : []).map(receipt => ({
     ...receipt,
     property: typeof receipt.property === 'string' 
       ? receipt.property 
@@ -262,20 +395,233 @@ export default function Receipts() {
   };
 
   const downloadReceipt = (receiptId: string) => {
-    // Mock download functionality - replace with actual download logic
-    // Downloading receipt
-    // You can implement actual PDF generation or download logic here
+    // Find the receipt
+    const receipt = receipts.find(r => r.id === receiptId);
+    if (!receipt) {
+      toast.error("Receipt not found");
+      return;
+    }
+    
+    try {
+      // Create new PDF document
+      const doc = new jsPDF();
+      
+      // Set colors
+      const primaryColor: [number, number, number] = [78, 9, 145]; // #4E0991 (purple)
+      const secondaryColor: [number, number, number] = [255, 215, 0]; // #FFD700 (gold)
+      const darkColor: [number, number, number] = [26, 26, 26]; // #1a1a1a (dark)
+      const lightGray: [number, number, number] = [200, 200, 200];
+      
+      // Header section
+      doc.setFillColor(...primaryColor);
+      doc.rect(0, 0, 210, 40, 'F');
+      
+      // Company/App name
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(24);
+      doc.setFont('helvetica', 'bold');
+      doc.text('REVIAI', 105, 20, { align: 'center' });
+      
+      // Receipt title
+      doc.setFontSize(18);
+      doc.text('PAYMENT RECEIPT', 105, 35, { align: 'center' });
+      
+      // Reset text color
+      doc.setTextColor(...darkColor);
+      
+      // Receipt details section
+      let yPos = 55;
+      
+      // Receipt info box
+      doc.setFillColor(245, 245, 245);
+      doc.roundedRect(10, yPos, 190, 50, 3, 3, 'F');
+      
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.setFont('helvetica', 'normal');
+      
+      yPos += 8;
+      doc.text('Receipt ID:', 15, yPos);
+      doc.setTextColor(...darkColor);
+      doc.setFont('helvetica', 'bold');
+      doc.text(receipt.id.slice(0, 20) + (receipt.id.length > 20 ? '...' : ''), 50, yPos);
+      
+      yPos += 7;
+      doc.setTextColor(100, 100, 100);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Transaction ID:', 15, yPos);
+      doc.setTextColor(...darkColor);
+      doc.setFont('helvetica', 'bold');
+      doc.text((receipt.transactionId || receipt.id).slice(0, 20), 50, yPos);
+      
+      yPos += 7;
+      doc.setTextColor(100, 100, 100);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Date:', 15, yPos);
+      doc.setTextColor(...darkColor);
+      doc.setFont('helvetica', 'bold');
+      doc.text(formatDate(receipt.date || receipt.created_at), 50, yPos);
+      
+      yPos += 7;
+      doc.setTextColor(100, 100, 100);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Time:', 15, yPos);
+      doc.setTextColor(...darkColor);
+      doc.setFont('helvetica', 'bold');
+      doc.text(formatTime(receipt.created_at), 50, yPos);
+      
+      yPos += 7;
+      doc.setTextColor(100, 100, 100);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Status:', 15, yPos);
+      doc.setTextColor(...darkColor);
+      doc.setFont('helvetica', 'bold');
+      const statusColor: [number, number, number] = receipt.status.toLowerCase().includes('completed') || receipt.status.toLowerCase().includes('paid') 
+        ? [34, 197, 94] // green
+        : receipt.status.toLowerCase().includes('pending')
+        ? [251, 146, 60] // orange
+        : [239, 68, 68]; // red
+      doc.setTextColor(...statusColor);
+      doc.text(receipt.status.toUpperCase(), 50, yPos);
+      
+      // Property details section
+      yPos = 120;
+      doc.setFillColor(245, 245, 245);
+      doc.roundedRect(10, yPos, 190, 40, 3, 3, 'F');
+      
+      doc.setFontSize(12);
+      doc.setTextColor(...primaryColor);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Property Details', 15, yPos + 8);
+      
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.setFont('helvetica', 'normal');
+      
+      yPos += 15;
+      doc.text('Property:', 15, yPos);
+      doc.setTextColor(...darkColor);
+      doc.setFont('helvetica', 'bold');
+      doc.text(receipt.property || 'N/A', 50, yPos);
+      
+      yPos += 7;
+      doc.setTextColor(100, 100, 100);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Location:', 15, yPos);
+      doc.setTextColor(...darkColor);
+      doc.setFont('helvetica', 'bold');
+      doc.text(receipt.location || 'N/A', 50, yPos);
+      
+      if (receipt.landlord) {
+        yPos += 7;
+        doc.setTextColor(100, 100, 100);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Agent/Landlord:', 15, yPos);
+        doc.setTextColor(...darkColor);
+        doc.setFont('helvetica', 'bold');
+        doc.text(receipt.landlord, 50, yPos);
+      }
+      
+      // Payment details section
+      yPos = 175;
+      doc.setFillColor(245, 245, 245);
+      doc.roundedRect(10, yPos, 190, 50, 3, 3, 'F');
+      
+      doc.setFontSize(12);
+      doc.setTextColor(...primaryColor);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Payment Details', 15, yPos + 8);
+      
+      const amount = typeof receipt.amount === 'string' ? parseFloat(receipt.amount) : receipt.amount;
+      const formattedAmount = `₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.setFont('helvetica', 'normal');
+      
+      yPos += 15;
+      doc.text('Amount Paid:', 15, yPos);
+      doc.setFontSize(18);
+      doc.setTextColor(...primaryColor);
+      doc.setFont('helvetica', 'bold');
+      doc.text(formattedAmount, 50, yPos);
+      
+      yPos += 10;
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Payment Method:', 15, yPos);
+      doc.setTextColor(...darkColor);
+      doc.setFont('helvetica', 'bold');
+      doc.text(receipt.paymentMethod || 'Paystack', 50, yPos);
+      
+      if (receipt.bookingId) {
+        yPos += 7;
+        doc.setTextColor(100, 100, 100);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Booking ID:', 15, yPos);
+        doc.setTextColor(...darkColor);
+        doc.setFont('helvetica', 'bold');
+        doc.text(receipt.bookingId.slice(0, 20), 50, yPos);
+      }
+      
+      // Footer
+      yPos = 250;
+      doc.setFontSize(9);
+      doc.setTextColor(150, 150, 150);
+      doc.setFont('helvetica', 'italic');
+      doc.text('Thank you for your business!', 105, yPos, { align: 'center' });
+      
+      yPos += 5;
+      doc.setFontSize(8);
+      doc.text('This is an automated receipt. Please keep this for your records.', 105, yPos, { align: 'center' });
+      
+      // Save the PDF
+      doc.save(`receipt-${receiptId.slice(0, 8)}.pdf`);
+      
+      toast.success("Receipt PDF downloaded successfully");
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      toast.error("Failed to generate PDF receipt");
+    }
+  };
+
+  const viewReceipt = (receiptId: string) => {
+    // Navigate to receipt detail page or show modal
+    const receipt = receipts.find(r => r.id === receiptId);
+    if (!receipt) {
+      toast.error("Receipt not found");
+      return;
+    }
+    
+    // Navigate to bookings page with the booking ID if available
+    if (receipt.bookingId) {
+      window.location.href = `/user-dashboard/bookings`;
+    } else {
+      // Show receipt details in a modal or alert
+      const receiptDetails = `Receipt Details:\n\nID: ${receipt.id}\nAmount: ₦${typeof receipt.amount === 'string' ? parseFloat(receipt.amount).toLocaleString() : receipt.amount.toLocaleString()}\nStatus: ${receipt.status}\nDate: ${formatDate(receipt.date || receipt.created_at)}\nProperty: ${receipt.property}`;
+      alert(receiptDetails);
+    }
   };
 
   const totalAmount = filteredReceipts.reduce(
-    (sum, receipt) => sum + receipt.amount,
+    (sum, receipt) => {
+      const amount = typeof receipt.amount === 'string' ? parseFloat(receipt.amount) || 0 : receipt.amount || 0;
+      return sum + amount;
+    },
     0
   );
   const paidAmount = filteredReceipts
-    .filter((r) => r.status.toLowerCase().includes('paid') || 
-                   r.status.toLowerCase().includes('completed') ||
-                   r.status.toLowerCase().includes('successful'))
-    .reduce((sum, receipt) => sum + receipt.amount, 0);
+    .filter((r) => {
+      const status = (r.status || '').toLowerCase();
+      return status.includes('paid') || 
+             status.includes('completed') ||
+             status.includes('successful');
+    })
+    .reduce((sum, receipt) => {
+      const amount = typeof receipt.amount === 'string' ? parseFloat(receipt.amount) || 0 : receipt.amount || 0;
+      return sum + amount;
+    }, 0);
 
   if (!isAuthenticated) {
     return (
@@ -622,12 +968,21 @@ export default function Receipts() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button
-                          onClick={() => downloadReceipt(receipt.id)}
-                          className="text-blue-400 hover:text-blue-300 mr-3"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadReceipt(receipt.id);
+                          }}
+                          className="text-blue-400 hover:text-blue-300 mr-3 transition-colors"
                         >
                           Download
                         </button>
-                        <button className="text-gray-400 hover:text-white">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            viewReceipt(receipt.id);
+                          }}
+                          className="text-gray-400 hover:text-white transition-colors"
+                        >
                           View
                         </button>
                       </td>

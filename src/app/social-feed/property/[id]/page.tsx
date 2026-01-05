@@ -26,6 +26,7 @@ import { useReviews } from "@/contexts/reviews-context";
 import PropertyChatWidget from "@/components/property/PropertyChatWidget";
 import { PropertyReviewForm } from "@/components/property-review-form";
 import { useAuth } from "@/contexts/auth-context";
+import { followAPI } from "@/lib/api";
 
 const amenityIcons: { [key: string]: React.ReactNode } = {
   "Swimming Pool": <Waves className="w-5 h-5" />,
@@ -71,6 +72,38 @@ export default function PropertyDetailsPage() {
     const loadedReviews = await getReviewsByPropertyId(id);
     console.log("Loaded reviews:", loadedReviews.length, loadedReviews);
 
+    // Extract unique user IDs from reviews
+    const userIds = new Set<string>();
+    loadedReviews.forEach((r: any) => {
+      if (r.user_id) userIds.add(r.user_id);
+      if (r.user && typeof r.user === 'string') userIds.add(r.user);
+      if (r.user && typeof r.user === 'object' && r.user.id) userIds.add(r.user.id);
+    });
+
+    // Fetch user data for all reviewers
+    const userDataMap = new Map<string, any>();
+    await Promise.all(
+      Array.from(userIds).map(async (userId: string) => {
+        try {
+          const userStats = await followAPI.getUserFollowStats(userId);
+          userDataMap.set(userId, {
+            id: userStats.id,
+            name: `${userStats.first_name || ""} ${userStats.last_name || ""}`.trim() || userStats.username || "Anonymous",
+            email: userStats.email,
+            avatar: userStats.avatar,
+          });
+        } catch (error) {
+          console.error(`Failed to fetch user data for ${userId}:`, error);
+          userDataMap.set(userId, {
+            id: userId,
+            name: "Anonymous",
+            email: null,
+            avatar: undefined,
+          });
+        }
+      })
+    );
+
     const validReviews = loadedReviews
       .filter((r: any) => {
         // Filter approved or pending reviews
@@ -78,22 +111,33 @@ export default function PropertyDetailsPage() {
           console.log("Filtered out review:", r?.id, r?.status);
           return false;
         }
-        // Ensure user exists or provide a fallback
-        if (!r.user) {
-          r.user = {
-            id: null,
-            name: "Anonymous",
-            email: null,
-          };
-        }
         return true;
+      })
+      .map((r: any) => {
+        // Get user ID from various possible fields
+        const userId = r.user_id || (typeof r.user === 'string' ? r.user : r.user?.id);
+        
+        // Get user data from map or use existing user object
+        const userData = userId && userDataMap.has(userId)
+          ? userDataMap.get(userId)
+          : (r.user && typeof r.user === 'object' ? r.user : {
+              id: userId || null,
+              name: "Anonymous",
+              email: null,
+              avatar: undefined,
+            });
+
+        return {
+          ...r,
+          user: userData,
+        };
       })
       .sort(
         (a: any, b: any) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
 
-    console.log("Valid reviews after filtering:", validReviews.length);
+    console.log("Valid reviews after filtering and transformation:", validReviews.length);
     setReviews(validReviews);
     setIsLoadingReviews(false);
   };

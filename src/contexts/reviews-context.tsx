@@ -172,27 +172,46 @@ export const ReviewsProvider: React.FC<ReviewsProviderProps> = ({
         }
 
         console.log("🔄 Fetching reviews from API for property:", propertyId);
-        const response = (await reviewsAPI.getByProperty(propertyId)) as any;
+        const apiReviews = await reviewsAPI.getByProperty(propertyId, 0, 100, 'approved');
+        console.log("getReviewsByPropertyId: Got reviews:", apiReviews.length);
 
-        let reviews: Review[] = [];
-        if (Array.isArray(response)) {
-          console.log(
-            "getReviewsByPropertyId: Got array response:",
-            response.length
-          );
-          reviews = response;
-        } else if (response && Array.isArray(response.results)) {
-          console.log(
-            "getReviewsByPropertyId: Got paginated response:",
-            response.results.length
-          );
-          reviews = response.results;
-        } else {
-          console.log(
-            "getReviewsByPropertyId: Unexpected response format:",
-            response
-          );
-        }
+        // Transform API reviews to match context Review interface
+        const reviews: Review[] = apiReviews.map((apiReview: any) => ({
+          id: apiReview.id,
+          property: apiReview.property && typeof apiReview.property === 'object'
+            ? {
+                id: apiReview.property.id || apiReview.property_id || propertyId,
+                title: apiReview.property.title || '',
+                location: apiReview.property.location || apiReview.property.address || apiReview.address || '',
+              }
+            : apiReview.property_id
+            ? {
+                id: apiReview.property_id,
+                title: '',
+                location: apiReview.address || '',
+              }
+            : null,
+          user: apiReview.user && typeof apiReview.user === 'object'
+            ? {
+                id: apiReview.user.id || apiReview.user_id || '',
+                name: apiReview.user.name || apiReview.user.first_name || 'Anonymous',
+                email: apiReview.user.email || '',
+              }
+            : {
+                id: apiReview.user_id || '',
+                name: 'Anonymous',
+                email: '',
+              },
+          rating: typeof apiReview.rating === 'number' ? apiReview.rating : parseInt(apiReview.rating) || 0,
+          review_text: apiReview.review_text || apiReview.content || '',
+          status: apiReview.status || 'pending',
+          created_at: apiReview.created_at || '',
+          updated_at: apiReview.updated_at || apiReview.created_at || '',
+          address: apiReview.address || '',
+          evidence: apiReview.evidence || '',
+          embeddings: apiReview.embeddings || '',
+          reply: apiReview.reply,
+        }));
 
         // Cache for 3 minutes
         reviewsCache.set(cacheKey, reviews, 180);

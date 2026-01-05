@@ -19,6 +19,7 @@ function PaymentCallbackContent() {
         // Get reference from URL params (Paystack redirects with ?reference=...)
         const reference = searchParams.get("reference");
         const trxref = searchParams.get("trxref"); // Alternative param name
+        const bookingIdParam = searchParams.get("booking_id"); // Booking ID from URL if provided
 
         const paymentReference = reference || trxref;
 
@@ -28,8 +29,36 @@ function PaymentCallbackContent() {
           return;
         }
 
-        // Verify payment with backend
-        const result = await bookingAPI.verifyPayment(paymentReference) as any;
+        // Try to get booking_id from URL params, sessionStorage, or fallback to old endpoint
+        let bookingId = bookingIdParam;
+        
+        if (!bookingId) {
+          // Try to get from sessionStorage (stored when redirecting to payment)
+          bookingId = typeof window !== 'undefined' 
+            ? sessionStorage.getItem('pending_booking_id') || null
+            : null;
+        }
+
+        let result: any;
+        
+        // Use new verify-booking-payment endpoint if we have booking_id
+        if (bookingId) {
+          try {
+            result = await bookingAPI.verifyBookingPayment(bookingId, paymentReference) as any;
+            // Clear the stored booking_id after successful verification
+            if (typeof window !== 'undefined') {
+              sessionStorage.removeItem('pending_booking_id');
+            }
+          } catch (verifyError: any) {
+            // If new endpoint fails, fallback to old endpoint
+            console.warn("verify-booking-payment failed, falling back to verify-payment:", verifyError);
+            result = await bookingAPI.verifyPayment(paymentReference) as any;
+          }
+        } else {
+          // Fallback to old endpoint if we don't have booking_id
+          console.log("No booking_id available, using verify-payment endpoint");
+          result = await bookingAPI.verifyPayment(paymentReference) as any;
+        }
 
         if (result?.status === "success" || result?.status === "paid") {
           setStatus("success");
