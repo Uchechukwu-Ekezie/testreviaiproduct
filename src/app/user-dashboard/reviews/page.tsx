@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { apiFetch, reviewsAPI } from "@/lib/api";
+import { useAuth } from "@/contexts/auth-context";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -59,6 +60,7 @@ const isValidImageUrl = (url: string): boolean => {
 };
 
 export default function MyReviews() {
+  const { user } = useAuth();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,20 +77,53 @@ export default function MyReviews() {
     const fetchReviews = async () => {
       try {
         setLoading(true);
-        const response = await apiFetch("reviews/mine/");
-        setReviews(response || []);
+        setError(null);
+        
+        if (!user?.id) {
+          throw new Error("User ID is required to fetch reviews");
+        }
+        
+        // Use reviewsAPI.getUserReviews() with user ID
+        const apiReviews = await reviewsAPI.getUserReviews(user.id, 0, 100);
+        // Transform API reviews to match local Review interface
+        // API returns reviews with user as string, but we need user as object
+        const transformedReviews = (Array.isArray(apiReviews) ? apiReviews : (apiReviews as any)?.reviews || []).map((review: any) => ({
+          id: review.id,
+          user: typeof review.user === 'string' 
+            ? { id: review.user, name: review.user_name || 'Unknown', email: review.user_email || '' }
+            : review.user || { id: '', name: 'Unknown', email: '' },
+          rating: review.rating,
+          address: review.address || '',
+          review_text: review.review_text || review.content || '',
+          status: review.status || 'pending',
+          created_at: review.created_at,
+          updated_at: review.updated_at,
+          evidence: review.evidence || null,
+          property: review.property || review.property_id || null,
+        }));
+        setReviews(transformedReviews);
       } catch (err: any) {
         console.error("Error fetching reviews:", err);
-        const errorMessage = err.message || "Failed to load reviews";
-        setError(errorMessage);
-        toast.error(errorMessage);
+        // Handle 422/404 errors gracefully (endpoint might not be available)
+        if (err?.response?.status === 422 || err?.response?.status === 404) {
+          setError("Reviews endpoint is not available. Please try again later.");
+          setReviews([]); // Set empty array instead of showing error
+        } else {
+          const errorMessage = err?.message || err?.response?.data?.detail || "Failed to load reviews";
+          setError(errorMessage);
+          toast.error(errorMessage);
+        }
       } finally {
         setLoading(false);
       }
     };
 
-    fetchReviews();
-  }, []);
+    if (user?.id) {
+      fetchReviews();
+    } else {
+      setLoading(false);
+    }
+  }, [user?.id]);
 
   // Handle delete review
   const handleDeleteClick = (reviewId: string) => {

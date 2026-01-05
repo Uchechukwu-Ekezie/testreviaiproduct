@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { bookingAPI, propertiesAPI } from "@/lib/api";
 import { useAuth } from "@/contexts/auth-context";
 import { toast } from "react-toastify";
@@ -59,6 +60,7 @@ const sortOptions = [
 ];
 
 export default function AgentBookings() {
+  const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,7 +69,7 @@ export default function AgentBookings() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("recent");
   const [processingBooking, setProcessingBooking] = useState<string | null>(null);
-  const [propertyCache, setPropertyCache] = useState<Record<string, any>>({});
+  const propertyCacheRef = useRef<Record<string, any>>({});
 
   // Fetch bookings data
   useEffect(() => {
@@ -97,11 +99,11 @@ export default function AgentBookings() {
               return booking;
             }
 
-            // Check cache first
-            if (propertyCache[booking.property_booked_id]) {
+            // Check cache first (using ref to avoid re-renders)
+            if (propertyCacheRef.current[booking.property_booked_id]) {
               return {
                 ...booking,
-                property: propertyCache[booking.property_booked_id],
+                property: propertyCacheRef.current[booking.property_booked_id],
               };
             }
 
@@ -111,11 +113,8 @@ export default function AgentBookings() {
               const property = propertyResponse?.data || propertyResponse;
               
               if (property) {
-                // Cache the property
-                setPropertyCache(prev => ({
-                  ...prev,
-                  [booking.property_booked_id!]: property,
-                }));
+                // Cache the property in ref (doesn't trigger re-render)
+                propertyCacheRef.current[booking.property_booked_id] = property;
                 
                 return {
                   ...booking,
@@ -144,7 +143,7 @@ export default function AgentBookings() {
     };
 
     fetchBookings();
-  }, [isAuthenticated, user?.id, propertyCache]);
+  }, [isAuthenticated, user?.id]);
 
   // Helper function to format dates
   const formatDate = (dateString: string): string => {
@@ -290,10 +289,10 @@ export default function AgentBookings() {
       
       // Update bookings with cached properties
       const updatedBookings = bookingsData.map((booking: Booking) => {
-        if (booking.property_booked_id && propertyCache[booking.property_booked_id]) {
+        if (booking.property_booked_id && propertyCacheRef.current[booking.property_booked_id]) {
           return {
             ...booking,
-            property: propertyCache[booking.property_booked_id],
+            property: propertyCacheRef.current[booking.property_booked_id],
           };
         }
         return booking;
@@ -310,8 +309,8 @@ export default function AgentBookings() {
   };
 
   const handleViewDetails = (bookingId: string) => {
-    // Navigate to booking details page or show modal
-    toast.info("Booking details feature coming soon");
+    // Navigate to booking details page
+    router.push(`/dashboard/bookings/${bookingId}`);
   };
 
   if (!isAuthenticated) {
@@ -665,36 +664,37 @@ export default function AgentBookings() {
                           )}
                         </div>
 
-                        <div className="px-4 py-3 flex items-center w-full gap-2 border-t border-gray-700 pt-3 flex-wrap relative z-10 bg-[#212121]">
+                        <div className="px-4 py-3 flex items-center justify-between w-full gap-2 border-t border-gray-700 pt-3 flex-wrap relative z-10 bg-[#212121]">
                           {/* Update Status Button for Agent */}
-                          {booking.status?.toLowerCase() !== "cancelled" && 
-                           booking.status?.toLowerCase() !== "completed" && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                if (booking.status?.toLowerCase() === "paid") {
-                                  handleUpdateStatus(booking.id, "confirmed");
-                                } else if (booking.status?.toLowerCase() === "confirmed") {
-                                  handleUpdateStatus(booking.id, "completed");
-                                }
-                              }}
-                              disabled={processingBooking === booking.id}
-                              className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 hover:text-blue-300 text-sm font-medium rounded-[10px] disabled:opacity-50 transition-colors cursor-pointer relative z-20"
-                            >
-                              {processingBooking === booking.id ? "Processing..." : 
-                               booking.status?.toLowerCase() === "paid" ? "Confirm" : 
-                               booking.status?.toLowerCase() === "confirmed" ? "Mark Complete" : 
-                               "Update Status"}
-                            </button>
-                          )}
+                          <div className="flex gap-2">
+                            {booking.status?.toLowerCase() !== "cancelled" && 
+                             booking.status?.toLowerCase() !== "completed" && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (booking.status?.toLowerCase() === "paid") {
+                                    handleUpdateStatus(booking.id, "confirmed");
+                                  } else if (booking.status?.toLowerCase() === "confirmed") {
+                                    handleUpdateStatus(booking.id, "completed");
+                                  }
+                                }}
+                                disabled={processingBooking === booking.id}
+                                className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 hover:text-blue-300 text-sm font-medium rounded-[10px] disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer relative z-20"
+                              >
+                                {processingBooking === booking.id ? "Processing..." : 
+                                 booking.status?.toLowerCase() === "paid" ? "Confirm" : 
+                                 booking.status?.toLowerCase() === "confirmed" ? "Mark Complete" : 
+                                 "Update Status"}
+                              </button>
+                            )}
+                          </div>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              e.preventDefault();
                               handleViewDetails(booking.id);
                             }}
-                            className="px-4 py-2 bg-gray-500/20 hover:bg-gray-500/30 text-gray-400 hover:text-gray-300 text-sm font-medium rounded-[10px] transition-colors ml-auto cursor-pointer relative z-20"
+                            type="button"
+                            className="px-4 py-2 bg-gray-500/20 hover:bg-gray-500/30 text-gray-400 hover:text-gray-300 text-sm font-medium rounded-[10px] transition-colors cursor-pointer relative z-20 flex-shrink-0"
                           >
                             View Details
                           </button>

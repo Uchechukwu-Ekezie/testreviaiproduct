@@ -92,11 +92,12 @@ export default function PropertyChatWidget({
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: response.answer,
+        content: response.answer || "",
         timestamp: new Date(),
         similar_properties: response.similar_properties || [],
       };
       
+      console.log("📝 Created assistant message:", assistantMessage);
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {

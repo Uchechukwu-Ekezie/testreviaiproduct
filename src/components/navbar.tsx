@@ -93,9 +93,9 @@ export default function Navbar() {
             Blogs
           </Link>
 
-          <Link href="/reviews" className="text-[#F3F3F3] hover:text-white/80">
+          {/* <Link href="/reviews" className="text-[#F3F3F3] hover:text-white/80">
             Reviews
-          </Link>
+          </Link> */}
 
           {/* Authentication-based buttons */}
           {isAuthenticated ? (
@@ -223,13 +223,13 @@ export default function Navbar() {
           >
             Blogs
           </Link>
-          <Link
+          {/* <Link
             href="/reviews"
             className="text-white text-base sm:text-lg hover:text-white/80 py-2 px-4 rounded-lg hover:bg-white/5 transition-colors w-full text-center"
             onClick={() => setIsOpen(false)}
           >
             Reviews
-          </Link>
+          </Link> */}
 
           {/* Mobile Authentication buttons */}
           {isAuthenticated ? (

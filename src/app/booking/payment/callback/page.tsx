@@ -49,9 +49,23 @@ function PaymentCallbackContent() {
         }
       } catch (error: any) {
         console.error("Payment verification error:", error);
+        
+        // Handle specific error cases
+        let errorMessage = "Failed to verify payment. Please contact support.";
+        
+        if (error?.response?.status === 403) {
+          errorMessage = "Access denied. Please try logging in again or contact support if the issue persists.";
+        } else if (error?.response?.status === 404) {
+          errorMessage = "Payment reference not found. Please contact support with your payment reference.";
+        } else if (error?.response?.status === 400) {
+          errorMessage = error?.response?.data?.message || "Invalid payment reference. Please contact support.";
+        } else if (error?.message) {
+          errorMessage = error.message;
+        }
+        
         setStatus("error");
-        setMessage(error.message || "Failed to verify payment. Please contact support.");
-        toast.error("Payment verification failed. Please contact support.");
+        setMessage(errorMessage);
+        toast.error(errorMessage);
       }
     };
 

@@ -561,6 +561,9 @@ export const chatAPI = {
       includeSimilarProperties?: boolean;
       onChunk?: (text: string, isComplete: boolean) => void;
       signal?: AbortSignal;
+      sessionId?: string | null;
+      file?: File;
+      imageUrl?: string | null;
     }
   ): Promise<{ answer: string; property_context?: any; similar_properties?: any[] }> => {
     const token = getAuthToken();
@@ -569,27 +572,57 @@ export const chatAPI = {
     }
     setAuthToken(token);
 
-    const requestData = {
-      property_id: propertyId,
-      question: question.trim(),
-      use_streaming: options?.useStreaming ?? false,
-      include_similar_properties: options?.includeSimilarProperties ?? false,
-    };
+    // Create FormData for multipart/form-data request
+    const formData = new FormData();
+    
+    // Add session_id - API accepts string | null
+    // Always include session_id field, even if empty (API spec shows it's required in the form)
+    if (options?.sessionId !== undefined && options?.sessionId !== null && options.sessionId !== "") {
+      formData.append("session_id", options.sessionId);
+    } else {
+      // Send empty string for null/undefined (FormData doesn't support null)
+      formData.append("session_id", "");
+    }
+    
+    // Add prompt (required) - include property_id in the prompt
+    const prompt = question.trim();
+    if (!prompt) {
+      throw new Error("Prompt is required");
+    }
+    // Include property_id in the prompt so the AI knows which property the user is asking about
+    const promptWithPropertyId = `Property ID: ${propertyId}\n\n${prompt}`;
+    formData.append("prompt", promptWithPropertyId);
+    
+    // Add file if provided
+    if (options?.file) {
+      formData.append("file", options.file);
+    }
+    
+    // Add image_url only if provided and not empty
+    if (options?.imageUrl && options.imageUrl.trim() !== "") {
+      formData.append("image_url", options.imageUrl);
+    }
+
+    // Log FormData contents for debugging
+    console.log("📤 propertyChat FormData contents:");
+    for (const [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        console.log(`  ${key}: [File] ${value.name} (${value.size} bytes)`);
+      } else {
+        console.log(`  ${key}:`, value);
+      }
+    }
 
     const requestConfig: AxiosRequestConfig = {
       headers: {
         Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
+        // Don't set Content-Type - axios will set it with boundary for FormData
       },
       ...(options?.signal ? { signal: options.signal } : {}),
     };
 
     // Handle streaming response
     if (options?.useStreaming && options?.onChunk) {
-      requestConfig.responseType = "text";
-      requestConfig.adapter = "fetch";
-      requestConfig.onDownloadProgress = undefined;
-
       try {
         const response = await fetch(
           `${api.defaults.baseURL}/chats/ask-property-ai/`,
@@ -597,14 +630,22 @@ export const chatAPI = {
             method: "POST",
             headers: {
               Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
+              // Don't set Content-Type - browser will set it with boundary
             },
-            body: JSON.stringify(requestData),
+            body: formData,
             signal: options?.signal,
           }
         );
 
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Streaming error response:", errorText);
+          try {
+            const errorJson = JSON.parse(errorText);
+            console.error("Streaming error details:", errorJson);
+          } catch {
+            // Not JSON, use text
+          }
           throw new Error(`HTTP error! status: ${response.status}`);
         }
 
@@ -649,13 +690,40 @@ export const chatAPI = {
     }
 
     // Standard non-streaming request
-    const response = await api.post<{ answer: string; property_context?: any }>(
-      `/chats/ask-property-ai/`,
-      requestData,
-      requestConfig
-    );
+    try {
+      const response = await api.post<ChatMessageResponse>(
+        `/chats/ask-property-ai/`,
+        formData,
+        requestConfig
+      );
 
-    return response.data;
+      console.log("✅ propertyChat API response:", response.data);
+
+      // Transform the API response to match expected format
+      // The API returns a ChatMessage with 'response' field containing the answer
+      const apiResponse = response.data as any; // Use 'any' to access all fields from API
+      
+      return {
+        answer: apiResponse.response || "",
+        property_context: apiResponse.properties || null,
+        similar_properties: apiResponse.returned_property_ids ? [] : undefined, // Can be populated if needed
+      };
+    } catch (error: any) {
+      // Log detailed error information
+      console.error("❌ propertyChat API error:", {
+        status: error?.response?.status,
+        statusText: error?.response?.statusText,
+        data: error?.response?.data,
+        message: error?.message,
+      });
+      
+      // If it's a 422, log the validation errors
+      if (error?.response?.status === 422) {
+        console.error("422 Validation errors:", error?.response?.data);
+      }
+      
+      throw error;
+    }
   },
 };
 
