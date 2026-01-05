@@ -159,6 +159,10 @@ export { postAPI } from "./post.api";
 // Booking API - Booking management and payment processing
 export { bookingAPI } from "./booking.api";
 
+// Stories API - Stories management and viewing
+export { storiesAPI } from "./stories.api";
+export type { StoryResponse, StoryCreatePayload } from "./stories.api";
+
 // ===========================
 // Backward Compatibility Aliases
 // ===========================

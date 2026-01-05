@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import axios, { AxiosError } from "axios";
+import { storiesAPI, type StoryResponse, type StoryCreatePayload } from "@/lib/api/stories.api";
 
 export interface StoryItem {
   id: string;
@@ -8,6 +8,7 @@ export interface StoryItem {
   created_at: string;
   duration?: number;
   is_viewed?: boolean;
+  caption?: string;
 }
 
 export interface Story {
@@ -21,151 +22,80 @@ export interface Story {
   latest_story_time: string;
 }
 
-interface Post {
-  id: string;
-  author: {
-    id: string;
-    username: string;
-    email: string;
-    first_name?: string;
-    last_name?: string;
-    avatar: string;
-  };
-  media_url?: string;
-  images?: string[];
-  created_at: string;
-  is_story?: boolean;
-  is_viewed?: boolean;
-}
-
-interface PostsResponse {
-  results: Post[];
-  count: number;
-  next: string | null;
-  previous: string | null;
-}
-
 interface StoryError {
   detail?: string;
   error?: string;
   non_field_errors?: string[];
 }
 
-const API_BASE_URL = (() => {
-  // Use the same base URL as the rest of the app
-  const env = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_API_URL;
-  if (!env) return "https://uat.backend.reviai.ai";
-  return env.replace(/\/+$/g, "");
-})();
-
 export function useStories() {
   const [stories, setStories] = useState<Story[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Configure axios instance with auth token
-  const axiosInstance = axios.create({
-    baseURL: API_BASE_URL,
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
-
-  // Add auth token to requests
-  axiosInstance.interceptors.request.use(
-    async (config) => {
-      const token = localStorage.getItem("authToken");
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-      return config;
-    },
-    (error) => Promise.reject(error)
-  );
-
-  // Transform posts to stories format
-  const transformPostsToStories = (posts: Post[]): Story[] => {
-    console.log("[useStories] Transforming posts to stories:", posts);
+  // Transform API stories to internal format
+  const transformStories = (apiStories: StoryResponse[]): Story[] => {
+    console.log("[useStories] Transforming API stories:", apiStories);
     const storyMap = new Map<string, Story>();
 
-    posts.forEach((post) => {
-      console.log("[useStories] Processing post:", {
-        id: post.id,
-        hasAuthor: !!post.author,
-        authorId: post.author?.id,
-        authorUsername: post.author?.username,
-        hasImages: !!post.images?.length,
-        hasMediaUrl: !!post.media_url,
-        images: post.images,
-        media_url: post.media_url,
+    apiStories.forEach((apiStory) => {
+      console.log("[useStories] Processing story:", {
+        id: apiStory.id,
+        author_id: apiStory.author_id,
+        media_url: apiStory.media_url,
+        author_username: apiStory.author_username,
+        is_viewed: apiStory.is_viewed,
       });
 
-      // Handle posts that might have author_id, author_username, author_avatar instead of author object
-      let authorId: string | undefined;
-      let authorUsername: string | undefined;
-      let authorAvatar: string | undefined;
-      let authorFirstName: string | undefined;
-      let authorLastName: string | undefined;
-
-      if (post.author && post.author.id) {
-        // Post has author object
-        authorId = post.author.id;
-        authorUsername = post.author.username;
-        authorAvatar = post.author.avatar;
-        authorFirstName = post.author.first_name;
-        authorLastName = post.author.last_name;
-      } else if ((post as any).author_id) {
-        // Post has separate author fields
-        authorId = (post as any).author_id;
-        authorUsername = (post as any).author_username || (post as any).author_username;
-        authorAvatar = (post as any).author_avatar;
-        authorFirstName = (post as any).author_first_name;
-        authorLastName = (post as any).author_last_name;
+      const userId = apiStory.author_id;
+      if (!userId) {
+        console.log("[useStories] Skipping story - no author_id:", apiStory.id);
+        return;
       }
 
-      // Skip posts without valid author data
-      if (!authorId) {
-        console.log("[useStories] Skipping post - no author ID:", post.id);
+      const mediaUrl = apiStory.media_url || "";
+      // Skip if media_url is empty (but allow "string" placeholder for testing)
+      if (!mediaUrl || mediaUrl.trim() === "") {
+        console.log("[useStories] Skipping story - empty media_url:", apiStory.id);
         return;
       }
       
-      const mediaUrl = post.images?.[0] || post.media_url || "";
-      
-      if (!mediaUrl) {
-        console.log("[useStories] Skipping post - no media URL:", post.id);
-        return;
+      // Log if media_url is "string" placeholder
+      if (mediaUrl === "string") {
+        console.warn("[useStories] Story has placeholder media_url:", apiStory.id, "- will show in bar but may not display in viewer");
       }
 
       const storyItem: StoryItem = {
-        id: post.id,
+        id: apiStory.id,
         media_url: mediaUrl,
         media_type: mediaUrl.match(/\.(mp4|webm|mov)$/i) ? "video" : "image",
-        created_at: post.created_at,
-        is_viewed: post.is_viewed || false,
+        created_at: apiStory.created_at,
+        is_viewed: apiStory.is_viewed || false,
+        caption: apiStory.caption,
       };
 
-      if (storyMap.has(authorId)) {
-        const existingStory = storyMap.get(authorId)!;
+      if (storyMap.has(userId)) {
+        const existingStory = storyMap.get(userId)!;
         existingStory.stories.push(storyItem);
         existingStory.has_unviewed =
           existingStory.has_unviewed || !storyItem.is_viewed;
         // Update latest time if this story is newer
         if (
-          new Date(post.created_at) >
+          new Date(apiStory.created_at) >
           new Date(existingStory.latest_story_time)
         ) {
-          existingStory.latest_story_time = post.created_at;
+          existingStory.latest_story_time = apiStory.created_at;
         }
       } else {
-        storyMap.set(authorId, {
-          user_id: authorId,
-          username: authorUsername || "Unknown",
-          avatar: authorAvatar || "",
-          first_name: authorFirstName,
-          last_name: authorLastName,
+        storyMap.set(userId, {
+          user_id: userId,
+          username: apiStory.author_username || "Unknown",
+          avatar: apiStory.author_avatar || "",
+          first_name: apiStory.author_first_name,
+          last_name: apiStory.author_last_name,
           stories: [storyItem],
           has_unviewed: !storyItem.is_viewed,
-          latest_story_time: post.created_at,
+          latest_story_time: apiStory.created_at,
         });
       }
     });
@@ -180,32 +110,27 @@ export function useStories() {
     return transformedStories;
   };
 
-  // Fetch all available stories (posts with is_story=true)
+  // Fetch all available stories
   const fetchStories = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const url = "/posts/?is_story=true";
-      console.log("[useStories] Fetching stories from:", API_BASE_URL + url);
-      const response = await axiosInstance.get<PostsResponse>(url);
+      console.log("[useStories] Fetching stories from /stories/");
+      const apiStories = await storiesAPI.getAll();
       console.log("[useStories] API response:", {
-        count: response.data.count,
-        resultsCount: response.data.results?.length || 0,
-        results: response.data.results,
+        count: apiStories.length,
+        stories: apiStories,
       });
-      const transformedStories = transformPostsToStories(
-        response.data.results || []
-      );
+      const transformedStories = transformStories(apiStories);
       console.log("[useStories] Setting stories:", transformedStories);
       setStories(transformedStories);
       return transformedStories;
-    } catch (err) {
-      const error = err as AxiosError<StoryError>;
+    } catch (err: any) {
       const errorMsg =
-        error.response?.data?.detail ||
-        error.response?.data?.error ||
-        error.message ||
+        err?.response?.data?.detail ||
+        err?.response?.data?.error ||
+        err?.message ||
         "Failed to fetch stories";
       console.error("[useStories] Fetch error:", errorMsg);
       setError(errorMsg);
@@ -218,7 +143,7 @@ export function useStories() {
   // Mark a story as viewed
   const viewStory = useCallback(async (storyId: string) => {
     try {
-      await axiosInstance.post(`/posts/${storyId}/view/`);
+      await storiesAPI.viewStory(storyId);
 
       // Update local state
       setStories((prev) =>
@@ -237,44 +162,34 @@ export function useStories() {
     }
   }, []);
 
-  // Create a new story (post with is_story=true)
+  // Create a new story
   const createStory = useCallback(
-    async (mediaUrl: string, mediaType: "image" | "video") => {
+    async (mediaUrl: string, mediaType: "image" | "video", caption?: string) => {
       setError(null);
 
       try {
-        const postData: any = {
-          caption: "",
-          is_story: true,
+        const storyData: StoryCreatePayload = {
+          media_url: mediaUrl,
+          caption: caption || "",
         };
 
-        if (mediaType === "image") {
-          postData.images = [mediaUrl];
-        } else {
-          postData.media_url = mediaUrl;
-        }
-
-        const response = await axiosInstance.post<Post>(
-          "/posts/",
-          postData
-        );
+        const response = await storiesAPI.create(storyData);
 
         // Refresh stories after creation
         await fetchStories();
-        return response.data;
-      } catch (err) {
-        const error = err as AxiosError<StoryError>;
+        return response;
+      } catch (err: any) {
         const errorMsg =
-          error.response?.data?.detail ||
-          error.response?.data?.error ||
-          error.message ||
+          err?.response?.data?.detail ||
+          err?.response?.data?.error ||
+          err?.message ||
           "Failed to create story";
         console.error("[useStories] Create error:", errorMsg);
         setError(errorMsg);
         throw new Error(errorMsg);
       }
     },
-    [fetchStories, axiosInstance]
+    [fetchStories]
   );
 
   // Delete a story
@@ -282,7 +197,7 @@ export function useStories() {
     setError(null);
 
     try {
-      await axiosInstance.delete(`/posts/${storyId}/`);
+      await storiesAPI.delete(storyId);
 
       // Remove from local state
       setStories((prev) =>
@@ -293,12 +208,11 @@ export function useStories() {
           }))
           .filter((story) => story.stories.length > 0)
       );
-    } catch (err) {
-      const error = err as AxiosError<StoryError>;
+    } catch (err: any) {
       const errorMsg =
-        error.response?.data?.detail ||
-        error.response?.data?.error ||
-        error.message ||
+        err?.response?.data?.detail ||
+        err?.response?.data?.error ||
+        err?.message ||
         "Failed to delete story";
       console.error("[useStories] Delete error:", errorMsg);
       setError(errorMsg);

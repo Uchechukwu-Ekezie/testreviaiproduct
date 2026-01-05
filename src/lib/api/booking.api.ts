@@ -170,6 +170,29 @@ export const bookingAPI = {
   },
 
   /**
+   * Verify booking payment
+   * Verify Paystack payment for a specific booking and process wallet credit/receipt.
+   * Mirrors webhook behavior for cases where webhooks are delayed or missed.
+   * @param bookingId - Booking ID
+   * @param reference - Payment reference from Paystack
+   * @returns Verification response
+   */
+  verifyBookingPayment: async (
+    bookingId: string,
+    reference: string
+  ): Promise<unknown> => {
+    return withErrorHandling(async () => {
+      return await apiFetch("/bookings/verify-booking-payment", {
+        method: "POST",
+        body: JSON.stringify({
+          booking_id: bookingId,
+          reference: reference,
+        }),
+      });
+    });
+  },
+
+  /**
    * Confirm a booking
    * Behavior depends on payment status
    * @param bookingId - Booking ID
@@ -511,7 +534,6 @@ export const bookingAPI = {
       return await apiFetch(url);
     });
   },
-
 
 };
 

@@ -24,6 +24,7 @@ import PostCardSkeleton from "@/components/social-feed/PostCardSkeleton";
 import AgentCardSkeleton from "@/components/social-feed/AgentCardSkeleton";
 import StoriesBar from "@/components/social-feed/StoriesBar";
 import StoryViewer from "@/components/social-feed/StoryViewer";
+import CreateStoryModal from "@/components/social-feed/CreateStoryModal";
 
 // Hooks
 import { usePosts } from "@/hooks/usePosts";
@@ -84,6 +85,7 @@ export default function SocialFeed() {
   // Stories viewer state
   const [isStoryViewerOpen, setIsStoryViewerOpen] = useState(false);
   const [selectedStoryIndex, setSelectedStoryIndex] = useState(0);
+  const [isCreateStoryModalOpen, setIsCreateStoryModalOpen] = useState(false);
 
   // NEW: Follow state management
   const [followStatusMap, setFollowStatusMap] = useState<
@@ -106,6 +108,16 @@ export default function SocialFeed() {
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // Debug: Log stories data
+  useEffect(() => {
+    console.log("[SocialFeed] Stories state:", {
+      storiesCount: stories.length,
+      stories,
+      currentUserId: user?.id,
+      isLoadingStories,
+    });
+  }, [stories, user?.id, isLoadingStories]);
 
   // Scroll position restoration
   const hasRestoredScroll = useRef(false);
@@ -643,42 +655,12 @@ export default function SocialFeed() {
             currentUserAvatar={user?.avatar}
             currentUserName={user?.first_name || user?.username || "You"}
             onStoryClick={(userId, storyIndex) => {
+              console.log("[SocialFeed] Story clicked:", { userId, storyIndex });
               setSelectedStoryIndex(storyIndex);
               setIsStoryViewerOpen(true);
             }}
-            onCreateStory={async () => {
-              // Trigger file input for story creation
-              const input = document.createElement("input");
-              input.type = "file";
-              input.accept = "image/*,video/*";
-              input.onchange = async (e) => {
-                const file = (e.target as HTMLInputElement).files?.[0];
-                if (file) {
-                  try {
-                    let uploadedUrl: string | null = null;
-                    const mediaType = file.type.startsWith("video/")
-                      ? "video"
-                      : "image";
-
-                    // Upload to Cloudinary first
-                    if (mediaType === "image") {
-                      uploadedUrl = await uploadImage(file);
-                    } else {
-                      uploadedUrl = await uploadVideo(file);
-                    }
-
-                    if (!uploadedUrl) {
-                      throw new Error("Failed to upload media");
-                    }
-
-                    // Create story with uploaded URL
-                    await createStory(uploadedUrl, mediaType);
-                  } catch (error) {
-                    console.error("Failed to create story:", error);
-                  }
-                }
-              };
-              input.click();
+            onCreateStory={() => {
+              setIsCreateStoryModalOpen(true);
             }}
             isLoading={isLoadingStories}
           />
@@ -831,6 +813,15 @@ export default function SocialFeed() {
           )
         }
         onPrev={() => setLightboxIndex((prev) => Math.max(prev - 1, 0))}
+      />
+
+      {/* Create Story Modal */}
+      <CreateStoryModal
+        isOpen={isCreateStoryModalOpen}
+        onClose={() => setIsCreateStoryModalOpen(false)}
+        onCreateStory={async (mediaUrl, mediaType, caption) => {
+          await createStory(mediaUrl, mediaType, caption);
+        }}
       />
 
       {/* Story Viewer */}

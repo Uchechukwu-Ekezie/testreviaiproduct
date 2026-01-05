@@ -274,17 +274,55 @@ export const reviewsAPI = {
   /**
    * Get reviews for a specific property
    * @param propertyId - Property ID
+   * @param skip - Number of reviews to skip (default: 0)
+   * @param limit - Maximum number of reviews to return (default: 20, max: 100)
+   * @param status - Filter by status (default: 'approved')
    * @returns Array of property reviews
    */
-  getByProperty: async (propertyId: string): Promise<Review[]> => {
+  getByProperty: async (
+    propertyId: string,
+    skip: number = 0,
+    limit: number = 20,
+    status: string = 'approved'
+  ): Promise<Review[]> => {
     return withErrorHandling(async () => {
       console.log(
         "reviewsAPI.getByProperty: Starting request for propertyId:",
-        propertyId
+        propertyId,
+        "skip:",
+        skip,
+        "limit:",
+        limit,
+        "status:",
+        status
       );
-      const response = await apiFetch(`/reviews/?property=${propertyId}`);
+      
+      // Build query parameters
+      const queryParams = new URLSearchParams();
+      queryParams.append("skip", skip.toString());
+      queryParams.append("limit", limit.toString());
+      if (status) {
+        queryParams.append("status", status);
+      }
+      
+      const queryString = queryParams.toString();
+      const url = `/reviews/by-property/${propertyId}${queryString ? `?${queryString}` : ""}`;
+      
+      console.log("reviewsAPI.getByProperty: URL:", url);
+      
+      const response = await apiFetch(url);
       console.log("reviewsAPI.getByProperty: Success response:", response);
-      return response as Review[];
+      
+      // Handle different response formats
+      if (Array.isArray(response)) {
+        return response as Review[];
+      } else if (response && typeof response === 'object' && Array.isArray((response as any).results)) {
+        return (response as any).results as Review[];
+      } else if (response && typeof response === 'object' && Array.isArray((response as any).reviews)) {
+        return (response as any).reviews as Review[];
+      }
+      
+      return [];
     });
   },
 

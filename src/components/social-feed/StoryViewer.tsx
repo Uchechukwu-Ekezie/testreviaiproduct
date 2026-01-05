@@ -209,7 +209,36 @@ export default function StoryViewer({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [goToNext, goToPrevious, onClose]);
 
+  // Helper function to validate URLs
+  const isValidUrl = (url: string | undefined | null): boolean => {
+    if (!url || typeof url !== 'string' || url.trim() === '' || url === 'string') {
+      return false;
+    }
+    try {
+      // For relative URLs, check if they start with /
+      if (url.startsWith('/')) {
+        return true;
+      }
+      // For absolute URLs, validate with URL constructor
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   if (!currentStory || !currentItem) {
+    return null;
+  }
+
+  // Validate media URL
+  const mediaUrl = currentItem.media_url;
+  const isValidMediaUrl = isValidUrl(mediaUrl);
+  const avatarUrl = currentStory.avatar;
+  const isValidAvatarUrl = isValidUrl(avatarUrl);
+
+  if (!isValidMediaUrl) {
+    console.error("Invalid media URL:", mediaUrl);
     return null;
   }
 
@@ -248,7 +277,7 @@ export default function StoryViewer({
         <div className="absolute top-4 left-0 right-0 z-20 flex items-center justify-between px-4 mt-4">
           <div className="flex items-center gap-2">
             <Avatar className="w-8 h-8 border-2 border-white">
-              <AvatarImage src={currentStory.avatar} />
+              <AvatarImage src={isValidAvatarUrl ? avatarUrl : undefined} />
               <AvatarFallback className="bg-gray-700 text-white text-xs">
                 {getDisplayName(currentStory)[0]?.toUpperCase() || "?"}
               </AvatarFallback>
@@ -331,7 +360,7 @@ export default function StoryViewer({
           {isVideo ? (
             <video
               ref={videoRef}
-              src={currentItem.media_url}
+              src={mediaUrl}
               className="max-w-full max-h-full object-contain"
               playsInline
               loop={false}
@@ -340,14 +369,28 @@ export default function StoryViewer({
             />
           ) : (
             <Image
-              src={currentItem.media_url}
+              src={mediaUrl}
               alt="Story"
               fill
               className="object-contain"
               priority
+              unoptimized={mediaUrl?.startsWith("http")}
+              onError={(e) => {
+                console.error("Failed to load story image:", mediaUrl);
+                e.currentTarget.src = "/placeholder.svg";
+              }}
             />
           )}
         </div>
+
+        {/* Caption */}
+        {currentItem.caption && (
+          <div className="absolute bottom-0 left-0 right-0 z-20 p-4 bg-gradient-to-t from-black/80 via-black/60 to-transparent">
+            <p className="text-white text-sm leading-relaxed break-words">
+              {currentItem.caption}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

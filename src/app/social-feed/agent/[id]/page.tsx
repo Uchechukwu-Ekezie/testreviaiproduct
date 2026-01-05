@@ -190,7 +190,7 @@ export default function AgentProfilePage({
     try {
       const token = localStorage.getItem("authToken");
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_URL}/auth/agent-reviews/agent/${agentId}/`,
+        `${process.env.NEXT_PUBLIC_BASE_URL}/auth/agent-reviews/agent/${agentId}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -200,10 +200,71 @@ export default function AgentProfilePage({
 
       if (response.ok) {
         const data = await response.json();
-        setReviews(data.results || data || []);
+        console.log("Agent reviews API response:", data);
+        
+        // Handle different response formats
+        const reviewsData: any[] = data.reviews || data.results || (Array.isArray(data) ? data : []);
+        
+        // Extract unique user IDs
+        const userIds: string[] = [...new Set(reviewsData.map((r: any) => r.user_id).filter((id: any) => Boolean(id)))];
+        
+        // Fetch user data for all reviewers
+        const userDataMap = new Map<string, any>();
+        await Promise.all(
+          userIds.map(async (userId: string) => {
+            try {
+              const userStats = await followAPI.getUserFollowStats(userId);
+              userDataMap.set(userId, {
+                id: userStats.id,
+                first_name: userStats.first_name,
+                last_name: userStats.last_name,
+                username: userStats.username,
+                avatar: userStats.avatar,
+              });
+            } catch (error) {
+              console.error(`Failed to fetch user data for ${userId}:`, error);
+              // Set default values
+              userDataMap.set(userId, {
+                id: userId,
+                first_name: "",
+                last_name: "",
+                username: "Anonymous",
+                avatar: undefined,
+              });
+            }
+          })
+        );
+        
+        // Transform reviews to include reviewer data
+        const transformedReviews = reviewsData.map((review: any) => ({
+          id: review.id,
+          reviewer: userDataMap.get(review.user_id) || {
+            id: review.user_id,
+            first_name: "",
+            last_name: "",
+            username: "Anonymous",
+            avatar: undefined,
+          },
+          rating: review.rating,
+          comment: review.review_text || review.content || "",
+          created_at: review.created_at,
+        }));
+        
+        setReviews(transformedReviews);
+        
+        // Update reviews count from API response if available
+        if (data.total !== undefined) {
+          setReviewsCount(data.total);
+        } else if (transformedReviews.length > 0) {
+          setReviewsCount(transformedReviews.length);
+        }
+      } else {
+        console.error("Failed to fetch reviews:", response.status, response.statusText);
+        setReviews([]);
       }
     } catch (error) {
       console.error("Failed to fetch reviews:", error);
+      setReviews([]);
     } finally {
       setIsLoadingReviews(false);
     }
@@ -688,7 +749,7 @@ export default function AgentProfilePage({
                     </span>
                   </div>
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 w-full">
                   {reviews.map((review) => (
                     <AgentReviewCard key={review.id} review={review} />
                   ))}
