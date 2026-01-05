@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, reviewsAPI, bookingAPI, propertiesAPI } from "@/lib/api";
 import { useAuth } from "@/contexts/auth-context";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -84,39 +84,157 @@ export default function Dashboard() {
         setLoading(true);
         setError(null);
 
-        // Fetch reviews data
-        const reviewsResponse = await apiFetch("reviews/mine/");
-        const userReviews = reviewsResponse || [];
+        // Fetch reviews data using reviewsAPI with user ID
+        let userReviews: Review[] = [];
+        try {
+          if (user?.id) {
+            const apiReviews = await reviewsAPI.getUserReviews(user.id, 0, 100);
+            // Transform API reviews to match local Review interface
+            // API returns reviews with user as string, but we need user as object
+            userReviews = (Array.isArray(apiReviews) ? apiReviews : (apiReviews as any)?.reviews || []).map((review: any) => ({
+              id: review.id,
+              user: typeof review.user === 'string' 
+                ? { id: review.user, name: review.user_name || 'Unknown', email: review.user_email || '' }
+                : review.user || { id: '', name: 'Unknown', email: '' },
+              rating: review.rating,
+              address: review.address || '',
+              review_text: review.review_text || review.content || '',
+              status: review.status || 'pending',
+              created_at: review.created_at,
+              updated_at: review.updated_at,
+              evidence: review.evidence || null,
+              property: review.property || review.property_id || null,
+            }));
+          }
+        } catch (reviewError: any) {
+          // If reviews endpoint fails, log but don't block dashboard
+          console.warn("Failed to fetch reviews:", reviewError);
+          // Check if it's a 422 or 404 error (endpoint might not be available)
+          if (reviewError?.response?.status !== 422 && reviewError?.response?.status !== 404) {
+            throw reviewError; // Re-throw if it's not a 422 or 404
+          }
+          // For 422/404, just use empty array
+          userReviews = [];
+        }
         
-        // Fetch bookings data (if endpoint exists)
+        // Fetch bookings data using bookingAPI
         let bookingsData: Booking[] = [];
         try {
-          // Try to fetch bookings - this endpoint might not exist yet
-          const bookingsResponse = await apiFetch("bookings/mine/");
-          bookingsData = bookingsResponse || [];
-        } catch (bookingError) {
-          // Bookings endpoint not available, using empty array
+          console.log("Fetching bookings for user:", user.id);
+          const bookingsResponse = await bookingAPI.getMine({
+            page: 1,
+            page_size: 100,
+          }) as any;
+          
+          console.log("Bookings API response:", bookingsResponse);
+          console.log("Response type:", typeof bookingsResponse);
+          console.log("Is array:", Array.isArray(bookingsResponse));
+          console.log("Has bookings key:", bookingsResponse?.bookings);
+          console.log("Has data key:", bookingsResponse?.data);
+          
+          // Handle paginated response or array response
+          let rawBookings: any[] = [];
+          
+          if (Array.isArray(bookingsResponse)) {
+            rawBookings = bookingsResponse;
+          } else if (bookingsResponse?.bookings && Array.isArray(bookingsResponse.bookings)) {
+            rawBookings = bookingsResponse.bookings;
+          } else if (bookingsResponse?.data?.bookings && Array.isArray(bookingsResponse.data.bookings)) {
+            rawBookings = bookingsResponse.data.bookings;
+          } else if (bookingsResponse?.results && Array.isArray(bookingsResponse.results)) {
+            rawBookings = bookingsResponse.results;
+          } else {
+            console.warn("Unexpected bookings response format:", bookingsResponse);
+            rawBookings = [];
+          }
+          
+          console.log("Raw bookings extracted:", rawBookings.length, rawBookings);
+          
+          // Transform booking data to match dashboard format
+          // Use Promise.allSettled to prevent one failed property fetch from breaking all bookings
+          const bookingPromises = rawBookings.map(async (booking: any) => {
+            let propertyName = "Unknown Property";
+            let propertyImage = "";
+            let propertyLocation = "";
+            
+            // Try to fetch property data if property_booked_id exists
+            if (booking.property_booked_id) {
+              try {
+                const propertyResponse = await propertiesAPI.getById(booking.property_booked_id) as any;
+                const property = propertyResponse?.data || propertyResponse;
+                if (property) {
+                  propertyName = property.title || property.name || propertyName;
+                  propertyImage = property.images?.[0]?.url || property.image_url || property.image || "";
+                  propertyLocation = property.location || property.address || "";
+                }
+              } catch (propError) {
+                console.warn(`Could not fetch property ${booking.property_booked_id}:`, propError);
+                // Continue with default values
+              }
+            }
+            
+            return {
+              id: booking.id,
+              property: propertyName,
+              type: booking.type || "booking",
+              status: booking.status || "pending",
+              date: booking.created_at ? new Date(booking.created_at).toLocaleDateString() : "",
+              location: propertyLocation || booking.location || "",
+              price: parseFloat(booking.total_amount || booking.price || "0"),
+              image: propertyImage,
+            };
+          });
+          
+          const bookingResults = await Promise.allSettled(bookingPromises);
+          bookingsData = bookingResults
+            .filter((result): result is PromiseFulfilledResult<Booking> => result.status === 'fulfilled')
+            .map(result => result.value);
+          
+          console.log("Transformed bookings data:", bookingsData.length, bookingsData);
+        } catch (bookingError: any) {
+          // If bookings endpoint fails, log but don't block dashboard
+          console.error("Failed to fetch bookings:", bookingError);
+          console.error("Error details:", {
+            message: bookingError?.message,
+            response: bookingError?.response,
+            status: bookingError?.response?.status,
+            data: bookingError?.response?.data,
+          });
           bookingsData = [];
-          // Don't show error toast for missing bookings endpoint as it's expected
         }
 
         // Calculate stats from the data
         const calculatedStats: Stats = {
           totalBookings: bookingsData.length,
-          pendingBookings: bookingsData.filter(booking => 
-            booking.status.toLowerCase().includes("pending") || 
-            booking.status.toLowerCase().includes("awaiting")
-          ).length,
-          completedBookings: bookingsData.filter(booking => 
-            booking.status.toLowerCase().includes("confirmed") || 
-            booking.status.toLowerCase().includes("completed")
-          ).length,
-          totalSpent: bookingsData.reduce((sum, booking) => sum + (booking.price || 0), 0),
+          pendingBookings: bookingsData.filter(booking => {
+            const status = (booking.status || "").toLowerCase();
+            return status.includes("pending") || status.includes("awaiting");
+          }).length,
+          completedBookings: bookingsData.filter(booking => {
+            const status = (booking.status || "").toLowerCase();
+            return status.includes("confirmed") || status.includes("completed") || status.includes("paid");
+          }).length,
+          totalSpent: bookingsData.reduce((sum, booking) => {
+            const price = typeof booking.price === 'string' ? parseFloat(booking.price) : (booking.price || 0);
+            return sum + price;
+          }, 0),
           reviews: userReviews.length,
           averageRating: userReviews.length > 0 
-            ? userReviews.reduce((sum: number, review: Review) => sum + review.rating, 0) / userReviews.length
+            ? userReviews.reduce((sum: number, review: Review) => {
+                // Handle rating as string or number
+                const rating = typeof review.rating === 'string' ? parseFloat(review.rating) : (review.rating || 0);
+                return sum + (isNaN(rating) ? 0 : rating);
+              }, 0) / userReviews.length
             : 0,
         };
+
+        console.log("Dashboard stats calculated:", {
+          bookingsCount: bookingsData.length,
+          reviewsCount: userReviews.length,
+          stats: calculatedStats,
+          bookingsData: bookingsData,
+          userReviews: userReviews,
+        });
 
         setStats(calculatedStats);
         setRecentBookings(bookingsData.slice(0, 2)); // Show only recent 2 bookings

@@ -112,15 +112,60 @@ export const bookingAPI = {
   /**
    * Verify payment with Paystack
    * Verifies payment and processes wallet funding
+   * Authentication is optional for this endpoint (can be called from Paystack redirect)
    * @param reference - Payment reference from Paystack
    * @returns Payment verification result
    */
   verifyPayment: async (reference: string): Promise<unknown> => {
     return withErrorHandling(async () => {
-      return await apiFetch("/bookings/verify-payment", {
+      const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
+      const token =
+        typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
+
+      // Build headers - include auth if available, but don't require it
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+      
+      // Only add auth header if token exists (optional for this endpoint)
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${BASE_URL}/bookings/verify-payment`, {
         method: "POST",
+        headers,
         body: JSON.stringify({ reference }),
       });
+
+      if (!response.ok) {
+        let errorData: any = {};
+        try {
+          errorData = await response.json();
+        } catch {
+          errorData = {
+            message: `HTTP error! status: ${response.status}`,
+            status: response.status,
+            statusText: response.statusText,
+          };
+        }
+        
+        const error = new Error(
+          errorData.message || 
+          errorData.detail || 
+          `Payment verification failed: ${response.status} ${response.statusText}`
+        ) as any;
+        error.response = {
+          status: response.status,
+          statusText: response.statusText,
+          data: errorData,
+        };
+        error.status = response.status;
+        error.statusText = response.statusText;
+        throw error;
+      }
+
+      return response.json();
     });
   },
 
@@ -239,9 +284,24 @@ export const bookingAPI = {
    * @param agentId - Agent ID
    * @returns Wallet balance and details
    */
-  getAgentWallet: async (agentId: string): Promise<unknown> => {
+  getAgentWallet: async (agentId: string): Promise<{
+    id: string;
+    user_id: string;
+    balance: string;
+    currency: string;
+    created_at: string;
+    updated_at: string;
+  }> => {
     return withErrorHandling(async () => {
-      return await apiFetch(`/bookings/agents/${agentId}/wallet`);
+      const response = await apiFetch(`/bookings/agents/${agentId}/wallet`);
+      return response as {
+        id: string;
+        user_id: string;
+        balance: string;
+        currency: string;
+        created_at: string;
+        updated_at: string;
+      };
     });
   },
 
@@ -451,6 +511,8 @@ export const bookingAPI = {
       return await apiFetch(url);
     });
   },
+
+
 };
 
 export default bookingAPI;

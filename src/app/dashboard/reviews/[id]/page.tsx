@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -16,6 +16,7 @@ const ReviewDetailPage = () => {
   const router = useRouter();
   const params = useParams();
   const reviewId = params.id as string;
+  const hasLoadedRef = useRef(false);
 
   const { getReviewById, approveReview, rejectReview, replyToReview } =
     useReviews();
@@ -30,16 +31,26 @@ const ReviewDetailPage = () => {
   // Load review data on component mount
   useEffect(() => {
     const loadReview = async () => {
-      if (!reviewId) return;
+      if (!reviewId || hasLoadedRef.current) return;
+      hasLoadedRef.current = true;
 
       try {
         setLoading(true);
         setError(null);
+        console.log("Loading review with ID:", reviewId);
         const reviewData = await getReviewById(reviewId);
+        console.log("Review data loaded:", reviewData);
 
         if (reviewData) {
           setReview(reviewData);
           setReplyMessage(reviewData.reply || "");
+          // Log property info if present
+          if (reviewData.property) {
+            console.log("Review has property reference:", {
+              property: reviewData.property,
+              property_id: reviewData.property?.id || reviewData.property,
+            });
+          }
         } else {
           setError("Review not found");
         }
@@ -52,7 +63,13 @@ const ReviewDetailPage = () => {
     };
 
     loadReview();
-  }, [reviewId, getReviewById]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewId]); // Only depend on reviewId, getReviewById is stable from context
+
+  // Reset hasLoadedRef when reviewId changes
+  useEffect(() => {
+    hasLoadedRef.current = false;
+  }, [reviewId]);
 
   const renderStars = (rating: number) => {
     return Array.from({ length: 5 }, (_, index) => (

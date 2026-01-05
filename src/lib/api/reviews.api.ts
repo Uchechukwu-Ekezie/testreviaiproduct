@@ -290,15 +290,56 @@ export const reviewsAPI = {
 
   /**
    * Get all reviews for the authenticated user
+   * @param userId - User ID (optional, will use current user if not provided)
+   * @param skip - Number of reviews to skip (default: 0)
+   * @param limit - Maximum number of reviews to return (default: 20, max: 100)
    * @returns Array of user's reviews
    */
-  getUserReviews: async (): Promise<Review[]> => {
+  getUserReviews: async (
+    userId?: string,
+    skip: number = 0,
+    limit: number = 20
+  ): Promise<Review[]> => {
     return withErrorHandling(async () => {
+      // If userId is not provided, try to get it from token
+      let targetUserId = userId;
+      if (!targetUserId && typeof window !== "undefined") {
+        const token = localStorage.getItem("authToken");
+        if (token) {
+          try {
+            const decoded = JSON.parse(atob(token.split('.')[1])) as any;
+            targetUserId = decoded.user_id || decoded.userId || decoded.sub || decoded.id;
+          } catch (error) {
+            console.warn("Could not extract user ID from token:", error);
+          }
+        }
+      }
+
+      if (!targetUserId) {
+        throw new Error("User ID is required to fetch reviews");
+      }
+
+      // Build query parameters
+      const queryParams = new URLSearchParams();
+      if (skip > 0) queryParams.append("skip", skip.toString());
+      if (limit !== 20) queryParams.append("limit", Math.min(limit, 100).toString());
+
+      const queryString = queryParams.toString();
+      const url = `/reviews/user/${targetUserId}${queryString ? `?${queryString}` : ""}`;
+
       console.log(
-        "reviewsAPI.getUserReviews: Starting request to reviews/mine/"
+        "reviewsAPI.getUserReviews: Starting request to",
+        url
       );
-      const response = await apiFetch("/reviews/mine/");
-      return response as Review[];
+      const response = await apiFetch(url);
+      
+      // The API returns { reviews: [...] } format
+      if (response && typeof response === 'object' && 'reviews' in response) {
+        return (response as { reviews: Review[] }).reviews;
+      }
+      
+      // Fallback: if response is already an array, return it
+      return Array.isArray(response) ? response : [];
     });
   },
 

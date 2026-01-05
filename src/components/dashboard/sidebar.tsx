@@ -11,6 +11,8 @@ import {
   LogOut,
   X,
   CalendarCheck,
+  Wallet,
+  Receipt,
 } from "lucide-react";
 
 const navigationItems = [
@@ -28,6 +30,16 @@ const navigationItems = [
     name: "Bookings",
     href: "/dashboard/bookings",
     icon: CalendarCheck,
+  },
+  {
+    name: "Wallet",
+    href: "/dashboard/wallet",
+    icon: Wallet,
+  },
+  {
+    name: "Transactions",
+    href: "/dashboard/transactions",
+    icon: Receipt,
   },
   {
     name: "Reviews",

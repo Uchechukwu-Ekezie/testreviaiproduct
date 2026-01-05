@@ -133,7 +133,7 @@ export default function BookingPage({
           </p>
           <button
             onClick={() => router.push("/properties")}
-            className="bg-[#FFD700] text-black px-6 py-2 rounded-lg hover:bg-[#FFA500] transition-colors"
+            className="bg-gradient-to-r from-[#FFD700] to-[#780991] hover:opacity-90 text-black px-6 py-2 rounded-lg transition-colors"
           >
             Back to Properties
           </button>
@@ -275,24 +275,41 @@ export default function BookingPage({
     ));
   };
 
+  // Get today's date in YYYY-MM-DD format
+  const today = new Date().toISOString().split('T')[0];
+  
+  // Calculate minimum check-out date (day after check-in or today)
+  const getMinCheckoutDate = () => {
+    if (bookingData.checkIn) {
+      const checkInDate = new Date(bookingData.checkIn);
+      checkInDate.setDate(checkInDate.getDate() + 1);
+      return checkInDate.toISOString().split('T')[0];
+    }
+    return today;
+  };
+
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-black text-white">
-        <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="min-h-screen bg-gradient-to-b from-black via-[#0a0a0a] to-black text-white">
+        <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6 max-w-3xl">
           {/* Header */}
-          <div className="flex items-center gap-4 mb-8">
+          <div className="flex items-center gap-3 mb-4 sm:mb-6 mt-16">
             <button
               onClick={() => router.back()}
-              className="p-2 text-white hover:bg-white/10 rounded-full transition-colors"
+              className="p-2 text-white hover:bg-white/10 rounded-full transition-all hover:scale-105 active:scale-95"
+              aria-label="Go back"
             >
-              <ArrowLeft className="w-6 h-6" />
+              <ArrowLeft className="w-5 h-5" />
             </button>
-            <h1 className="text-3xl font-bold text-white">Book Property</h1>
+            <div>
+              <h1 className="text-lg sm:text-2xl font-bold text-white">Book Property</h1>
+              <p className="text-white/50 text-xs mt-0.5">Complete your reservation in 3 simple steps</p>
+            </div>
           </div>
 
           {/* Property Summary */}
-          <div className="flex gap-6 p-6 bg-white/5 rounded-xl mb-8">
-            <div className="relative w-32 h-32 rounded-lg overflow-hidden">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 p-3 sm:p-5 bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-sm rounded-xl mb-4 sm:mb-6 border border-white/10 shadow-lg hover:border-white/20 transition-all duration-300">
+            <div className="relative w-full sm:w-32 h-32 sm:h-32 rounded-lg overflow-hidden flex-shrink-0 shadow-md">
               <Image
                 src={typeof property.images === 'string' ? property.images : property.images || house}
                 alt={property.title}
@@ -305,31 +322,36 @@ export default function BookingPage({
                 }}
               />
             </div>
-            <div className="flex-1">
-              <h2 className="text-white font-semibold text-2xl mb-2">
-                {property.title}
-              </h2>
-              <div className="flex items-center gap-2 text-white/70 text-lg mb-2">
-                <MapPin className="w-5 h-5" />
-                {property.location}
-              </div>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="flex items-center gap-1">
-                  {renderStars(property.rating)}
+            <div className="flex-1 min-w-0 flex flex-col justify-between">
+              <div>
+                <h2 className="text-white font-semibold text-base sm:text-xl mb-1.5 sm:mb-2 line-clamp-2 leading-tight">
+                  {property.title}
+                </h2>
+                <div className="flex items-center gap-1.5 text-white/60 text-xs mb-1.5 sm:mb-2">
+                  <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-[#780991]" />
+                  <span className="truncate">{property.location}</span>
                 </div>
-                <span className="text-white/70 text-lg">
-                  {property.rating} • {property.reviews} Reviews
-                </span>
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <div className="flex items-center gap-0.5">
+                    {renderStars(property.rating)}
+                  </div>
+                  <span className="text-white/60 text-xs">
+                    {property.rating.toFixed(1)} • {property.reviews} Review{property.reviews !== 1 ? 's' : ''}
+                  </span>
+                </div>
               </div>
-              <div className="text-[#FFD700] font-bold text-2xl">
-                {property.price}
+              <div className="flex items-baseline gap-1.5">
+                <span className="bg-gradient-to-r from-[#FFD700] to-[#780991] bg-clip-text text-white/90 font-bold text-lg sm:text-2xl">
+                ₦{property.price}
+                </span>
+                <span className="text-white/50 text-xs">per night</span>
               </div>
             </div>
           </div>
 
           {/* Progress Indicator */}
-          <div className="flex items-center justify-center mb-12">
-            <div className="flex items-center">
+          <div className="flex items-center justify-center mb-6 sm:mb-8 overflow-x-auto pb-3">
+            <div className="flex items-center min-w-max">
               {[
                 { number: 1, label: "Dates & Guests" },
                 { number: 2, label: "Personal Info" },
@@ -338,22 +360,22 @@ export default function BookingPage({
                 <div key={stepInfo.number} className="flex items-center">
                   <div className="flex flex-col items-center">
                     <div
-                      className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-semibold mb-2 ${
+                      className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-sm sm:text-base font-semibold mb-1.5 transition-all duration-300 ${
                         step >= stepInfo.number
-                          ? "bg-[#FFD700] text-black"
+                          ? "bg-gradient-to-r from-[#FFD700] to-[#780991] text-white/90"
                           : "bg-white/20 text-white/50"
                       }`}
                     >
                       {step > stepInfo.number ? (
-                        <Check className="w-6 h-6" />
+                        <Check className="w-4 h-4 sm:w-5 sm:h-5" />
                       ) : (
                         stepInfo.number
                       )}
                     </div>
                     <span
-                      className={`text-sm ${
+                      className={`text-xs text-center text- px-1 ${
                         step >= stepInfo.number
-                          ? "text-[#FFD700]"
+                          ? "bg-gradient-to-r from-[#FFD700] to-[#780991] text-white/50 bg-clip-text text-transparent font-medium"
                           : "text-white/50"
                       }`}
                     >
@@ -362,8 +384,8 @@ export default function BookingPage({
                   </div>
                   {index < 2 && (
                     <div
-                      className={`w-24 h-1 mx-4 mt-[-20px] ${
-                        step > stepInfo.number ? "bg-[#FFD700]" : "bg-white/20"
+                      className={`w-12 sm:w-16 h-0.5 mx-2 sm:mx-3 mt-[-16px] transition-all duration-300 text-white ${
+                        step > stepInfo.number ? "bg-gradient-to-r from-[#FFD700] to-[#780991]" : "bg-white/20"
                       }`}
                     />
                   )}
@@ -373,32 +395,50 @@ export default function BookingPage({
           </div>
 
           {/* Step Content */}
-          <div className="bg-white/5 rounded-xl p-8 mb-8">
+          <div className="bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-sm rounded-xl p-3 sm:p-6 mb-4 sm:mb-6 border border-white/10 shadow-lg">
             {step === 1 && (
               <div>
-                <h3 className="text-white text-2xl font-semibold mb-6">
-                  Select Dates & Guests
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="mb-3 sm:mb-5">
+                  <h3 className="text-white text-base sm:text-xl font-semibold mb-1">
+                    Select Dates & Guests
+                  </h3>
+                  <p className="text-white/50 text-xs">Choose your check-in and check-out dates</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                   <div>
-                    <label className="block text-white/70 text-lg mb-3">
-                      Check-in Date
+                    <label className="block text-white/80 text-xs sm:text-sm font-medium mb-1.5">
+                      Check-in Date <span className="text-red-400">*</span>
                     </label>
                     <div className="relative">
                       <input
                         type="date"
                         value={bookingData.checkIn}
-                        onChange={(e) =>
-                          handleInputChange("checkIn", e.target.value)
-                        }
-                        className="w-full p-4 bg-white/10 border border-white/20 rounded-lg text-white text-lg focus:outline-none focus:border-[#FFD700]"
+                        onChange={(e) => {
+                          handleInputChange("checkIn", e.target.value);
+                          // Reset check-out if it's before the new check-in
+                          if (bookingData.checkOut && e.target.value && bookingData.checkOut <= e.target.value) {
+                            handleInputChange("checkOut", "");
+                          }
+                        }}
+                        min={today}
+                        required
+                        className="w-full p-2.5 sm:p-3 bg-white/10 border border-white/20 rounded-lg text-white text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-[#FFD700]/50 focus:border-[#FFD700] transition-all hover:border-white/30"
                       />
-                      <Calendar className="absolute right-4 top-4 w-6 h-6 text-white/50" />
+                      <Calendar className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-white/50 pointer-events-none" />
                     </div>
+                    {bookingData.checkIn && (
+                      <p className="text-white/40 text-xs mt-1">
+                        {new Date(bookingData.checkIn).toLocaleDateString('en-US', { 
+                          weekday: 'short', 
+                          month: 'short', 
+                          day: 'numeric' 
+                        })}
+                      </p>
+                    )}
                   </div>
                   <div>
-                    <label className="block text-white/70 text-lg mb-3">
-                      Check-out Date
+                    <label className="block text-white/80 text-xs sm:text-sm font-medium mb-1.5">
+                      Check-out Date <span className="text-red-400">*</span>
                     </label>
                     <div className="relative">
                       <input
@@ -407,15 +447,32 @@ export default function BookingPage({
                         onChange={(e) =>
                           handleInputChange("checkOut", e.target.value)
                         }
-                        className="w-full p-4 bg-white/10 border border-white/20 rounded-lg text-white text-lg focus:outline-none focus:border-[#FFD700]"
+                        min={getMinCheckoutDate()}
+                        disabled={!bookingData.checkIn}
+                        required
+                        className="w-full p-2.5 sm:p-3 bg-white/10 border border-white/20 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#FFD700]/50 focus:border-[#FFD700] transition-all hover:border-white/30 disabled:opacity-50 disabled:cursor-not-allowed"
                       />
-                      <Calendar className="absolute right-4 top-4 w-6 h-6 text-white/50" />
+                      <Calendar className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-white/50 pointer-events-none" />
                     </div>
+                    {bookingData.checkOut && (
+                      <p className="text-white/40 text-xs mt-1">
+                        {new Date(bookingData.checkOut).toLocaleDateString('en-US', { 
+                          weekday: 'short', 
+                          month: 'short', 
+                          day: 'numeric' 
+                        })}
+                      </p>
+                    )}
+                    {!bookingData.checkIn && (
+                      <p className="text-white/40 text-xs mt-1">
+                        Select check-in first
+                      </p>
+                    )}
                   </div>
                 </div>
-                <div className="mt-6">
-                  <label className="block text-white/70 text-lg mb-3">
-                    Number of Guests
+                <div className="mt-3 sm:mt-4">
+                  <label className="block text-white/80 text-xs sm:text-sm font-medium mb-1.5">
+                    Number of Guests <span className="text-red-400">*</span>
                   </label>
                   <div className="relative">
                     <select
@@ -423,7 +480,7 @@ export default function BookingPage({
                       onChange={(e) =>
                         handleInputChange("guests", parseInt(e.target.value))
                       }
-                      className="w-full p-4 bg-white/10 border border-white/20 rounded-lg text-white text-lg focus:outline-none focus:border-[#FFD700] appearance-none"
+                      className="w-full p-2.5 sm:p-3 bg-white/10 border border-white/20 rounded-lg text-white text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-[#FFD700]/50 focus:border-[#FFD700] appearance-none transition-all hover:border-white/30 cursor-pointer"
                     >
                       {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
                         <option key={num} value={num} className="bg-[#1a1a1a]">
@@ -431,7 +488,7 @@ export default function BookingPage({
                         </option>
                       ))}
                     </select>
-                    <Users className="absolute right-4 top-4 w-6 h-6 text-white/50" />
+                    <Users className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-white/50 pointer-events-none" />
                   </div>
                 </div>
               </div>
@@ -439,13 +496,16 @@ export default function BookingPage({
 
             {step === 2 && (
               <div>
-                <h3 className="text-white text-2xl font-semibold mb-6">
-                  Personal Information
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="mb-3 sm:mb-5">
+                  <h3 className="text-white text-base sm:text-xl font-semibold mb-1">
+                    Personal Information
+                  </h3>
+                  <p className="text-white/50 text-xs">Please provide your contact details</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                   <div>
-                    <label className="block text-white/70 text-lg mb-3">
-                      First Name
+                    <label className="block text-white/80 text-xs sm:text-sm font-medium mb-1.5">
+                      First Name <span className="text-red-400">*</span>
                     </label>
                     <input
                       type="text"
@@ -453,13 +513,14 @@ export default function BookingPage({
                       onChange={(e) =>
                         handleInputChange("firstName", e.target.value)
                       }
-                      className="w-full p-4 bg-white/10 border border-white/20 rounded-lg text-white text-lg focus:outline-none focus:border-[#FFD700]"
-                      placeholder="Enter your first name"
+                      required
+                      className="w-full p-2.5 sm:p-3 bg-white/10 border border-white/20 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#FFD700]/50 focus:border-[#FFD700] transition-all hover:border-white/30 placeholder:text-white/30"
+                      placeholder="John"
                     />
                   </div>
                   <div>
-                    <label className="block text-white/70 text-lg mb-3">
-                      Last Name
+                    <label className="block text-white/80 text-xs sm:text-sm font-medium mb-1.5">
+                      Last Name <span className="text-red-400">*</span>
                     </label>
                     <input
                       type="text"
@@ -467,14 +528,15 @@ export default function BookingPage({
                       onChange={(e) =>
                         handleInputChange("lastName", e.target.value)
                       }
-                      className="w-full p-4 bg-white/10 border border-white/20 rounded-lg text-white text-lg focus:outline-none focus:border-[#FFD700]"
-                      placeholder="Enter your last name"
+                      required
+                      className="w-full p-2.5 sm:p-3 bg-white/10 border border-white/20 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#FFD700]/50 focus:border-[#FFD700] transition-all hover:border-white/30 placeholder:text-white/30"
+                      placeholder="Doe"
                     />
                   </div>
                 </div>
-                <div className="mt-6">
-                  <label className="block text-white/70 text-lg mb-3">
-                    Email Address
+                <div className="mt-3 sm:mt-4">
+                  <label className="block text-white/80 text-xs sm:text-sm font-medium mb-1.5">
+                    Email Address <span className="text-red-400">*</span>
                   </label>
                   <div className="relative">
                     <input
@@ -483,15 +545,16 @@ export default function BookingPage({
                       onChange={(e) =>
                         handleInputChange("email", e.target.value)
                       }
-                      className="w-full p-4 bg-white/10 border border-white/20 rounded-lg text-white text-lg focus:outline-none focus:border-[#FFD700]"
-                      placeholder="Enter your email address"
+                      required
+                      className="w-full p-2.5 sm:p-3 bg-white/10 border border-white/20 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#FFD700]/50 focus:border-[#FFD700] transition-all hover:border-white/30 placeholder:text-white/30 pr-9 sm:pr-10"
+                      placeholder="john.doe@example.com"
                     />
-                    <Mail className="absolute right-4 top-4 w-6 h-6 text-white/50" />
+                    <Mail className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-white/50 pointer-events-none" />
                   </div>
                 </div>
-                <div className="mt-6">
-                  <label className="block text-white/70 text-lg mb-3">
-                    Phone Number
+                <div className="mt-3 sm:mt-4">
+                  <label className="block text-white/80 text-xs sm:text-sm font-medium mb-1.5">
+                    Phone Number <span className="text-red-400">*</span>
                   </label>
                   <div className="relative">
                     <input
@@ -500,10 +563,11 @@ export default function BookingPage({
                       onChange={(e) =>
                         handleInputChange("phone", e.target.value)
                       }
-                      className="w-full p-4 bg-white/10 border border-white/20 rounded-lg text-white text-lg focus:outline-none focus:border-[#FFD700]"
-                      placeholder="Enter your phone number"
+                      required
+                      className="w-full p-2.5 sm:p-3 bg-white/10 border border-white/20 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#FFD700]/50 focus:border-[#FFD700] transition-all hover:border-white/30 placeholder:text-white/30 pr-9 sm:pr-10"
+                      placeholder="+234 800 000 0000"
                     />
-                    <Phone className="absolute right-4 top-4 w-6 h-6 text-white/50" />
+                    <Phone className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-white/50 pointer-events-none" />
                   </div>
                 </div>
               </div>
@@ -511,63 +575,91 @@ export default function BookingPage({
 
             {step === 3 && (
               <div>
-                <h3 className="text-white text-2xl font-semibold mb-6">
-                  Review & Confirm
-                </h3>
-                <div className="space-y-6">
-                  <div className="p-6 bg-white/5 rounded-lg">
-                    <h4 className="text-white font-semibold text-xl mb-4">
+                <div className="mb-3 sm:mb-5">
+                  <h3 className="text-white text-base sm:text-xl font-semibold mb-1">
+                    Review & Confirm
+                  </h3>
+                  <p className="text-white/50 text-xs">Please review your booking details before confirming</p>
+                </div>
+                <div className="space-y-3 sm:space-y-4">
+                  <div className="p-3 sm:p-5 bg-gradient-to-br from-white/5 to-white/[0.02] rounded-lg border border-white/10 shadow-md">
+                    <h4 className="text-white font-semibold text-sm sm:text-lg mb-2 sm:mb-3 flex items-center gap-2">
+                      <div className="w-0.5 h-4 sm:h-5 bg-gradient-to-b from-[#FFD700] to-[#780991] rounded-full"></div>
                       Booking Summary
                     </h4>
-                    <div className="space-y-3">
-                      <div className="flex justify-between text-lg">
-                        <span className="text-white/70">Check-in:</span>
-                        <span className="text-white">
-                          {bookingData.checkIn || "Not selected"}
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-xs sm:text-sm py-2 border-b border-white/10">
+                        <span className="text-white/60 font-medium">Check-in:</span>
+                        <span className="text-white font-semibold text-right">
+                          {bookingData.checkIn ? new Date(bookingData.checkIn).toLocaleDateString('en-US', { 
+                            weekday: 'short', 
+                            month: 'short', 
+                            day: 'numeric',
+                            year: 'numeric'
+                          }) : "Not selected"}
                         </span>
                       </div>
-                      <div className="flex justify-between text-lg">
-                        <span className="text-white/70">Check-out:</span>
-                        <span className="text-white">
-                          {bookingData.checkOut || "Not selected"}
+                      <div className="flex justify-between items-center text-xs sm:text-sm py-2 border-b border-white/10">
+                        <span className="text-white/60 font-medium">Check-out:</span>
+                        <span className="text-white font-semibold text-right">
+                          {bookingData.checkOut ? new Date(bookingData.checkOut).toLocaleDateString('en-US', { 
+                            weekday: 'short', 
+                            month: 'short', 
+                            day: 'numeric',
+                            year: 'numeric'
+                          }) : "Not selected"}
                         </span>
                       </div>
-                      <div className="flex justify-between text-lg">
-                        <span className="text-white/70">Guests:</span>
-                        <span className="text-white">
+                      <div className="flex justify-between items-center text-xs sm:text-sm py-2 border-b border-white/10">
+                        <span className="text-white/60 font-medium">Duration:</span>
+                        <span className="text-white font-semibold">
+                          {bookingData.checkIn && bookingData.checkOut ? (
+                            (() => {
+                              const checkIn = new Date(bookingData.checkIn);
+                              const checkOut = new Date(bookingData.checkOut);
+                              const diffTime = Math.abs(checkOut.getTime() - checkIn.getTime());
+                              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                              return `${diffDays} Night${diffDays > 1 ? 's' : ''}`;
+                            })()
+                          ) : "N/A"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs sm:text-sm py-2 border-b border-white/10">
+                        <span className="text-white/60 font-medium">Guests:</span>
+                        <span className="text-white font-semibold">
                           {bookingData.guests} Guest
                           {bookingData.guests > 1 ? "s" : ""}
                         </span>
                       </div>
-                      <div className="flex justify-between text-lg">
-                        <span className="text-white/70">Guest Name:</span>
-                        <span className="text-white">
+                      <div className="flex justify-between items-center text-xs sm:text-sm py-2 border-b border-white/10">
+                        <span className="text-white/60 font-medium">Guest Name:</span>
+                        <span className="text-white font-semibold text-right">
                           {bookingData.firstName} {bookingData.lastName}
                         </span>
                       </div>
-                      <div className="flex justify-between text-lg">
-                        <span className="text-white/70">Email:</span>
-                        <span className="text-white">{bookingData.email}</span>
+                      <div className="flex justify-between items-start text-xs sm:text-sm py-2 border-b border-white/10">
+                        <span className="text-white/60 font-medium">Email:</span>
+                        <span className="text-white font-semibold break-all text-right ml-4">{bookingData.email}</span>
                       </div>
-                      <div className="flex justify-between text-lg">
-                        <span className="text-white/70">Phone:</span>
-                        <span className="text-white">{bookingData.phone}</span>
+                      <div className="flex justify-between items-center text-xs sm:text-sm py-2">
+                        <span className="text-white/60 font-medium">Phone:</span>
+                        <span className="text-white font-semibold">{bookingData.phone}</span>
                       </div>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-white/70 text-lg mb-3">
-                      Special Requests (Optional)
+                    <label className="block text-white/80 text-xs sm:text-sm font-medium mb-1.5">
+                      Special Requests <span className="text-white/40 text-xs">(Optional)</span>
                     </label>
                     <textarea
                       value={bookingData.specialRequests}
                       onChange={(e) =>
                         handleInputChange("specialRequests", e.target.value)
                       }
-                      className="w-full p-4 bg-white/10 border border-white/20 rounded-lg text-white text-lg focus:outline-none focus:border-[#FFD700] resize-none"
-                      rows={4}
-                      placeholder="Any special requests or notes..."
+                      className="w-full p-2.5 sm:p-3 bg-white/10 border border-white/20 rounded-lg text-white text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-[#FFD700]/50 focus:border-[#FFD700] resize-none transition-all hover:border-white/30 placeholder:text-white/30"
+                      rows={3}
+                      placeholder="Any special requests, dietary requirements, or notes for the host..."
                     />
                   </div>
                 </div>
@@ -576,24 +668,27 @@ export default function BookingPage({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-between">
+          <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0 pt-3 border-t border-white/10">
             <button
               onClick={step === 1 ? () => router.back() : handleBack}
-              className="px-8 py-4 text-white border border-white/20 rounded-lg hover:bg-white/5 transition-colors text-lg"
+              className="w-full sm:w-auto px-5 sm:px-6 py-2.5 sm:py-3 text-white border border-white/20 rounded-lg hover:bg-white/10 hover:border-white/30 transition-all text-sm sm:text-base font-medium active:scale-95"
             >
               {step === 1 ? "Back to Property" : "Previous"}
             </button>
             <button
               onClick={step === 3 ? handleSubmit : handleNext}
               disabled={isSubmitting}
-              className="px-8 py-4 bg-[#FFD700] text-black font-semibold rounded-lg hover:bg-[#FFA500] transition-colors text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full sm:w-auto px-5 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-[#FFD700] to-[#780991] hover:opacity-90 text-white font-semibold rounded-lg  transition-all text-sm sm:text-base disabled:opacity-50 disabled:cursor- active:scale-95"
             >
               {isSubmitting ? (
-                "Processing..."
+                <span className="flex items-center justify-center gap-2">
+                  <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                  Processing...
+                </span>
               ) : step === 3 ? (
-                "Confirm Booking"
+                "Confirm & Pay"
               ) : (
-                "Next"
+                "Continue"
               )}
             </button>
           </div>
