@@ -135,11 +135,11 @@ export default function CreateStoryModal({
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-md bg-gradient-to-b from-[#1a1a1a] to-[#2a2a2a] rounded-2xl border border-gray-700/50 shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-md bg-[#1a1a1a] rounded-2xl border border-gray-800 shadow-2xl overflow-hidden">
         {/* Loading overlay */}
         {isProcessing && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div className="flex flex-col items-center gap-3 rounded-xl bg-gray-900/80 p-6">
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-3 rounded-xl bg-gray-900/90 p-6">
               <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
               <p className="text-sm font-medium text-gray-200">
                 {uploading ? "Uploading media..." : "Creating story..."}
@@ -149,12 +149,12 @@ export default function CreateStoryModal({
         )}
 
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-700/50 p-4">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
           <h2 className="text-lg font-semibold text-white">Create Story</h2>
           <button
             onClick={onClose}
             disabled={isProcessing}
-            className="rounded-full p-1.5 transition-colors hover:bg-gray-700/50 disabled:opacity-50"
+            className="rounded-full p-1.5 transition-colors hover:bg-gray-800 disabled:opacity-50"
           >
             <X className="h-5 w-5 text-gray-400" />
           </button>
@@ -170,32 +170,27 @@ export default function CreateStoryModal({
                 <button
                   onClick={() => setShowCamera(true)}
                   disabled={isProcessing}
-                  className="flex flex-col items-center gap-3 p-6 border-2 border-gray-600 rounded-xl hover:border-gray-500 transition-colors disabled:opacity-50"
+                  className="flex flex-col items-center gap-3 p-6 border border-gray-700 rounded-xl hover:border-gray-600 hover:bg-gray-800/50 transition-all disabled:opacity-50"
                 >
-                  <div className="p-4 bg-gray-800 rounded-full">
-                    <Camera className="h-6 w-6 text-gray-400" />
+                  <div className="p-3 bg-gray-800 rounded-full">
+                    <Camera className="h-5 w-5 text-white" />
                   </div>
-                  <div>
-                    <p className="text-white font-medium mb-1">Take Photo/Video</p>
-                    <p className="text-xs text-gray-400">Use camera</p>
+                  <div className="text-center">
+                    <p className="text-white font-medium text-sm">Camera</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Take photo/video</p>
                   </div>
                 </button>
                 <button
                   onClick={() => !isProcessing && fileInputRef.current?.click()}
                   disabled={isProcessing}
-                  className="flex flex-col items-center gap-3 p-6 border-2 border-gray-600 rounded-xl hover:border-gray-500 transition-colors disabled:opacity-50"
+                  className="flex flex-col items-center gap-3 p-6 border border-gray-700 rounded-xl hover:border-gray-600 hover:bg-gray-800/50 transition-all disabled:opacity-50"
                 >
-                  <div className="flex gap-2">
-                    <div className="p-4 bg-gray-800 rounded-full">
-                      <ImageIcon className="h-6 w-6 text-gray-400" />
-                    </div>
-                    <div className="p-4 bg-gray-800 rounded-full">
-                      <Video className="h-6 w-6 text-gray-400" />
-                    </div>
+                  <div className="p-3 bg-gray-800 rounded-full">
+                    <ImageIcon className="h-5 w-5 text-white" />
                   </div>
-                  <div>
-                    <p className="text-white font-medium mb-1">Choose from Gallery</p>
-                    <p className="text-xs text-gray-400">Select file</p>
+                  <div className="text-center">
+                    <p className="text-white font-medium text-sm">Gallery</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Choose file</p>
                   </div>
                 </button>
               </div>
@@ -210,68 +205,72 @@ export default function CreateStoryModal({
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Preview */}
-              <div className="relative rounded-xl overflow-hidden bg-gray-900">
-                {selectedFile.type.startsWith("video/") ? (
-                  <video
-                    src={preview || undefined}
-                    controls
-                    className="w-full max-h-64 object-contain"
-                  />
-                ) : (
-                  <img
-                    src={preview || undefined}
-                    alt="Preview"
-                    className="w-full max-h-64 object-contain"
-                  />
-                )}
+              {/* Preview - Portrait orientation for mobile */}
+              <div className="relative rounded-xl overflow-hidden bg-black mx-auto max-w-[280px]">
+                <div className="aspect-[11/16] w-full flex items-center justify-center">
+                  {selectedFile.type.startsWith("video/") ? (
+                    <video
+                      src={preview || undefined}
+                      controls
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <img
+                      src={preview || undefined}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                    />
+                  )}
+                </div>
                 <button
                   onClick={handleRemoveFile}
                   disabled={isProcessing}
-                  className="absolute top-2 right-2 p-2 bg-black/60 rounded-full hover:bg-black/80 transition-colors disabled:opacity-50"
+                  className="absolute top-3 right-3 p-2 bg-black/70 backdrop-blur-sm rounded-full hover:bg-black/90 transition-colors disabled:opacity-50 z-10"
                 >
                   <X className="h-4 w-4 text-white" />
                 </button>
               </div>
 
-              {/* Caption input */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Caption (optional)
-                </label>
+              {/* Caption input - Inline */}
+              <div className="border-t border-gray-800 pt-4">
                 <textarea
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
-                  placeholder="Add a caption to your story..."
-                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                  rows={3}
+                  placeholder="Add caption"
+                  className="w-full px-0 py-2 bg-transparent border-0 text-white text-sm placeholder-gray-500 focus:outline-none resize-none"
+                  rows={caption ? Math.min(Math.ceil(caption.length / 40), 4) : 1}
                   maxLength={2200}
                   disabled={isProcessing}
+                  style={{ minHeight: '24px' }}
                 />
-                <p className="text-xs text-gray-500 mt-1 text-right">
-                  {caption.length}/2200
-                </p>
+                {caption && (
+                  <p className="text-xs text-gray-500 mt-1 text-right">
+                    {caption.length}/2200
+                  </p>
+                )}
               </div>
             </div>
           )}
 
           {/* Action buttons */}
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={onClose}
-              disabled={isProcessing}
-              className="flex-1 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={!selectedFile || isProcessing}
-              className="flex-1 px-4 py-2.5 bg-gradient-to-r from-[#FFD700] to-[#780991] hover:opacity-90 text-white rounded-lg font-medium transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? "Posting..." : "Share Story"}
-            </button>
-          </div>
+          {selectedFile && (
+            <div className="flex gap-3 pt-2 border-t border-gray-800">
+              <button
+                onClick={onClose}
+                disabled={isProcessing}
+                className="flex-1 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={!selectedFile || isProcessing}
+                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-[#FFD700] to-[#780991] hover:opacity-90 text-white rounded-lg text-sm font-medium transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? "Posting..." : "Share Story"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -285,4 +284,6 @@ export default function CreateStoryModal({
     </div>
   );
 }
+
+
 

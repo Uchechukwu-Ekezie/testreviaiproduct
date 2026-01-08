@@ -65,9 +65,9 @@ export default function BookingPage({
           // Check if property is added by agent
           if (!apiProperty.is_added_by_agent) {
             setProperty(null);
-            setIsLoading(false);
-            return;
-          }
+          setIsLoading(false);
+          return;
+        }
 
           // Extract image URL from various possible formats
           let imageUrl = house; // Default fallback
@@ -80,7 +80,7 @@ export default function BookingPage({
           } else if (apiProperty.images && Array.isArray(apiProperty.images) && apiProperty.images.length > 0) {
             const primaryImage = apiProperty.images.find((img: any) => img.is_primary) || apiProperty.images[0];
             imageUrl = primaryImage.image_url || primaryImage.url || house;
-          }
+      }
 
           // Transform API property to UI format
           const transformedProperty = {
@@ -370,20 +370,20 @@ export default function BookingPage({
             <div className="flex-1 min-w-0 flex flex-col justify-between">
               <div>
                 <h2 className="text-white font-semibold text-base sm:text-xl mb-1.5 sm:mb-2 line-clamp-2 leading-tight">
-                  {property.title}
-                </h2>
+                {property.title}
+              </h2>
                 <div className="flex items-center gap-1.5 text-white/60 text-xs mb-1.5 sm:mb-2">
                   <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-[#780991]" />
                   <span className="truncate">{property.location}</span>
-                </div>
+              </div>
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <div className="flex items-center gap-0.5">
-                    {renderStars(property.rating)}
-                  </div>
+                  {renderStars(property.rating)}
+                </div>
                   <span className="text-white/60 text-xs">
                     {property.rating.toFixed(1)} • {property.reviews} Review{property.reviews !== 1 ? 's' : ''}
-                  </span>
-                </div>
+                </span>
+              </div>
               </div>
               <div className="flex items-baseline gap-1.5">
                 <span className="bg-gradient-to-r from-[#FFD700] to-[#780991] bg-clip-text text-white/90 font-bold text-lg sm:text-2xl">
@@ -445,8 +445,8 @@ export default function BookingPage({
               <div>
                 <div className="mb-3 sm:mb-5">
                   <h3 className="text-white text-base sm:text-xl font-semibold mb-1">
-                    Select Dates & Guests
-                  </h3>
+                  Select Dates & Guests
+                </h3>
                   <p className="text-white/50 text-xs">Choose your check-in and check-out dates</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
@@ -562,8 +562,8 @@ export default function BookingPage({
               <div>
                 <div className="mb-3 sm:mb-5">
                   <h3 className="text-white text-base sm:text-xl font-semibold mb-1">
-                    Personal Information
-                  </h3>
+                  Personal Information
+                </h3>
                   <p className="text-white/50 text-xs">Please provide your contact details</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
@@ -641,8 +641,8 @@ export default function BookingPage({
               <div>
                 <div className="mb-3 sm:mb-5">
                   <h3 className="text-white text-base sm:text-xl font-semibold mb-1">
-                    Review & Confirm
-                  </h3>
+                  Review & Confirm
+                </h3>
                   <p className="text-white/50 text-xs">Please review your booking details before confirming</p>
                 </div>
                 <div className="space-y-3 sm:space-y-4">

@@ -424,8 +424,8 @@ export default function PropertyDetailClient({
         };
       });
 
-      console.log("Processed reviews:", processedReviews);
-      setBackendReviews(processedReviews);
+        console.log("Processed reviews:", processedReviews);
+        setBackendReviews(processedReviews);
     } catch (err) {
       console.error("Error fetching reviews:", err);
       setBackendReviews([]);
@@ -692,12 +692,12 @@ export default function PropertyDetailClient({
 
               {/* Book Now Button - Only show for agent-added properties */}
               {propertyDetailData.is_added_by_agent && (
-                <button
-                  onClick={() => router.push(`/booking/${propertyId}`)}
+              <button
+                onClick={() => router.push(`/booking/${propertyId}`)}
                   className="w-full sm:w-auto min-w-[200px] bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold py-3 sm:py-4 px-4 sm:px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 text-sm sm:text-base"
-                >
-                  Book Now
-                </button>
+              >
+                Book Now
+              </button>
               )}
             </div>
           </div>
@@ -896,13 +896,13 @@ export default function PropertyDetailClient({
                             className="w-10 h-10 rounded-full object-cover border-2 border-white/20"
                           />
                         ) : (
-                          <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
-                            <span className="text-white font-semibold text-sm">
-                              {(review.user?.name || review.username || "U")
-                                .charAt(0)
-                                .toUpperCase()}
-                            </span>
-                          </div>
+                        <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
+                          <span className="text-white font-semibold text-sm">
+                            {(review.user?.name || review.username || "U")
+                              .charAt(0)
+                              .toUpperCase()}
+                          </span>
+                        </div>
                         )}
                         <div className="flex-1">
                           <h4 className="text-white font-medium text-sm mb-1">
