@@ -8,7 +8,7 @@ import React, {
   useMemo,
   useCallback,
 } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -21,17 +21,36 @@ import {
   BadgeCheck,
   UserCheck,
   UserPlus,
+  MoreVertical,
+  Trash2,
+  MoreHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 import ShareModal from "./ShareModal";
 import CommentsModal from "./CommentsModal";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type {
   Post as PostType,
   Comment as CommentType,
 } from "@/hooks/usePosts";
 import { useAuth } from "@/contexts/auth-context";
 import { useFollow } from "@/hooks/useFollow";
+import { toast } from "@/components/ui/use-toast";
 
 interface PostCardProps {
   post: PostType;
@@ -57,6 +76,8 @@ interface PostCardProps {
   onFollowToggle?: (authorId: string, authorData: any) => Promise<void>;
   // Image lightbox handler
   onOpenLightbox?: (images: string[], startIndex: number) => void;
+  // Delete post handler
+  onDelete?: (postId: string) => Promise<boolean>;
 }
 
 const formatRelativeTime = (date: Date): string => {
@@ -96,8 +117,11 @@ export default function PostCard({
   onFollowToggle,
   // Image lightbox handler
   onOpenLightbox,
+  // Delete post handler
+  onDelete,
 }: PostCardProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { user } = useAuth();
   const { toggleFollow } = useFollow();
 
@@ -118,6 +142,10 @@ export default function PostCard({
   // Local follow state for this post's author
   const [localIsFollowing, setLocalIsFollowing] = useState(isFollowing);
   const [localIsFollowLoading, setLocalIsFollowLoading] = useState(false);
+
+  // Delete post state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   /* ------------------------------------------------------------- */
   /* Sync local state with prop changes                            */
@@ -705,9 +733,9 @@ export default function PostCard({
               </span>
             </div>
 
-            {/* Follow Button */}
-            {!isOwnPost && !localIsFollowing && (
-              <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0 ml-1">
+            {/* Follow Button or Menu */}
+            <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0 ml-1">
+              {!isOwnPost && !localIsFollowing ? (
                 <button
                   className={cn(
                     "text-white rounded-full px-2.5 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-[13px] font-medium transition-all duration-200 flex items-center gap-0.5 sm:gap-1 shadow-sm",
@@ -728,8 +756,37 @@ export default function PostCard({
                     </>
                   )}
                 </button>
-              </div>
-            )}
+              ) : isOwnPost && onDelete ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="text-gray-400 hover:text-white transition-colors p-1.5 rounded-full hover:bg-gray-800/50"
+                      onClick={(e) => e.stopPropagation()}
+                      title="More options"
+                    >
+                      <MoreHorizontal className="w-4 h-4 sm:w-5 sm:h-5" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-48 bg-gradient-to-b from-[#0a0a0a] via-[#141414] to-[#0a0a0a] border-gray-700 text-white z-[70]"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <DropdownMenuItem
+                      variant="destructive"
+                      className="text-white focus:text-red-300 focus:bg-red-500/10 cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowDeleteDialog(true);
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete Post
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+            </div>
           </div>
 
           {/* Caption */}
@@ -974,6 +1031,68 @@ export default function PostCard({
           user?.first_name || user?.username || user?.email?.split("@")[0]
         }
       />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="text-white bg-gray-800 border-gray-700 z-[70]">
+          <DialogHeader>
+            <DialogTitle>Delete Post</DialogTitle>
+            <DialogDescription className="text-gray-300">
+              Are you sure you want to delete this post? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteDialog(false)}
+              className="text-gray-300 border-gray-600 hover:bg-gray-700"
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (!onDelete) return;
+                setIsDeleting(true);
+                try {
+                  const success = await onDelete(localPost.id);
+                  if (success) {
+                    toast({
+                      description: "Post deleted successfully",
+                    });
+                    setShowDeleteDialog(false);
+                    
+                    // If we're on the post detail page for this post, redirect to feed
+                    if (pathname?.includes(`/social-feed/post/${localPost.id}`)) {
+                      router.push("/social-feed");
+                    }
+                  } else {
+                    toast({
+                      title: "Error",
+                      description: "Failed to delete post",
+                      variant: "destructive",
+                    });
+                  }
+                } catch (error) {
+                  console.error("Failed to delete post:", error);
+                  toast({
+                    title: "Error",
+                    description: "Failed to delete post",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setIsDeleting(false);
+                }
+              }}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

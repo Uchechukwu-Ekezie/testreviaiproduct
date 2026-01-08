@@ -33,6 +33,7 @@ export default function NeighborhoodHighlights() {
   const {
     fetchPostsByLocation,
     likePost: likePostAction,
+    deletePost,
     fetchComments,
     createComment,
     replyToComment,
@@ -404,6 +405,7 @@ export default function NeighborhoodHighlights() {
                     onLikeComment={handleLikeComment}
                     isFollowing={isFollowing}
                     onFollowToggle={handleFollowToggle}
+                    onDelete={deletePost}
                     onClick={() => router.push(`/social-feed/post/${item.post.id}`)}
                   />
                 );
