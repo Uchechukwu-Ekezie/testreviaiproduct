@@ -26,24 +26,25 @@ export default function StoriesBar({
 }: StoriesBarProps) {
   console.log("[StoriesBar] Rendering with:", {
     storiesCount: stories.length,
-    stories,
+    stories: stories.map(s => ({ user_id: s.user_id, username: s.username, storiesCount: s.stories.length })),
     currentUserId,
     isLoading,
   });
   
-  // Check if current user has stories
+  // Check if current user has stories - use strict comparison
   const currentUserStory = stories.find(
-    (story) => story.user_id === currentUserId
+    (story) => story.user_id === currentUserId && currentUserId !== undefined
   );
   
   const otherUsersStories = stories.filter(
-    (story) => story.user_id !== currentUserId
+    (story) => story.user_id !== currentUserId || currentUserId === undefined
   );
   
   console.log("[StoriesBar] Filtered stories:", {
-    currentUserStory: !!currentUserStory,
+    currentUserId,
+    currentUserStory: currentUserStory ? { user_id: currentUserStory.user_id, username: currentUserStory.username } : null,
     otherUsersStoriesCount: otherUsersStories.length,
-    otherUsersStories,
+    otherUsersStories: otherUsersStories.map(s => ({ user_id: s.user_id, username: s.username })),
   });
 
   const getDisplayName = (story: Story) => {

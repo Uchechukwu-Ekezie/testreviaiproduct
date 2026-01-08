@@ -44,12 +44,14 @@ export function useStories() {
         author_id: apiStory.author_id,
         media_url: apiStory.media_url,
         author_username: apiStory.author_username,
+        author_first_name: apiStory.author_first_name,
+        author_last_name: apiStory.author_last_name,
         is_viewed: apiStory.is_viewed,
       });
 
       const userId = apiStory.author_id;
-      if (!userId) {
-        console.log("[useStories] Skipping story - no author_id:", apiStory.id);
+      if (!userId || userId.trim() === "") {
+        console.warn("[useStories] Skipping story - invalid author_id:", apiStory.id, "author_id:", userId);
         return;
       }
 
@@ -173,10 +175,30 @@ export function useStories() {
           caption: caption || "",
         };
 
+        console.log("[useStories] Creating story with payload:", storyData);
         const response = await storiesAPI.create(storyData);
+        console.log("[useStories] Story created successfully:", {
+          id: response.id,
+          author_id: response.author_id,
+          author_username: response.author_username,
+        });
 
         // Refresh stories after creation
-        await fetchStories();
+        const refreshedStories = await fetchStories();
+        console.log("[useStories] Stories refreshed after creation:", refreshedStories);
+        
+        // Verify the story appears in the list with correct author_id
+        const createdStory = refreshedStories.find(s => s.user_id === response.author_id);
+        if (createdStory) {
+          console.log("[useStories] Verified story in list:", {
+            user_id: createdStory.user_id,
+            username: createdStory.username,
+            storiesCount: createdStory.stories.length,
+          });
+        } else {
+          console.warn("[useStories] Warning: Created story not found in refreshed list with expected author_id:", response.author_id);
+        }
+        
         return response;
       } catch (err: any) {
         const errorMsg =

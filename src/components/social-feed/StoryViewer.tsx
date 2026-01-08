@@ -383,12 +383,17 @@ export default function StoryViewer({
           )}
         </div>
 
-        {/* Caption */}
+        {/* Caption - WhatsApp style */}
         {currentItem.caption && (
-          <div className="absolute bottom-0 left-0 right-0 z-20 p-4 bg-gradient-to-t from-black/80 via-black/60 to-transparent">
-            <p className="text-white text-sm leading-relaxed break-words">
-              {currentItem.caption}
-            </p>
+          <div className="absolute bottom-0 left-0 right-0 z-20 px-4 pb-4 pt-12 pointer-events-none">
+            <div 
+              className="bg-black/50 backdrop-blur-md rounded-2xl px-4 py-2.5 max-h-[140px] overflow-y-auto shadow-lg pointer-events-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-white text-[15px] leading-[1.5] break-words whitespace-pre-wrap font-normal">
+                {currentItem.caption}
+              </p>
+            </div>
           </div>
         )}
       </div>

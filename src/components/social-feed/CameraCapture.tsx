@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Camera, Video, X, RotateCcw, Check } from "lucide-react";
 import { toast } from "react-toastify";
 import {
@@ -38,10 +38,18 @@ export default function CameraCapture({
   );
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const isInitializingRef = useRef(false);
 
-  // Request camera access
+  // Request camera access when modal opens or facing mode changes
   useEffect(() => {
+    if (!isOpen) {
+      // Clean up camera when modal closes
+      stopCamera();
+      isInitializingRef.current = false;
+      return;
+    }
+
     let mounted = true;
     
     // Prevent double initialization (React Strict Mode)
@@ -52,7 +60,7 @@ export default function CameraCapture({
     isInitializingRef.current = true;
     
     const initCamera = async () => {
-      if (mounted && !streamRef.current) {
+      if (mounted && !streamRef.current && isOpen) {
         await startCamera();
       }
     };
@@ -65,14 +73,21 @@ export default function CameraCapture({
     return () => {
       mounted = false;
       clearTimeout(timeoutId);
-      stopCamera();
-      isInitializingRef.current = false;
+      if (!isOpen) {
+        stopCamera();
+        isInitializingRef.current = false;
+      }
     };
-  }, [facingMode]);
+  }, [isOpen, facingMode]);
 
   const startCamera = async () => {
     // Prevent concurrent initialization
     if (isInitializingRef.current && streamRef.current) {
+      return;
+    }
+    
+    // Don't start if modal is closed
+    if (!isOpen) {
       return;
     }
     
@@ -82,6 +97,11 @@ export default function CameraCapture({
 
       // Wait a bit to ensure previous stream is fully stopped
       await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Check again if modal is still open
+      if (!isOpen) {
+        return;
+      }
 
       const constraints: MediaStreamConstraints = {
         video: {
@@ -94,17 +114,52 @@ export default function CameraCapture({
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
-      // Check if component is still mounted before setting state
-      if (!streamRef.current) {
+      // Check if modal is still open before assigning stream
+      if (!isOpen) {
         stream.getTracks().forEach(track => track.stop());
         return;
       }
       
+      // Assign stream first
       streamRef.current = stream;
 
+      // Then connect to video element
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        const video = videoRef.current;
+        video.srcObject = stream;
+        
+        // Force video to be visible
+        video.style.display = "block";
+        
+        // Add event listener to ensure video plays
+        const handleCanPlay = async () => {
+          try {
+            if (video.paused) {
+              await video.play();
+              console.log("Camera stream started successfully via canplay");
+              setIsLoading(false);
+            }
+          } catch (playError) {
+            console.error("Error playing video in canplay:", playError);
+            setIsLoading(false);
+          }
+        };
+        
+        video.addEventListener("canplay", handleCanPlay, { once: true });
+        
+        // Try to play immediately
+        try {
+          await video.play();
+          console.log("Camera stream started successfully");
+          setIsLoading(false);
+        } catch (playError) {
+          console.log("Waiting for video to be ready...", playError);
+          // Video will play when canplay event fires
+          setIsLoading(true);
+        }
+      } else {
+        console.warn("Video ref is not available");
+        setIsLoading(false);
       }
 
       setHasPermission(true);
@@ -309,6 +364,13 @@ export default function CameraCapture({
           </div>
         ) : (
           <div className="relative w-full h-[80vh] min-h-[600px] bg-black">
+            {/* Loading indicator */}
+            {isLoading && hasPermission === null && (
+              <div className="absolute inset-0 flex items-center justify-center z-20">
+                <div className="text-white text-lg">Initializing camera...</div>
+              </div>
+            )}
+            
             {/* Video preview */}
             <video
               ref={videoRef}
@@ -316,6 +378,10 @@ export default function CameraCapture({
               playsInline
               muted
               className="w-full h-full object-cover"
+              style={{ 
+                display: streamRef.current && hasPermission === true ? "block" : "none",
+                backgroundColor: "#000"
+              }}
             />
             <canvas ref={canvasRef} className="hidden" />
 
