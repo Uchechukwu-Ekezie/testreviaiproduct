@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { X, Image as ImageIcon, Video, Loader2 } from "lucide-react";
+import { X, Image as ImageIcon, Video, Loader2, Camera } from "lucide-react";
 import { useCloudinaryUpload } from "@/hooks/useCloudinaryUpload";
 import { toast } from "react-toastify";
+import CameraCapture from "./CameraCapture";
 
 interface CreateStoryModalProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ export default function CreateStoryModal({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Reset state when modal closes
@@ -30,6 +32,7 @@ export default function CreateStoryModal({
       setSelectedFile(null);
       setPreview(null);
       setIsSubmitting(false);
+      setShowCamera(false);
     }
   }, [isOpen]);
 
@@ -109,6 +112,16 @@ export default function CreateStoryModal({
     }
   };
 
+  const handleCameraCapture = (file: File) => {
+    setSelectedFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+    setShowCamera(false);
+  };
+
   if (!isOpen) return null;
 
   const isProcessing = uploading || isSubmitting;
@@ -151,23 +164,40 @@ export default function CreateStoryModal({
         <div className="p-4 space-y-4">
           {/* File selection area */}
           {!selectedFile ? (
-            <div
-              onClick={() => !isProcessing && fileInputRef.current?.click()}
-              className="border-2 border-dashed border-gray-600 rounded-xl p-8 text-center cursor-pointer hover:border-gray-500 transition-colors"
-            >
-              <div className="flex flex-col items-center gap-4">
-                <div className="flex gap-4">
+            <div className="space-y-4">
+              {/* Action buttons */}
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setShowCamera(true)}
+                  disabled={isProcessing}
+                  className="flex flex-col items-center gap-3 p-6 border-2 border-gray-600 rounded-xl hover:border-gray-500 transition-colors disabled:opacity-50"
+                >
                   <div className="p-4 bg-gray-800 rounded-full">
-                    <ImageIcon className="h-6 w-6 text-gray-400" />
+                    <Camera className="h-6 w-6 text-gray-400" />
                   </div>
-                  <div className="p-4 bg-gray-800 rounded-full">
-                    <Video className="h-6 w-6 text-gray-400" />
+                  <div>
+                    <p className="text-white font-medium mb-1">Take Photo/Video</p>
+                    <p className="text-xs text-gray-400">Use camera</p>
                   </div>
-                </div>
-                <div>
-                  <p className="text-white font-medium mb-1">Select photo or video</p>
-                  <p className="text-sm text-gray-400">Choose an image or video to share</p>
-                </div>
+                </button>
+                <button
+                  onClick={() => !isProcessing && fileInputRef.current?.click()}
+                  disabled={isProcessing}
+                  className="flex flex-col items-center gap-3 p-6 border-2 border-gray-600 rounded-xl hover:border-gray-500 transition-colors disabled:opacity-50"
+                >
+                  <div className="flex gap-2">
+                    <div className="p-4 bg-gray-800 rounded-full">
+                      <ImageIcon className="h-6 w-6 text-gray-400" />
+                    </div>
+                    <div className="p-4 bg-gray-800 rounded-full">
+                      <Video className="h-6 w-6 text-gray-400" />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-white font-medium mb-1">Choose from Gallery</p>
+                    <p className="text-xs text-gray-400">Select file</p>
+                  </div>
+                </button>
               </div>
               <input
                 ref={fileInputRef}
@@ -244,6 +274,14 @@ export default function CreateStoryModal({
           </div>
         </div>
       </div>
+
+      {/* Camera Capture Modal */}
+      <CameraCapture
+        onCapture={handleCameraCapture}
+        onClose={() => setShowCamera(false)}
+        mode="both"
+        isOpen={showCamera}
+      />
     </div>
   );
 }

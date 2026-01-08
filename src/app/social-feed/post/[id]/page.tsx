@@ -89,6 +89,7 @@ export default function MediaViewPage({
   const [allPostsLoaded, setAllPostsLoaded] = useState(false);
   const [isLoadingSinglePost, setIsLoadingSinglePost] = useState(false);
   const [postFetchAttempted, setPostFetchAttempted] = useState(false);
+  const [postNotFound, setPostNotFound] = useState(false); // Track if post was not found (404)
   const [isMounted, setIsMounted] = useState(false); // Prevent hydration mismatch
 
   // Follow states
@@ -266,12 +267,12 @@ export default function MediaViewPage({
 
   // Check if current post needs to be fetched (when posts array changes or currentPostId changes)
   useEffect(() => {
-    if (!currentPostId) return;
+    if (!currentPostId || postNotFound) return; // Don't fetch if post was already marked as not found
 
     const postInArray = posts.find((p) => p.id === currentPostId);
 
     // If looking for a post that's not in array and not currently loading, fetch it
-    if (!postInArray && !isLoadingSinglePost && postFetchAttempted) {
+    if (!postInArray && !isLoadingSinglePost && postFetchAttempted && !postNotFound) {
       console.log(
         `🔄 Current post ${currentPostId} not in array after state update, fetching...`
       );
@@ -295,13 +296,29 @@ export default function MediaViewPage({
             setMediaIndexMap((prev) => ({ ...prev, [currentPostId]: 0 }));
             setVideoMutedMap((prev) => ({ ...prev, [currentPostId]: true }));
             setVideoVolumeMap((prev) => ({ ...prev, [currentPostId]: 0.7 }));
+            setIsLoadingSinglePost(false);
+            setTimeout(() => setPostFetchAttempted(true), 500);
+          } else {
+            // Post not found (404) - mark as not found and redirect
+            console.log(`❌ Post ${currentPostId} not found (404)`);
+            setPostNotFound(true);
+            setIsLoadingSinglePost(false);
+            // Redirect to feed after a short delay
+            setTimeout(() => {
+              router.push("/social-feed");
+            }, 1000);
           }
-
-          setIsLoadingSinglePost(false);
-          setTimeout(() => setPostFetchAttempted(true), 500);
         })
         .catch((error) => {
           console.error("❌ Failed to fetch missing post:", error);
+          // Check if it's a 404 error
+          const is404 = error.response?.status === 404 || error.message?.includes("404");
+          if (is404) {
+            setPostNotFound(true);
+            setTimeout(() => {
+              router.push("/social-feed");
+            }, 1000);
+          }
           setIsLoadingSinglePost(false);
           setTimeout(() => setPostFetchAttempted(true), 500);
         });
@@ -311,10 +328,12 @@ export default function MediaViewPage({
     posts,
     isLoadingSinglePost,
     postFetchAttempted,
+    postNotFound,
     fetchPostById,
     viewPost,
     fetchComments,
     commentsMap,
+    router,
   ]);
 
   // Load more posts when near bottom
@@ -2597,11 +2616,33 @@ export default function MediaViewPage({
   }
 
   // Show error state ONLY if post not found after all loading is complete
+  // Also redirect immediately if postNotFound is true
+  if (postNotFound) {
+    return (
+      <div className="flex h-screen bg-[#0a0a0a] items-center justify-center">
+        <div className="text-center px-4">
+          <p className="text-white text-lg mb-4">Post not found</p>
+          <p className="text-gray-400 text-sm mb-6">
+            This post may have been deleted or is unavailable.
+          </p>
+          <p className="text-gray-500 text-xs mb-4">Redirecting to feed...</p>
+          <Button
+            onClick={() => router.push("/social-feed")}
+            className="bg-white text-black hover:bg-gray-200"
+          >
+            Go to Feed
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (
     currentIdx === -1 &&
     currentPostId &&
     postFetchAttempted &&
-    !isLoadingSinglePost
+    !isLoadingSinglePost &&
+    !postNotFound
   ) {
     console.log(
       `❌ Showing error state: currentIdx=${currentIdx}, postFetchAttempted=${postFetchAttempted}, posts.length=${posts.length}`
@@ -2611,6 +2652,13 @@ export default function MediaViewPage({
       posts.map((p) => p.id)
     );
     console.log(`🎯 Looking for post ID:`, currentPostId);
+    
+    // Mark as not found and redirect
+    setPostNotFound(true);
+    setTimeout(() => {
+      router.push("/social-feed");
+    }, 1000);
+    
     return (
       <div className="flex h-screen bg-[#0a0a0a] items-center justify-center">
         <div className="text-center px-4">
@@ -2618,6 +2666,7 @@ export default function MediaViewPage({
           <p className="text-gray-400 text-sm mb-6">
             This post may have been deleted or is unavailable.
           </p>
+          <p className="text-gray-500 text-xs mb-4">Redirecting to feed...</p>
           <Button
             onClick={() => router.push("/social-feed")}
             className="bg-white text-black hover:bg-gray-200"

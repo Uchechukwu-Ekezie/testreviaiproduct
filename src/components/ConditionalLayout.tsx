@@ -18,6 +18,7 @@ export default function ConditionalLayout({
   // - Login/signup routes under (auth)
   // - Chat routes (/chats)
   // - Social feed route (/social-feed)
+  // - Auth routes (verify, forgot-password, etc.)
   const hideNavAndFooter =
     pathname === "/" ||
     pathname?.startsWith("/dashboard") ||
@@ -27,7 +28,9 @@ export default function ConditionalLayout({
     pathname?.startsWith("/social-feed") ||
     pathname?.includes("/signin") ||
     pathname?.includes("/signup") ||
-    pathname?.includes("/login");
+    pathname?.includes("/login") ||
+    pathname?.includes("/verify") ||
+    pathname?.startsWith("/forgot-password");
 
   return (
     <>

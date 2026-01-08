@@ -104,13 +104,17 @@ export const storiesAPI = {
    * Mark a story as viewed by the current user
    * @param storyId - Story ID
    * @returns View confirmation
+   * @deprecated Endpoint not available yet - commented out temporarily
    */
   viewStory: async (storyId: string): Promise<void> => {
-    return withErrorHandling(async () => {
-      console.log(`storiesAPI.viewStory: Marking story ${storyId} as viewed`);
-      await api.post(`/stories/${storyId}/view`);
-      console.log(`storiesAPI.viewStory: Successfully marked story ${storyId} as viewed`);
-    });
+    // TODO: Uncomment when endpoint is available
+    // return withErrorHandling(async () => {
+    //   console.log(`storiesAPI.viewStory: Marking story ${storyId} as viewed`);
+    //   await api.post(`/stories/${storyId}/view`);
+    //   console.log(`storiesAPI.viewStory: Successfully marked story ${storyId} as viewed`);
+    // });
+    console.log(`storiesAPI.viewStory: Skipping view tracking for story ${storyId} - endpoint not available yet`);
+    return Promise.resolve();
   },
 
   /**

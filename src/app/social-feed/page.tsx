@@ -44,6 +44,7 @@ export default function SocialFeed() {
     isLoading: isLoadingPosts,
     error: postsError,
     createPost,
+    deletePost,
     likePost,
     fetchComments,
     createComment,
@@ -759,6 +760,8 @@ export default function SocialFeed() {
                     onFollowToggle={handleFollowToggle}
                     // Image lightbox handler
                     onOpenLightbox={handleOpenLightbox}
+                    // Delete post handler
+                    onDelete={deletePost}
                   />
                 );
               })}

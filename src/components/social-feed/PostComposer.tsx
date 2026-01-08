@@ -9,7 +9,9 @@ import {
   X,
   Smile,
   ChevronDown,
+  Camera,
 } from "lucide-react";
+import CameraCapture from "./CameraCapture";
 import { useCloudinaryUpload } from "@/hooks/useCloudinaryUpload";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
@@ -57,6 +59,8 @@ export default function PostComposer({
   const [locationPermission, setLocationPermission] = useState<
     "granted" | "denied" | "prompt" | "unsupported" | null
   >(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const [cameraMode, setCameraMode] = useState<"photo" | "video">("photo");
 
   // Rotating placeholder text
   const placeholders = [
@@ -74,6 +78,27 @@ export default function PostComposer({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleCameraCapture = (file: File) => {
+    if (file.type.startsWith("image/")) {
+      // Handle image
+      if (images.length >= 4) {
+        toast.error("You can only upload up to 4 images");
+        return;
+      }
+      setImages((prev) => [...prev, file]);
+      setImagePreviews((prev) => [...prev, URL.createObjectURL(file)]);
+    } else if (file.type.startsWith("video/")) {
+      // Handle video
+      if (video) {
+        toast.error("You can only upload one video per post");
+        return;
+      }
+      setVideo(file);
+      setVideoPreview(URL.createObjectURL(file));
+    }
+    setShowCamera(false);
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -544,9 +569,21 @@ export default function PostComposer({
               onClick={() => imageInputRef.current?.click()}
               className="p-1.5 sm:p-2 hover:bg-blue-500/10 rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               disabled={isProcessing || images.length >= 4}
-              title="Add photos"
+              title="Add photos from gallery"
             >
               <ImageIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
+            </button>
+
+            <button
+              onClick={() => {
+                setCameraMode("photo");
+                setShowCamera(true);
+              }}
+              className="p-1.5 sm:p-2 hover:bg-blue-500/10 rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              disabled={isProcessing || images.length >= 4}
+              title="Take photo"
+            >
+              <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
             </button>
 
             <input
@@ -560,9 +597,21 @@ export default function PostComposer({
               onClick={() => videoInputRef.current?.click()}
               className="p-1.5 sm:p-2 hover:bg-blue-500/10 rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               disabled={isProcessing || video !== null}
-              title="Add video"
+              title="Add video from gallery"
             >
               <Video className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
+            </button>
+
+            <button
+              onClick={() => {
+                setCameraMode("video");
+                setShowCamera(true);
+              }}
+              className="p-1.5 sm:p-2 hover:bg-blue-500/10 rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              disabled={isProcessing || video !== null}
+              title="Record video"
+            >
+              <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
             </button>
 
             {/* <button
@@ -605,6 +654,14 @@ export default function PostComposer({
           </button>
         </div>
       )}
+
+      {/* Camera Capture Modal */}
+      <CameraCapture
+        onCapture={handleCameraCapture}
+        onClose={() => setShowCamera(false)}
+        mode={cameraMode}
+        isOpen={showCamera}
+      />
     </div>
   );
 }
