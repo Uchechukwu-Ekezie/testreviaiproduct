@@ -8,7 +8,7 @@ This document describes the implementation of the Stories feature for the Revi b
   - Fields: `id`, `user_id`, `media_url`, `caption`, `created_at`, `expires_at`, `is_active`, etc.
 - **StoryView**: Tracks which users have viewed a story.
   - Fields: `id`, `story_id`, `viewer_id`, `viewed_at`
-
+check for story seen by users
 ## API Endpoints
 - `POST /stories/` — Create a new story
 - `GET /stories/` — List active stories for all users
