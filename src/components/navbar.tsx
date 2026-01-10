@@ -101,7 +101,7 @@ export default function Navbar() {
           {isAuthenticated ? (
             <div className="relative user-menu">
               <button
-                onClick={() => setShowUserMenu(!showUserMenu)}
+                onClick={() => router.push("/user-dashboard")}
                 className="flex items-center space-x-2 bg-gradient-to-r from-[#FFD700] to-[#780991] hover:opacity-90 px-4 py-2 rounded-[15px] text-white transition-opacity"
               >
                 {/* {user?.avatar && user.avatar !== "/placeholder.svg" ? (
@@ -119,55 +119,7 @@ export default function Navbar() {
               </button>
 
               {/* User Dropdown Menu */}
-              {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-64 bg-[#1A1A1A] border border-white/10 rounded-lg shadow-lg py-2 z-50">
-                  {/* User Info Header */}
-                  <div className="px-4 py-3 border-b border-white/10">
-                    <div className="flex items-center space-x-3">
-                      {/* {user?.avatar && user.avatar !== "/placeholder.svg" ? (
-                        <Image
-                          src={user.avatar}
-                          alt="Profile"
-                          width={62}
-                          height={32}
-                          className="rounded-full"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 bg-gradient-to-r from-[#FFD700] to-[#780991] rounded-full flex items-center justify-center">
-                          <User className="w-4 h-4 text-white" />
-                        </div>
-                      )} */}
-                      <div>
-                        <p className="text-white font-medium">
-                          {user?.first_name} {user?.last_name}
-                        </p>
-                        <p className="text-white/60 text-sm">{user?.email}</p>
-                        {user?.user_type && (
-                          <p className="text-xs text-[#FFD700] capitalize">
-                            {user.user_type}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Menu Items */}
-                  <button
-                    onClick={handleDashboardClick}
-                    className="w-full px-4 py-2 text-left text-white hover:bg-white/10 flex items-center space-x-2"
-                  >
-                    <Settings className="w-4 h-4" />
-                    <span>Dashboard</span>
-                  </button>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full px-4 py-2 text-left text-white hover:bg-white/10 flex items-center space-x-2"
-                  >
-                    <FiLogOut className="w-4 h-4" />
-                    <span>Logout</span>
-                  </button>
-                </div>
-              )}
+         
             </div>
           ) : (
             <Button

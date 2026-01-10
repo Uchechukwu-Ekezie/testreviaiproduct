@@ -11,7 +11,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/auth-context";
 
 import Image from "next/image";
-import { Settings, LogOut, User, Crown, LayoutDashboard, MessageSquare } from "lucide-react";
+import { Settings, LogOut, User, Crown, LayoutDashboard, MessageSquare, HomeIcon } from "lucide-react";
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ProfileModal } from "./profile-modal";
@@ -80,10 +80,10 @@ export function ProfileDropdown() {
             )}
             <DropdownMenuItem
               className="flex items-center gap-2 pb-3 border-0 cursor-pointer text-muted-foreground hover:text-white hover:bg-zinc-800 hover:border-none focus:outline-none focus:ring-0"
-              onClick={() => router.push("/reviews")}
+              onClick={() => router.push("/home")}
             >
-              <MessageSquare style={{ width: "24px", height: "24px" }} />
-              <span>Reviews</span>
+              <HomeIcon style={{ width: "24px", height: "24px" }} />
+              <span>Home</span>
             </DropdownMenuItem>
             {/* <DropdownMenuItem
 className="flex items-center gap-2 pb-3 border-0 cursor-pointer text-muted-foreground hover:text-white hover:bg-zinc-800 hover:border-none focus:outline-none focus:ring-0"

@@ -168,7 +168,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                     <button
                       onClick={() => {
                         setShowUserMenu(false);
-                        window.location.href = "/";
+                        window.location.href = "/home";
                         // Add settings navigation logic here
                       }}
                       className="w-full px-4 py-2 text-left text-white hover:bg-white/10 flex items-center space-x-2"

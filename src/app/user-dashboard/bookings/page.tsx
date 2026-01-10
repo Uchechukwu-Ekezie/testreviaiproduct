@@ -147,12 +147,17 @@ export default function Bookings() {
 
       } catch (err: any) {
         console.error("Error fetching bookings:", err);
-        // If endpoint doesn't exist, show empty state instead of error
-        if (err.message?.includes('404') || err.message?.includes('Not Found')) {
+        // If endpoint doesn't exist or returns 404, show empty state instead of error
+        const status = err?.status || err?.response?.status;
+        const message = err?.message || String(err);
+        
+        if (status === 404 || message?.includes('404') || message?.includes('Not Found')) {
           setBookings([]);
           setError(null);
         } else {
-          setError("Failed to load bookings");
+          // Only show error if it's not a network error or empty response
+          const errorMessage = err?.detail || err?.message || "Failed to load bookings";
+          setError(typeof errorMessage === 'string' ? errorMessage : "Failed to load bookings");
         }
       } finally {
         setLoading(false);

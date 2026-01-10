@@ -273,6 +273,8 @@ export const PropertiesProvider: React.FC<PropertiesProviderProps> = ({
       try {
         setIsLoading(true);
         setError(null);
+        // Clear properties immediately to prevent showing stale data
+        setProperties([]);
         const response = (await propertiesAPI.getByUserId(userId)) as any;
 
         // Based on your API response structure, it looks like it has results array
