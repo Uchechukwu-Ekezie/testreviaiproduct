@@ -98,15 +98,24 @@ export class ApiErrorHandler {
       if (apiError.detail !== undefined) errorInfo.detail = apiError.detail;
       if (apiError.data !== undefined) errorInfo.data = apiError.data;
       
-      console.error("API Error:", errorInfo);
+      // If errorInfo is empty, log the full apiError object
+      if (Object.keys(errorInfo).length === 0) {
+        console.error("API Error (no structured info):", apiError);
+      } else {
+        console.error("API Error:", errorInfo);
+      }
       
       // Also log the original error for debugging
       if (error instanceof Error) {
         console.error("Original error:", error);
+      } else {
+        console.error("Original error (non-Error):", error);
       }
     } else {
       // Log minimal info in production
-      console.error("API Error:", apiError.status, apiError.message);
+      const status = apiError.status ?? "unknown";
+      const message = apiError.message || "An unexpected error occurred";
+      console.error("API Error:", status, message);
     }
 
     throw apiError;
