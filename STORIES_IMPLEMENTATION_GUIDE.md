@@ -17,7 +17,7 @@ check for story seen by users
 - `DELETE /stories/{story_id}` — Delete a story (owner only)
 
 ## Permissions
-- Only authenticated users can create, view, or delete stories.
+- Only authenticated users can create, view, or delete their stories.
 - Users can only delete their own stories.
 
 ## Expiry Logic
@@ -26,7 +26,7 @@ check for story seen by users
 
 ## Implementation Steps
 1. **Model Creation**
-   - Define SQLAlchemy models for `Story` and `StoryView`.
+   - Define SQLAlchemy models for `Story` and `StoryView`
 2. **Schema Definition**
    - Create Pydantic schemas for story creation, response, and view tracking.
 3. **Repository Layer**
